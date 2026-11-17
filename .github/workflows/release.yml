@@ -15,10 +15,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p sentinela
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Instalador NSIS (compila o frontend, o CLI e empacota ambos)
+        working-directory: app
+        run: |
+          npm ci
+          npm run tauri build
       - name: Create GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" target/release/sentinela.exe --generate-notes
+        run: gh release create "$TAG" target/release/bundle/nsis/*-setup.exe target/release/sentinela.exe --generate-notes
