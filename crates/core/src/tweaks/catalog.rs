@@ -39,8 +39,6 @@ pub const FORBIDDEN_SERVICES: &[&str] = &[
     "TrustedInstaller",
 ];
 
-const GRAPHICS_DRIVERS: &str = "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
     pub tweaks: Vec<Tweak>,
@@ -127,11 +125,17 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
                 if !path_allowed(*hive, path) {
                     return Err(format!("{id}: caminho fora das raízes permitidas: {path}"));
                 }
+                // Cobre também GraphicsDrivers, que só existe em HKLM.
                 if *hive == Hive::Hklm && !t.needs_admin {
                     return Err(format!("{id}: ação HKLM exige needs_admin"));
                 }
-                if path.eq_ignore_ascii_case(GRAPHICS_DRIVERS) && !t.needs_admin {
-                    return Err(format!("{id}: GraphicsDrivers exige needs_admin"));
+                if let Action::ListEntry { key, value, .. } = a {
+                    let bad = |s: &str| s.is_empty() || s.contains(';') || s.contains('=');
+                    if bad(key) || bad(value) {
+                        return Err(format!(
+                            "{id}: chave/valor de lista vazio ou com ';' ou '=': {key}={value}"
+                        ));
+                    }
                 }
             }
             Action::Service { name, .. } => {
@@ -197,8 +201,30 @@ mod tests {
         }
     }
 
+    fn list_entry(key: &str, value: &str) -> Action {
+        Action::ListEntry {
+            hive: Hive::Hkcu,
+            path: "Software\\Microsoft\\DirectX\\UserGpuPreferences".into(),
+            name: "DirectXUserGlobalSettings".into(),
+            key: key.into(),
+            value: value.into(),
+        }
+    }
+
+    fn ok_action() -> Vec<Action> {
+        vec![reg(Hive::Hkcu, "Software\\Microsoft\\GameBar")]
+    }
+
     fn cat(tweaks: Vec<Tweak>) -> Catalog {
         Catalog { tweaks }
+    }
+
+    /// Valida e exige erro que cite o id e a razão esperada.
+    fn assert_rejected(t: Tweak, reason: &str) {
+        let id = t.id.clone();
+        let e = validate(&cat(vec![t])).unwrap_err();
+        assert!(e.contains(&id), "mensagem sem o id {id}: {e}");
+        assert!(e.contains(reason), "esperava '{reason}' em: {e}");
     }
 
     #[test]
@@ -208,14 +234,26 @@ mod tests {
 
     #[test]
     fn duplicate_id_is_rejected() {
-        let a = tweak(
-            "game-mode",
-            vec![reg(Hive::Hkcu, "Software\\Microsoft\\GameBar")],
-            false,
-        );
-        let c = cat(vec![a.clone(), a]);
-        let e = validate(&c).unwrap_err();
-        assert!(e.contains("game-mode"), "{e}");
+        let a = tweak("game-mode", ok_action(), false);
+        let e = validate(&cat(vec![a.clone(), a])).unwrap_err();
+        assert!(e.contains("game-mode") && e.contains("id repetido"), "{e}");
+    }
+
+    #[test]
+    fn invalid_id_is_rejected() {
+        assert_rejected(tweak("Bad_Id", ok_action(), false), "id inválido");
+    }
+
+    #[test]
+    fn empty_actions_are_rejected() {
+        assert_rejected(tweak("empty", vec![], false), "sem ações");
+    }
+
+    #[test]
+    fn empty_source_is_rejected() {
+        let mut t = tweak("nosrc", ok_action(), false);
+        t.source = String::new();
+        assert_rejected(t, "source vazio");
     }
 
     #[test]
@@ -225,7 +263,51 @@ mod tests {
             vec![reg(Hive::Hklm, "SOFTWARE\\Microsoft\\Windows Defender")],
             true,
         );
-        assert!(validate(&cat(vec![t])).unwrap_err().contains("bad"));
+        assert_rejected(t, "fora das raízes permitidas");
+    }
+
+    #[test]
+    fn hive_mismatch_is_rejected() {
+        // A raiz Policies\Microsoft\Windows só é permitida em HKLM.
+        let t = tweak(
+            "hive",
+            vec![reg(
+                Hive::Hkcu,
+                "SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+            )],
+            false,
+        );
+        assert_rejected(t, "fora das raízes permitidas");
+    }
+
+    #[test]
+    fn root_prefix_requires_path_boundary() {
+        let t = tweak(
+            "evil",
+            vec![reg(Hive::Hkcu, "Software\\MicrosoftEvil\\X")],
+            false,
+        );
+        assert_rejected(t, "fora das raízes permitidas");
+    }
+
+    #[test]
+    fn dotdot_segment_is_rejected() {
+        let t = tweak(
+            "dots",
+            vec![reg(Hive::Hkcu, "Software\\Microsoft\\..\\Evil")],
+            false,
+        );
+        assert_rejected(t, "fora das raízes permitidas");
+    }
+
+    #[test]
+    fn root_match_is_case_insensitive() {
+        let t = tweak(
+            "ci",
+            vec![reg(Hive::Hkcu, "software\\microsoft\\GameBar")],
+            false,
+        );
+        assert!(validate(&cat(vec![t])).is_ok());
     }
 
     #[test]
@@ -238,7 +320,20 @@ mod tests {
             }],
             true,
         );
-        assert!(validate(&cat(vec![t])).unwrap_err().contains("svc"));
+        assert_rejected(t, "serviço proibido");
+    }
+
+    #[test]
+    fn service_action_requires_admin() {
+        let t = tweak(
+            "svc-user",
+            vec![Action::Service {
+                name: "DiagTrack".into(),
+                start: StartType::Manual,
+            }],
+            false,
+        );
+        assert_rejected(t, "ação de serviço exige needs_admin");
     }
 
     #[test]
@@ -251,7 +346,73 @@ mod tests {
             )],
             false,
         );
-        assert!(validate(&cat(vec![t])).unwrap_err().contains("adm"));
+        assert_rejected(t, "ação HKLM exige needs_admin");
+    }
+
+    #[test]
+    fn graphics_drivers_is_covered_by_the_hklm_admin_rule() {
+        let t = tweak(
+            "gfx",
+            vec![reg(
+                Hive::Hklm,
+                "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+            )],
+            false,
+        );
+        assert_rejected(t, "ação HKLM exige needs_admin");
+    }
+
+    #[test]
+    fn malformed_power_plan_guid_is_rejected() {
+        let t = tweak(
+            "guid",
+            vec![Action::PowerPlan {
+                scheme: "{8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c}".into(),
+            }],
+            false,
+        );
+        assert_rejected(t, "GUID de plano de energia inválido");
+    }
+
+    #[test]
+    fn uppercase_power_plan_guid_is_rejected() {
+        let t = tweak(
+            "guid-up",
+            vec![Action::PowerPlan {
+                scheme: HIGH_PERFORMANCE_SCHEME.to_ascii_uppercase(),
+            }],
+            false,
+        );
+        assert_rejected(t, "GUID de plano de energia inválido");
+    }
+
+    #[test]
+    fn valid_power_plan_guid_is_accepted() {
+        let t = tweak(
+            "plan",
+            vec![Action::PowerPlan {
+                scheme: HIGH_PERFORMANCE_SCHEME.into(),
+            }],
+            false,
+        );
+        assert!(validate(&cat(vec![t])).is_ok());
+    }
+
+    #[test]
+    fn list_entry_with_bad_key_or_value_is_rejected() {
+        for (k, v) in [
+            ("", "1"),
+            ("K", ""),
+            ("K;X", "1"),
+            ("K=X", "1"),
+            ("K", "1;2"),
+            ("K", "a=b"),
+        ] {
+            let t = tweak("list", vec![list_entry(k, v)], false);
+            assert_rejected(t, "chave/valor de lista");
+        }
+        let good = tweak("list", vec![list_entry("VRROptimizeEnable", "1")], false);
+        assert!(validate(&cat(vec![good])).is_ok());
     }
 
     #[test]
@@ -276,73 +437,6 @@ mod tests {
     #[test]
     fn effect_ordering_supports_max() {
         assert!(Effect::Immediate < Effect::Relogon && Effect::Relogon < Effect::Reboot);
-    }
-
-    #[test]
-    fn invalid_id_empty_actions_service_admin_and_guid_are_rejected() {
-        let ok = vec![reg(Hive::Hkcu, "Software\\Microsoft\\GameBar")];
-        let bad_id = tweak("Bad_Id", ok.clone(), false);
-        assert!(validate(&cat(vec![bad_id])).is_err());
-        assert!(validate(&cat(vec![tweak("empty", vec![], false)])).is_err());
-        let svc = tweak(
-            "svc-user",
-            vec![Action::Service {
-                name: "DiagTrack".into(),
-                start: StartType::Manual,
-            }],
-            false,
-        );
-        assert!(validate(&cat(vec![svc])).is_err());
-        let gd = tweak(
-            "gfx",
-            vec![reg(
-                Hive::Hklm,
-                "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
-            )],
-            false,
-        );
-        assert!(validate(&cat(vec![gd])).is_err());
-        let mut nosrc = tweak("nosrc", ok.clone(), false);
-        nosrc.source = String::new();
-        assert!(validate(&cat(vec![nosrc])).is_err());
-        let guid = tweak(
-            "guid",
-            vec![Action::PowerPlan {
-                scheme: "{8C5E7FDA}".into(),
-            }],
-            false,
-        );
-        assert!(validate(&cat(vec![guid])).is_err());
-        let good = tweak(
-            "plan",
-            vec![Action::PowerPlan {
-                scheme: HIGH_PERFORMANCE_SCHEME.into(),
-            }],
-            false,
-        );
-        assert!(validate(&cat(vec![good])).is_ok());
-    }
-
-    #[test]
-    fn root_prefix_requires_path_boundary_and_no_dotdot() {
-        let evil = tweak(
-            "evil",
-            vec![reg(Hive::Hkcu, "Software\\MicrosoftEvil\\X")],
-            false,
-        );
-        assert!(validate(&cat(vec![evil])).is_err());
-        let dots = tweak(
-            "dots",
-            vec![reg(Hive::Hkcu, "Software\\Microsoft\\..\\Evil")],
-            false,
-        );
-        assert!(validate(&cat(vec![dots])).is_err());
-        let ci = tweak(
-            "ci",
-            vec![reg(Hive::Hkcu, "software\\microsoft\\GameBar")],
-            false,
-        );
-        assert!(validate(&cat(vec![ci])).is_ok());
     }
 
     #[test]
