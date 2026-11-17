@@ -329,3 +329,8 @@ body {
   gap: var(--sp-2);
   margin-top: var(--sp-4);
 }
+
+.clean-actions {
+  display: flex;
+  gap: var(--sp-2);
+}

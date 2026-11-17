@@ -21,21 +21,28 @@ const selectable = (c: CategorySummary) => c.skipped_reason === null;
 export default function Limpeza() {
   const [plan, setPlan] = useState<CleanSummary | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
-  const [checked, setChecked] = useState<Set<string>>(new Set());
+  // Só guarda o que o usuário desmarcou: categorias novas entram marcadas.
+  const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [confirming, setConfirming] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const [nothing, setNothing] = useState(false);
+  // Seleção revalidada por uma simulação nova, mostrada no diálogo.
+  const [pending, setPending] = useState<{
+    ids: string[];
+    files: number;
+    bytes: number;
+    bin: boolean;
+  } | null>(null);
   const [outcome, setOutcome] = useState<CleanSummary | null>(null);
   const job = useJob<CleanSummary>();
 
   const loadPlan = useCallback(() => {
     setPlanError(null);
+    setPlanning(true);
     cleanPlan([]).then(
-      (p) => {
-        setPlan(p);
-        setChecked(new Set(p.categories.filter(selectable).map((c) => c.id)));
-      },
+      (p) => setPlan(p),
       (e) => setPlanError(errorText(e)),
-    );
+    ).finally(() => setPlanning(false));
   }, []);
 
   useEffect(loadPlan, [loadPlan]);
@@ -48,13 +55,12 @@ export default function Limpeza() {
     }
   }, [job.state, job.result, loadPlan]);
 
-  const busy = job.state === "running";
-  const chosen = (plan?.categories ?? []).filter(
-    (c) => selectable(c) && checked.has(c.id),
-  );
+  const busy = job.state === "running" || planning;
+  const isChosen = (c: CategorySummary) =>
+    selectable(c) && !unchecked.has(c.id);
+  const chosen = (plan?.categories ?? []).filter(isChosen);
   const chosenFiles = chosen.reduce((n, c) => n + c.files, 0);
   const chosenBytes = chosen.reduce((n, c) => n + c.bytes, 0);
-  const emptiesBin = chosen.some((c) => c.id === "recycle-bin" && c.files > 0);
   const skippedFiles = outcome
     ? outcome.categories.reduce((n, c) => n + c.skipped_files, 0)
     : 0;
@@ -65,9 +71,48 @@ export default function Limpeza() {
     return next;
   };
 
+  // Antes de confirmar, simula de novo: o diálogo mostra números frescos.
+  const requestClean = async () => {
+    const ids = chosen.map((c) => c.id);
+    if (ids.length === 0) return;
+    setNothing(false);
+    setPlanError(null);
+    setPlanning(true);
+    try {
+      const fresh = await cleanPlan(ids);
+      setPlan((old) =>
+        old
+          ? {
+              ...old,
+              categories: old.categories.map(
+                (c) => fresh.categories.find((f) => f.id === c.id) ?? c,
+              ),
+            }
+          : fresh,
+      );
+      const ok = fresh.categories.filter(
+        (c) => ids.includes(c.id) && selectable(c) && c.files > 0,
+      );
+      if (ok.length === 0) {
+        setNothing(true);
+        return;
+      }
+      setPending({
+        ids: ok.map((c) => c.id),
+        files: ok.reduce((n, c) => n + c.files, 0),
+        bytes: ok.reduce((n, c) => n + c.bytes, 0),
+        bin: ok.some((c) => c.id === "recycle-bin"),
+      });
+    } catch (e) {
+      setPlanError(errorText(e));
+    } finally {
+      setPlanning(false);
+    }
+  };
+
   const confirm = () => {
-    setConfirming(false);
-    const selected = chosen.map((c) => c.id);
+    const selected = pending?.ids ?? [];
+    setPending(null);
     if (selected.length === 0) return; // nunca envia seleção vazia
     setOutcome(null);
     void job.start(() => cleanApply(selected));
@@ -87,7 +132,9 @@ export default function Limpeza() {
         </p>
       )}
       {!plan && !planError && <p className="muted">Calculando…</p>}
-      {busy && <p className="muted">Apagando…</p>}
+      {job.state === "running" && <p className="muted">Apagando…</p>}
+      {planning && plan && <p className="muted">Simulando…</p>}
+      {nothing && <p className="notice">Nada para apagar.</p>}
       {outcome && (
         <p className="notice">
           {`Apagados: ${outcome.deleted} arquivo(s), ${humanBytes(outcome.freed)} liberados`}
@@ -107,9 +154,9 @@ export default function Limpeza() {
                     <label className="clean-check">
                       <input
                         type="checkbox"
-                        checked={selectable(c) && checked.has(c.id)}
-                        disabled={!selectable(c) || busy}
-                        onChange={() => setChecked((s) => toggle(s, c.id))}
+                        checked={isChosen(c)}
+                        disabled={!selectable(c) || job.state === "running"}
+                        onChange={() => setUnchecked((s) => toggle(s, c.id))}
                       />
                       <span>{name}</span>
                     </label>
@@ -159,26 +206,36 @@ export default function Limpeza() {
             <span>
               {`${chosenFiles} arquivo(s) · ${humanBytes(chosenBytes)} selecionados`}
             </span>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy || chosen.length === 0 || chosenFiles === 0}
-              onClick={() => setConfirming(true)}
-            >
-              Limpar
-            </button>
+            <div className="clean-actions">
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={loadPlan}
+              >
+                Simular novamente
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy || chosen.length === 0 || chosenFiles === 0}
+                onClick={() => void requestClean()}
+              >
+                Limpar
+              </button>
+            </div>
           </div>
         </>
       )}
-      {confirming && (
+      {pending && (
         <ConfirmDialog
           title="Confirmar limpeza"
           confirmLabel="Apagar"
           onConfirm={confirm}
-          onCancel={() => setConfirming(false)}
+          onCancel={() => setPending(null)}
         >
-          <p>{`Apagar ${chosenFiles} arquivo(s), ${humanBytes(chosenBytes)} no total?`}</p>
-          {emptiesBin && <p>A Lixeira será esvaziada permanentemente.</p>}
+          <p>{`Apagar ${pending.files} arquivo(s), ${humanBytes(pending.bytes)} no total?`}</p>
+          {pending.bin && <p>A Lixeira será esvaziada permanentemente.</p>}
         </ConfirmDialog>
       )}
     </section>
