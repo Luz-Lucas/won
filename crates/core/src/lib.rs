@@ -10,5 +10,6 @@ pub mod secrets;
 pub mod serde_path;
 pub mod signatures;
 pub mod status;
+pub mod tweaks;
 pub mod updater;
 pub mod walker;

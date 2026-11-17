@@ -1,0 +1,338 @@
+{
+  "tweaks": [
+    {
+      "id": "game-mode",
+      "title": "Modo de Jogo",
+      "description": "Mantém o Modo de Jogo do Windows ativo, priorizando o jogo em primeiro plano. Efeito imediato; sem custo conhecido.",
+      "group": "jogos",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\GameBar",
+          "name": "AutoGameModeEnabled",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "game-dvr-off",
+      "title": "Desligar gravação em segundo plano (Game DVR)",
+      "description": "Desativa a captura de vídeo em segundo plano do Xbox Game Bar, que consome CPU/GPU e pode limitar o FPS. Você perde o 'gravar os últimos minutos'.",
+      "group": "jogos",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/answers/questions/2757834/frame-caps-in-games-due-to-gamedvr",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "System\\GameConfigStore",
+          "name": "GameDVR_Enabled",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR",
+          "name": "AppCaptureEnabled",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "hags",
+      "title": "Agendamento de GPU acelerado por hardware (HAGS)",
+      "description": "Deixa a própria placa de vídeo gerenciar a memória de vídeo, o que pode reduzir latência. Exige reinício. Em algumas placas antigas pode piorar; desfaça se notar travamentos.",
+      "group": "jogos",
+      "evidence": "comprovado",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/answers/questions/4358192/where-did-hardware-accellerated-gpu-scheduling-go",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+          "name": "HwSchMode",
+          "value": {
+            "type": "dword",
+            "data": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "windowed-optimizations",
+      "title": "Otimizações para jogos em janela",
+      "description": "Ativa o modelo de apresentação moderno e o VRR para jogos em janela ou sem borda, com menos latência. Só afeta jogos DirectX 10/11 antigos; sem custo conhecido.",
+      "group": "jogos",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/answers/questions/3996584/hdr-video-streaming-keeps-turning-on-at-restart",
+      "actions": [
+        {
+          "kind": "list_entry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\DirectX\\UserGpuPreferences",
+          "name": "DirectXUserGlobalSettings",
+          "key": "SwapEffectUpgradeEnable",
+          "value": "1"
+        },
+        {
+          "kind": "list_entry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\DirectX\\UserGpuPreferences",
+          "name": "DirectXUserGlobalSettings",
+          "key": "VRROptimizeEnable",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "id": "mouse-accel-off",
+      "title": "Desligar aceleração do mouse",
+      "description": "Remove a aceleração do ponteiro para que o movimento seja proporcional à mão. Vale após sair e entrar de novo no Windows; pode levar alguns dias para se acostumar.",
+      "group": "jogos",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Mouse",
+          "name": "MouseSpeed",
+          "value": {
+            "type": "string",
+            "data": "0"
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Mouse",
+          "name": "MouseThreshold1",
+          "value": {
+            "type": "string",
+            "data": "0"
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Mouse",
+          "name": "MouseThreshold2",
+          "value": {
+            "type": "string",
+            "data": "0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "power-high-performance",
+      "title": "Plano de energia Alto desempenho",
+      "description": "Usa o plano Alto desempenho, que evita reduzir a frequência do processador. Em notebook aumenta consumo de bateria e calor.",
+      "group": "energia",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": false,
+      "laptop_warning": true,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/windows/win32/power/power-policy-settings",
+      "actions": [
+        {
+          "kind": "power_plan",
+          "scheme": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+        }
+      ]
+    },
+    {
+      "id": "transparency-off",
+      "title": "Desligar efeitos de transparência",
+      "description": "Desativa a transparência de menus e janelas, poupando um pouco de GPU. O visual fica mais opaco.",
+      "group": "visual",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/answers/questions/5508970/how-can-i-turn-off-transparency-the-toggle-wont-mo",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "EnableTransparency",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "animations-off",
+      "title": "Desligar animações de janelas e barra de tarefas",
+      "description": "Remove as animações de minimizar/maximizar e da barra de tarefas, deixando a interface mais ágil. Vale após sair e entrar de novo no Windows.",
+      "group": "visual",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Desktop\\WindowMetrics",
+          "name": "MinAnimate",
+          "value": {
+            "type": "string",
+            "data": "0"
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAnimations",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "telemetry-reduced",
+      "title": "Reduzir telemetria",
+      "description": "Reduz o envio de dados de diagnóstico ao nível mínimo permitido e deixa os serviços de telemetria (DiagTrack, dmwappushservice) em modo manual. Exige reinício. Alguns recursos de feedback da Microsoft deixam de funcionar.",
+      "group": "privacidade",
+      "evidence": "comprovado",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-system",
+      "actions": [
+        {
+          "kind": "service",
+          "name": "DiagTrack",
+          "start": "manual"
+        },
+        {
+          "kind": "service",
+          "name": "dmwappushservice",
+          "start": "manual"
+        },
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection",
+          "name": "AllowTelemetry",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "activity-history-off",
+      "title": "Desligar histórico de atividades",
+      "description": "Impede o Windows de registrar e enviar à nuvem as atividades (linha do tempo). Vale após sair e entrar de novo no Windows; a linha do tempo deixa de lembrar o que você fez.",
+      "group": "privacidade",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-privacy",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+          "name": "EnableActivityFeed",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+          "name": "PublishUserActivities",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+          "name": "UploadUserActivities",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "delivery-optimization-off",
+      "title": "Desligar compartilhamento de atualizações",
+      "description": "Impede o Windows de usar sua internet para enviar atualizações a outros computadores (só baixa da Microsoft). Sem efeito nas atualizações em si.",
+      "group": "segundo_plano",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": true,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-deliveryoptimization",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+          "name": "DODownloadMode",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ]
+    }
+  ]
+}
