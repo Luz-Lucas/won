@@ -15,6 +15,7 @@
   --accent: #ffb020;
   --accent-ink: #1a1203;
   --accent-soft: rgba(255, 176, 32, 0.12);
+  --danger: #ff6b6b;
 
   /* Tipografia (fontes locais; sem conteúdo remoto) */
   --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;

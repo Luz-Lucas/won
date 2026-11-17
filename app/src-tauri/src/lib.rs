@@ -1,8 +1,9 @@
+pub mod commands;
 pub mod jobs;
 
 use jobs::{JobRegistry, Sink};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 
 /// Envia os eventos de operações longas para a janela via Tauri.
 pub struct TauriSink(pub AppHandle);
@@ -14,6 +15,7 @@ impl Sink for TauriSink {
 }
 
 pub fn run() {
+    commands::system::wait_for_previous_instance();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -27,6 +29,20 @@ pub fn run() {
             app.manage(Arc::new(JobRegistry::new()));
             Ok(())
         })
+        .on_window_event(|window, event| {
+            // Fechar a janela principal cancela operações em andamento, sem bloquear o fechamento.
+            if window.label() == "main"
+                && matches!(event, WindowEvent::CloseRequested { .. })
+                && let Some(jobs) = window.try_state::<Arc<JobRegistry>>()
+            {
+                jobs.cancel_all();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::system::system_status,
+            commands::system::relaunch_elevated,
+            commands::system::job_cancel,
+        ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela");
 }
