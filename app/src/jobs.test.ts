@@ -15,14 +15,18 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-import { useJob } from "./jobs";
+import { createElement, type ReactNode } from "react";
+import { JobsProvider, useJob, useJobSettled } from "./jobs";
+
+const wrapper = ({ children }: { children: ReactNode }) =>
+  createElement(JobsProvider, null, children);
 
 function emit(name: string, payload: unknown) {
   act(() => handlers.get(name)!({ payload }));
 }
 
 async function setup() {
-  const hook = renderHook(() => useJob<number>());
+  const hook = renderHook(() => useJob<number>("scan"), { wrapper });
   await act(async () => {}); // deixa os listeners registrarem
   return hook;
 }
@@ -129,7 +133,7 @@ describe("useJob", () => {
     await act(async () => {
       await result.current.cancel();
     });
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalledWith("job_cancel", expect.anything());
     await act(async () => {
       resolveId(3);
       await started;
@@ -175,7 +179,7 @@ describe("useJob", () => {
     await act(async () => {
       await result.current.cancel();
     });
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalledWith("job_cancel", expect.anything());
   });
 
   it("cancel chama job_cancel com o id", async () => {
@@ -194,5 +198,48 @@ describe("useJob", () => {
     unmount();
     await act(async () => {});
     expect(unlisten).toHaveBeenCalledTimes(3);
+  });
+
+  it("o job sobrevive a quem o iniciou: outro leitor vê o mesmo estado", async () => {
+    const hook = renderHook(
+      () => ({ a: useJob<number>("scan"), b: useJob<number>("clean") }),
+      { wrapper },
+    );
+    await act(async () => {});
+    await act(async () => {
+      await hook.result.current.a.start(async () => 4);
+    });
+    expect(hook.result.current.a.state).toBe("running");
+    expect(hook.result.current.b.state).toBe("idle");
+    emit("job:done", { job: 4, kind: "scan", result: 9 });
+    expect(hook.result.current.a.result).toBe(9);
+    expect(hook.result.current.b.state).toBe("idle");
+  });
+
+  it("retoma um job que segue rodando no backend (janela recarregada)", async () => {
+    invokeMock.mockImplementation(async (cmd: string, args: { kind?: string }) =>
+      cmd === "job_running" && args.kind === "scan" ? 12 : null,
+    );
+    const { result } = await setup();
+    expect(invokeMock).toHaveBeenCalledWith("job_running", { kind: "scan" });
+    expect(result.current.state).toBe("running");
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(invokeMock).toHaveBeenCalledWith("job_cancel", { id: 12 });
+    emit("job:done", { job: 12, kind: "scan", result: 6 });
+    expect(result.current.state).toBe("done");
+    expect(result.current.result).toBe(6);
+  });
+
+  it("avisa quando qualquer job termina", async () => {
+    const settled = vi.fn();
+    renderHook(() => useJobSettled(settled), { wrapper });
+    await act(async () => {});
+    emit("job:progress", { job: 1, phase: "counting", files_seen: 1 });
+    expect(settled).not.toHaveBeenCalled();
+    emit("job:done", { job: 1, kind: "clean", result: null });
+    emit("job:error", { job: 2, kind: "scan", message: "x" });
+    expect(settled).toHaveBeenCalledTimes(2);
   });
 });

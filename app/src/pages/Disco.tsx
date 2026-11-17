@@ -16,7 +16,6 @@ type Tab = "large" | "dupes";
 const number = new Intl.NumberFormat("pt-BR");
 const INPUT_ERROR = "Informe apenas números inteiros não negativos.";
 const TOP_ERROR = "Quantidade deve ser um inteiro entre 1 e 500.";
-const ERRORS_SHOWN = 200;
 
 async function reveal(path: string) {
   try {
@@ -38,7 +37,8 @@ const wasted = (groups: DupGroup[]) =>
 
 function Unverified({ result }: { result: FindResult<unknown> }) {
   const [show, setShow] = useState(false);
-  if (result.errors.length === 0) return null;
+  // O backend manda no máximo 200 erros e o total em `errors_total`.
+  if (result.errors_total === 0) return null;
   return (
     <div className="scan-errors">
       <button
@@ -47,18 +47,18 @@ function Unverified({ result }: { result: FindResult<unknown> }) {
         aria-expanded={show}
         onClick={() => setShow((v) => !v)}
       >
-        {`Não verificados (${number.format(result.errors.length)})`}
+        {`Não verificados (${number.format(result.errors_total)})`}
       </button>
       {show && (
         <ul className="sample">
-          {result.errors.slice(0, ERRORS_SHOWN).map((e, i) => (
+          {result.errors.map((e, i) => (
             <li key={`${e.path}-${i}`}>
               <span>{e.path}</span> <span className="muted">{e.reason}</span>
             </li>
           ))}
-          {result.errors.length > ERRORS_SHOWN && (
+          {result.errors_total > result.errors.length && (
             <li className="muted">
-              {`Mostrando ${ERRORS_SHOWN} de ${number.format(result.errors.length)}`}
+              {`Mostrando ${number.format(result.errors.length)} de ${number.format(result.errors_total)}`}
             </li>
           )}
         </ul>
@@ -89,8 +89,8 @@ function PathRow({ path, size }: { path: string; size?: number }) {
 
 /** Lista os maiores arquivos e os duplicados de uma pasta. Nunca mexe nos arquivos. */
 export default function Disco() {
-  const largeJob = useJob<FindResult<LargeFile>>();
-  const dupesJob = useJob<FindResult<DupGroup>>();
+  const largeJob = useJob<FindResult<LargeFile>>("find_large");
+  const dupesJob = useJob<FindResult<DupGroup>>("find_dupes");
   const [tab, setTab] = useState<Tab>("large");
   const [folder, setFolder] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);

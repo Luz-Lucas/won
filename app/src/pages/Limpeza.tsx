@@ -34,7 +34,7 @@ export default function Limpeza() {
     bin: boolean;
   } | null>(null);
   const [outcome, setOutcome] = useState<CleanSummary | null>(null);
-  const job = useJob<CleanSummary>();
+  const job = useJob<CleanSummary>("clean");
 
   const loadPlan = useCallback(() => {
     setPlanError(null);

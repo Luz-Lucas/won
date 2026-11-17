@@ -1,14 +1,19 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import type { CategorySummary, CleanSummary } from "../api";
 import Limpeza from "./Limpeza";
+import { JobsProvider } from "../jobs";
+
+const render = (ui: React.ReactElement) =>
+  rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
   cleanPlan: vi.fn(),
   cleanApply: vi.fn(),
   jobCancel: vi.fn(),
+  jobRunning: vi.fn().mockResolvedValue(null),
 }));
 
 type Listener = (e: { payload: unknown }) => void;

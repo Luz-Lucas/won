@@ -34,6 +34,12 @@ export const systemStatus = () => invoke<SystemStatus>("system_status");
 export const relaunchElevated = () => invoke<void>("relaunch_elevated");
 export const jobCancel = (id: number) => invoke<boolean>("job_cancel", { id });
 
+export type JobKind = "scan" | "clean" | "find_large" | "find_dupes" | "update";
+
+/** Id do job deste tipo que segue rodando no backend, se houver. */
+export const jobRunning = (kind: JobKind) =>
+  invoke<number | null>("job_running", { kind });
+
 export interface Candidate {
   path: string;
   size: number;
@@ -133,7 +139,10 @@ export const signaturesUpdate = () => invoke<number>("signatures_update");
 export const abuseKeySet = (key: string) =>
   invoke<void>("abuse_key_set", { key });
 export const abuseKeyClear = () => invoke<void>("abuse_key_clear");
-export const abuseKeyPresent = () => invoke<boolean>("abuse_key_present");
+/** De onde viria a chave: salva, variável de ambiente ou nenhuma. Nunca a chave. */
+export type KeySource = "stored" | "env" | "none";
+
+export const abuseKeyPresent = () => invoke<KeySource>("abuse_key_present");
 
 export interface LargeFile {
   path: string;
@@ -149,6 +158,7 @@ export interface DupGroup {
 export interface FindResult<T> {
   items: T[];
   errors: WalkError[];
+  errors_total: number;
   interrupted: boolean;
 }
 

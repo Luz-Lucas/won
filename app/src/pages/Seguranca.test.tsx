@@ -1,16 +1,21 @@
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import type { QuarantineEntry, ScanSummary } from "../api";
 import Seguranca from "./Seguranca";
+import { JobsProvider } from "../jobs";
+
+const render = (ui: React.ReactElement) =>
+  rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
   scanStart: vi.fn(),
   quarantineList: vi.fn(),
   quarantineRestore: vi.fn(),
   jobCancel: vi.fn(),
+  jobRunning: vi.fn().mockResolvedValue(null),
 }));
 
 type Listener = (e: { payload: unknown }) => void;
@@ -73,6 +78,15 @@ const entry = (over: Partial<QuarantineEntry> = {}): QuarantineEntry => ({
   quarantined_at: "2026-03-05T12:00:00Z",
   ...over,
 });
+
+const confirmRestore = async () => {
+  await userEvent.click(screen.getByRole("button", { name: "Restaurar" }));
+  await userEvent.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Restaurar",
+    }),
+  );
+};
 
 describe("Segurança", () => {
   beforeEach(() => {
@@ -281,17 +295,53 @@ describe("Segurança", () => {
     render(<Seguranca />);
     expect(await screen.findByText("C:\\x\\mal.exe")).toBeInTheDocument();
     expect(screen.getByText(/EICAR_Test_File/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Restaurar" }));
+    await confirmRestore();
     expect(api.quarantineRestore).toHaveBeenCalledWith("abc");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "o destino já existe",
     );
     vi.mocked(api.quarantineRestore).mockResolvedValueOnce("C:\\x\\mal.exe");
     vi.mocked(api.quarantineList).mockResolvedValue([]);
-    await userEvent.click(screen.getByRole("button", { name: "Restaurar" }));
+    await confirmRestore();
     expect(
       await screen.findByText("Nenhum arquivo em quarentena."),
     ).toBeInTheDocument();
     expect(screen.getByText("Restaurado: C:\\x\\mal.exe")).toBeInTheDocument();
+  });
+
+  it("Restaurar pede confirmação com o caminho e a regra", async () => {
+    vi.mocked(api.quarantineList).mockResolvedValue([entry()]);
+    vi.mocked(api.quarantineRestore).mockResolvedValue("C:\\x\\mal.exe");
+    const onRestored = vi.fn();
+    render(<Seguranca onRestored={onRestored} />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Restaurar" }),
+    );
+    expect(api.quarantineRestore).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(
+      "Restaurar C:\\x\\mal.exe? Este arquivo foi colocado em quarentena por: EICAR_Test_File.",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Restaurar" }),
+    );
+    expect(api.quarantineRestore).toHaveBeenCalledWith("abc");
+    await screen.findByText("Restaurado: C:\\x\\mal.exe");
+    expect(onRestored).toHaveBeenCalledTimes(1);
+  });
+
+  it("Cancelar e Escape não restauram", async () => {
+    vi.mocked(api.quarantineList).mockResolvedValue([entry()]);
+    render(<Seguranca />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Restaurar" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Restaurar" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(api.quarantineRestore).not.toHaveBeenCalled();
   });
 });

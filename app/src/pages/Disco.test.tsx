@@ -1,15 +1,20 @@
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import type { DupGroup, FindResult, LargeFile } from "../api";
 import Disco from "./Disco";
+import { JobsProvider } from "../jobs";
+
+const render = (ui: React.ReactElement) =>
+  rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
   diskFindLarge: vi.fn(),
   diskFindDupes: vi.fn(),
   jobCancel: vi.fn(),
+  jobRunning: vi.fn().mockResolvedValue(null),
 }));
 
 type Listener = (e: { payload: unknown }) => void;
@@ -36,7 +41,13 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 const result = <T,>(
   items: T[],
   over: Partial<FindResult<T>> = {},
-): FindResult<T> => ({ items, errors: [], interrupted: false, ...over });
+): FindResult<T> => ({
+  items,
+  errors: [],
+  interrupted: false,
+  errors_total: over.errors?.length ?? 0,
+  ...over,
+});
 
 const finish = async (res: unknown, kind: string, job = 7) => {
   await act(async () => {
@@ -230,7 +241,8 @@ describe("Disco", () => {
     await searchLarge();
     await finish(
       result<LargeFile>([], {
-        errors: Array.from({ length: 250 }, (_, i) => ({
+        errors_total: 250,
+        errors: Array.from({ length: 200 }, (_, i) => ({
           path: "p" + i,
           reason: "negado",
         })),
@@ -238,9 +250,9 @@ describe("Disco", () => {
       "find_large",
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: /Não verificados/ }),
+      await screen.findByRole("button", { name: "Não verificados (250)" }),
     );
     expect(screen.getByText("Mostrando 200 de 250")).toBeInTheDocument();
-    expect(screen.queryByText("p249")).toBeNull();
+    expect(screen.getByText("p199")).toBeInTheDocument();
   });
 });

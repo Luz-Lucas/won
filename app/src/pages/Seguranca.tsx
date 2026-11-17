@@ -8,6 +8,7 @@ import {
   type ScanSummary,
   type ScanTarget,
 } from "../api";
+import ConfirmDialog from "../components/ConfirmDialog";
 import FindingList from "../components/FindingList";
 import ProgressBar from "../components/ProgressBar";
 import type { Page } from "../components/Sidebar";
@@ -19,10 +20,12 @@ const number = new Intl.NumberFormat("pt-BR");
 
 export default function Seguranca({
   onNavigate,
+  onRestored,
 }: {
   onNavigate?: (page: Page) => void;
+  onRestored?: () => void;
 }) {
-  const job = useJob<ScanSummary>();
+  const job = useJob<ScanSummary>("scan");
   const [picking, setPicking] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -31,6 +34,7 @@ export default function Seguranca({
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [restored, setRestored] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<QuarantineEntry | null>(null);
 
   const running = job.state === "running";
   const busy = running || picking;
@@ -73,7 +77,9 @@ export default function Seguranca({
     job.cancel().catch(() => setCancelling(false));
   };
 
+  // Só restaura depois de o usuário confirmar no diálogo.
   const restore = async (id: string) => {
+    setConfirming(null);
     setRestoreError(null);
     setRestored(null);
     setRestoring(id);
@@ -81,6 +87,7 @@ export default function Seguranca({
       const path = await quarantineRestore(id);
       setRestored(path);
       loadQuarantine();
+      onRestored?.();
     } catch (e) {
       setRestoreError(errorText(e));
     } finally {
@@ -254,13 +261,25 @@ export default function Seguranca({
                 type="button"
                 className="btn"
                 disabled={restoring !== null}
-                onClick={() => void restore(q.id)}
+                onClick={() => setConfirming(q)}
               >
                 Restaurar
               </button>
             </li>
           ))}
         </ul>
+      )}
+      {confirming && (
+        <ConfirmDialog
+          title="Restaurar da quarentena"
+          confirmLabel="Restaurar"
+          onConfirm={() => void restore(confirming.id)}
+          onCancel={() => setConfirming(null)}
+        >
+          <p>
+            {`Restaurar ${confirming.original_path}? Este arquivo foi colocado em quarentena por: ${confirming.rule}.`}
+          </p>
+        </ConfirmDialog>
       )}
     </section>
   );

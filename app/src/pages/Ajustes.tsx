@@ -7,6 +7,7 @@ import {
   signaturesUpdate,
   systemStatus,
   type DbStatus,
+  type KeySource,
   type UpdateSummary,
 } from "../api";
 import { humanDate } from "../format";
@@ -17,10 +18,10 @@ const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 const number = new Intl.NumberFormat("pt-BR");
 
 export default function Ajustes() {
-  const job = useJob<UpdateSummary>();
+  const job = useJob<UpdateSummary>("update");
   const [db, setDb] = useState<DbStatus | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
-  const [hasKey, setHasKey] = useState<boolean | null>(null);
+  const [keySource, setKeySource] = useState<KeySource | null>(null);
   const [keyInput, setKeyInput] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
@@ -40,8 +41,8 @@ export default function Ajustes() {
 
   const loadKey = useCallback(() => {
     abuseKeyPresent().then(
-      (p) => setHasKey(p === true),
-      () => setHasKey(false),
+      (p) => setKeySource(p),
+      () => setKeySource("none"),
     );
   }, []);
   useEffect(loadKey, [loadKey]);
@@ -161,11 +162,13 @@ export default function Ajustes() {
         mostrada de volta.
       </p>
       <p>
-        {hasKey === null
+        {keySource === null
           ? "Carregando…"
-          : hasKey
+          : keySource === "stored"
             ? "Chave salva"
-            : "Sem chave (só as regras YARA são atualizadas)"}
+            : keySource === "env"
+              ? "Usando a variável ABUSE_CH_AUTH_KEY"
+              : "Sem chave (só as regras YARA são atualizadas)"}
       </p>
       <p>
         <label>
@@ -189,7 +192,7 @@ export default function Ajustes() {
         <button
           type="button"
           className="btn"
-          disabled={keyBusy || !hasKey}
+          disabled={keyBusy || keySource !== "stored"}
           onClick={() => void removeKey()}
         >
           Remover

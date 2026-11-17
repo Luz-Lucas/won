@@ -1,10 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import type { SystemStatus, UpdateSummary } from "../api";
 import Ajustes from "./Ajustes";
+import { JobsProvider } from "../jobs";
+
+const render = (ui: React.ReactElement) =>
+  rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
   systemStatus: vi.fn(),
@@ -13,6 +17,7 @@ vi.mock("../api", () => ({
   abuseKeyClear: vi.fn(),
   abuseKeyPresent: vi.fn(),
   jobCancel: vi.fn(),
+  jobRunning: vi.fn().mockResolvedValue(null),
 }));
 
 type Listener = (e: { payload: unknown }) => void;
@@ -74,7 +79,7 @@ describe("Ajustes", () => {
     vi.mocked(api.signaturesUpdate).mockReset().mockResolvedValue(9);
     vi.mocked(api.abuseKeySet).mockReset().mockResolvedValue(undefined);
     vi.mocked(api.abuseKeyClear).mockReset().mockResolvedValue(undefined);
-    vi.mocked(api.abuseKeyPresent).mockReset().mockResolvedValue(false);
+    vi.mocked(api.abuseKeyPresent).mockReset().mockResolvedValue("none");
   });
 
   it("mostra pasta, fontes com data e contagem", async () => {
@@ -130,9 +135,19 @@ describe("Ajustes", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Remover" })).toBeDisabled();
     unmount();
-    vi.mocked(api.abuseKeyPresent).mockResolvedValue(true);
+    vi.mocked(api.abuseKeyPresent).mockResolvedValue("stored");
     render(<Ajustes />);
     expect(await screen.findByText("Chave salva")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remover" })).toBeEnabled();
+  });
+
+  it("só a variável de ambiente: diz que a usa e não oferece remover", async () => {
+    vi.mocked(api.abuseKeyPresent).mockResolvedValue("env");
+    render(<Ajustes />);
+    expect(
+      await screen.findByText("Usando a variável ABUSE_CH_AUTH_KEY"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remover" })).toBeDisabled();
   });
 
   it("depois de Salvar o campo é esvaziado e a chave não aparece na página", async () => {
@@ -140,7 +155,7 @@ describe("Ajustes", () => {
     const field = await screen.findByLabelText("Chave de autenticação");
     expect(field).toHaveAttribute("type", "password");
     await userEvent.type(field, SECRET);
-    vi.mocked(api.abuseKeyPresent).mockResolvedValue(true);
+    vi.mocked(api.abuseKeyPresent).mockResolvedValue("stored");
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
     expect(api.abuseKeySet).toHaveBeenCalledWith(SECRET);
     expect(await screen.findByText("Chave salva")).toBeInTheDocument();
@@ -157,10 +172,10 @@ describe("Ajustes", () => {
   });
 
   it("Remover apaga a chave", async () => {
-    vi.mocked(api.abuseKeyPresent).mockResolvedValue(true);
+    vi.mocked(api.abuseKeyPresent).mockResolvedValue("stored");
     render(<Ajustes />);
     await screen.findByText("Chave salva");
-    vi.mocked(api.abuseKeyPresent).mockResolvedValue(false);
+    vi.mocked(api.abuseKeyPresent).mockResolvedValue("none");
     await userEvent.click(screen.getByRole("button", { name: "Remover" }));
     expect(api.abuseKeyClear).toHaveBeenCalledTimes(1);
     expect(
