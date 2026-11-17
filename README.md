@@ -16,7 +16,7 @@ A janela do Sentinela tem cinco páginas, na barra lateral:
 
 - **Início**: situação da proteção, atalhos para verificar e liberar espaço, e a atividade recente.
 - **Limpeza**: simula a limpeza e mostra, por categoria, o que seria apagado e o espaço liberado. Nada é apagado antes de você confirmar; categorias desmarcadas são mantidas.
-- **Segurança**: verifica pastas ou o computador inteiro (com cancelamento), isola em quarentena o malware confirmado por hash e permite restaurar itens da quarentena.
+- **Segurança**: verifica pastas ou o computador inteiro (com cancelamento) e lista o que encontrou, sem mover nem apagar nada; também lista os itens que o `sentinela full` colocou em quarentena e permite restaurá-los, sempre depois de confirmar.
 - **Disco**: lista os maiores arquivos e os duplicados de uma pasta. Só lista; nunca apaga.
 - **Ajustes**: atualiza o banco de assinaturas e guarda a chave gratuita da abuse.ch.
 
