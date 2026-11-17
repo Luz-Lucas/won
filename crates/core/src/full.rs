@@ -34,6 +34,7 @@ pub struct FullOptions<'a> {
 
 #[derive(Debug, Serialize)]
 pub struct QuarantineFailure {
+    #[serde(serialize_with = "crate::serde_path::lossy")]
     pub path: PathBuf,
     pub rule: String,
     pub reason: String,

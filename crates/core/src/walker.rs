@@ -17,6 +17,7 @@ pub struct Entry {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct WalkError {
+    #[serde(serialize_with = "crate::serde_path::lossy")]
     pub path: PathBuf,
     pub reason: String,
 }

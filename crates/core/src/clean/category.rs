@@ -52,6 +52,7 @@ impl Env {
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Candidate {
+    #[serde(serialize_with = "crate::serde_path::lossy")]
     pub path: PathBuf,
     pub size: u64,
 }
@@ -71,6 +72,7 @@ pub struct Plan {
 pub struct ApplyReport {
     pub deleted: u64,
     pub freed: u64,
+    #[serde(serialize_with = "crate::serde_path::lossy_pairs")]
     pub skipped: Vec<(PathBuf, String)>,
 }
 

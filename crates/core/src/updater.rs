@@ -93,7 +93,7 @@ impl Fetcher for HttpFetcher {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct UpdateSummary {
     pub hashes: usize,
     /// Rule files (`.yar`) accepted / rejected; the pack may hold many rules per file.

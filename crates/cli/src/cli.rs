@@ -12,6 +12,7 @@ use sentinela_core::clean::category::Env;
 use sentinela_core::clean::{self, CleanReport, platform};
 use sentinela_core::full::{self, FullOptions};
 use sentinela_core::scan::{Engine, NoProgress, Progress, ScanOptions, run_scan_with_progress};
+use sentinela_core::status::db_status;
 use sentinela_core::walker::WalkOptions;
 use sentinela_core::{finder, platform_fs, quarantine, signatures, updater};
 
@@ -150,8 +151,8 @@ fn dispatch(command: Command) -> Result<i32> {
             let min = min_size
                 .checked_mul(1024 * 1024)
                 .context("--min-size grande demais")?;
-            let (files, errors) = finder::find_large(&[path], top, min);
-            report::write_finder_large(&files, &errors, json, &mut io::stdout().lock())?;
+            let r = finder::find_large(&[path], top, min, &AtomicBool::new(false));
+            report::write_finder_large(&r.items, &r.errors, json, &mut io::stdout().lock())?;
             Ok(0)
         }
         Command::FindDupes {
@@ -163,8 +164,8 @@ fn dispatch(command: Command) -> Result<i32> {
             let min = min_size
                 .checked_mul(1024)
                 .context("--min-size grande demais")?;
-            let (groups, errors) = finder::find_dupes(&[path], min);
-            report::write_finder_dupes(&groups, &errors, json, &mut io::stdout().lock())?;
+            let r = finder::find_dupes(&[path], min, &AtomicBool::new(false));
+            report::write_finder_dupes(&r.items, &r.errors, json, &mut io::stdout().lock())?;
             Ok(0)
         }
         Command::Full { json, root } => cmd_full(json, root),
@@ -411,19 +412,18 @@ fn cmd_info() -> Result<i32> {
     let dir = signatures::default_db_dir();
     println!("sentinela {}", env!("CARGO_PKG_VERSION"));
     println!("Banco de assinaturas: {}", dir.display());
-    let db = signatures::load(&dir);
-    match &db.manifest {
-        Some(m) if !m.sources.is_empty() => {
-            for s in &m.sources {
-                println!(
-                    "  {} — atualizado em {} ({} itens)",
-                    s.name, s.fetched_at, s.count
-                );
-            }
+    let status = db_status(&dir);
+    if status.initialized {
+        for s in &status.sources {
+            println!(
+                "  {} — atualizado em {} ({} itens)",
+                s.name, s.fetched_at, s.count
+            );
         }
-        _ => println!("  banco não inicializado — rode `sentinela update`"),
+    } else {
+        println!("  banco não inicializado — rode `sentinela update`");
     }
-    for w in &db.warnings {
+    for w in &status.warnings {
         eprintln!("aviso: {w}");
     }
     println!(

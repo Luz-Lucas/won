@@ -4,6 +4,8 @@ pub mod full;
 pub mod platform_fs;
 pub mod quarantine;
 pub mod scan;
+pub mod serde_path;
 pub mod signatures;
+pub mod status;
 pub mod updater;
 pub mod walker;

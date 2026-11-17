@@ -25,6 +25,7 @@ pub struct ScanOptions {
 
 #[derive(Debug, Serialize)]
 pub struct ScanItem {
+    #[serde(serialize_with = "crate::serde_path::lossy")]
     pub path: PathBuf,
     pub verdict: Severity,
     pub findings: Vec<Finding>,
