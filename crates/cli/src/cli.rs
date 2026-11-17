@@ -12,6 +12,7 @@ use sentinela_core::clean::category::Env;
 use sentinela_core::clean::{self, CleanReport, platform};
 use sentinela_core::full::{self, FullOptions};
 use sentinela_core::scan::{Engine, NoProgress, Progress, ScanOptions, run_scan_with_progress};
+use sentinela_core::secrets::{WindowsCredentialStore, resolve_abuse_key};
 use sentinela_core::status::db_status;
 use sentinela_core::walker::WalkOptions;
 use sentinela_core::{finder, platform_fs, quarantine, signatures, updater};
@@ -326,10 +327,10 @@ fn cmd_full(json: bool, roots_override: Vec<PathBuf>) -> Result<i32> {
 }
 
 fn cmd_update() -> Result<i32> {
-    let key = std::env::var("ABUSE_CH_AUTH_KEY")
-        .ok()
-        .filter(|k| !k.trim().is_empty())
-        .map(|k| k.trim().to_string());
+    let key = resolve_abuse_key(
+        &WindowsCredentialStore,
+        std::env::var("ABUSE_CH_AUTH_KEY").ok(),
+    );
     let dir = signatures::default_db_dir();
     let s = updater::update(&dir, &updater::HttpFetcher, key)?;
     println!("Banco atualizado em {}", dir.display());

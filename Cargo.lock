@@ -4764,6 +4764,7 @@ dependencies = [
 name = "sentinela-gui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "sentinela-core",
  "serde",
  "serde_json",
@@ -4772,6 +4773,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tempfile",
  "windows-sys 0.61.2",
 ]
 

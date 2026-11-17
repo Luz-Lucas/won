@@ -6,6 +6,7 @@ pub mod full;
 pub mod platform_fs;
 pub mod quarantine;
 pub mod scan;
+pub mod secrets;
 pub mod serde_path;
 pub mod signatures;
 pub mod status;

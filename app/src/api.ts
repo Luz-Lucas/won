@@ -120,3 +120,17 @@ export const quarantineList = () =>
   invoke<QuarantineEntry[]>("quarantine_list");
 export const quarantineRestore = (id: string) =>
   invoke<string>("quarantine_restore", { id });
+
+export interface UpdateSummary {
+  hashes: number;
+  rules_ok: number;
+  rules_rejected: number;
+  rules_count: number;
+  warnings: string[];
+}
+
+export const signaturesUpdate = () => invoke<number>("signatures_update");
+export const abuseKeySet = (key: string) =>
+  invoke<void>("abuse_key_set", { key });
+export const abuseKeyClear = () => invoke<void>("abuse_key_clear");
+export const abuseKeyPresent = () => invoke<boolean>("abuse_key_present");
