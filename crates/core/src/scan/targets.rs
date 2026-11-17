@@ -219,6 +219,11 @@ mod tests {
             eprintln!("PULADO: não foi possível gravar o EICAR (antivírus?): {e}");
             return;
         }
+        // Só pula se o antivírus já bloqueou/removeu o arquivo ANTES da verificação.
+        if std::fs::read(&f).ok().as_deref() != Some(signatures::EICAR) {
+            eprintln!("PULADO: o arquivo EICAR foi bloqueado ou removido antes da verificação");
+            return;
+        }
         let r = resolve(
             &ScanTarget::Custom {
                 paths: vec![d.path().to_path_buf()],
@@ -239,10 +244,6 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let report = run_scan_with_progress(&engine, &opts, &cancel, &NoProgress);
         let s = summarize(report, &r.missing, false, warnings);
-        if !f.exists() || (s.malicious == 0 && s.errors_total > 0) {
-            eprintln!("PULADO: o arquivo EICAR foi bloqueado ou removido (antivírus?)");
-            return;
-        }
         assert_eq!(s.malicious, 1);
         assert!(f.exists(), "a verificação não pode mover o arquivo");
     }

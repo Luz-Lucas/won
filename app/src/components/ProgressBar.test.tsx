@@ -1,18 +1,20 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import type { JobProgress } from "../jobs";
 import ProgressBar from "./ProgressBar";
 
-const scanning = (over: Record<string, number | string> = {}) =>
-  ({
-    job: 1,
-    phase: "scanning",
-    files_done: 5,
-    total_files: 10,
-    bytes_done: 0,
-    total_bytes: 0,
-    current: "C:\\a",
-    ...over,
-  }) as never;
+type Scanning = Extract<JobProgress, { phase: "scanning" }>;
+
+const scanning = (over: Partial<Scanning> = {}): Scanning => ({
+  job: 1,
+  phase: "scanning",
+  files_done: 5,
+  total_files: 10,
+  bytes_done: 0,
+  total_bytes: 0,
+  current: "C:\\a",
+  ...over,
+});
 
 describe("ProgressBar", () => {
   it("usa a razão de arquivos quando total_bytes é 0, sem NaN", () => {
