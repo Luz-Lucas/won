@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { jobCancel } from "./api";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -100,7 +100,7 @@ export function useJob<T>() {
       if (cancelRequestedRef.current && liveRef.current) {
         // Falha ao cancelar não encerra o job: o evento terminal limpa o estado.
         try {
-          await invoke("job_cancel", { id });
+          await jobCancel(id);
         } catch {
           /* o job segue em andamento */
         }
@@ -111,7 +111,7 @@ export function useJob<T>() {
 
   const cancel = useCallback(async () => {
     if (idRef.current !== null)
-      await invoke("job_cancel", { id: idRef.current });
+      await jobCancel(idRef.current);
     else if (liveRef.current) cancelRequestedRef.current = true;
   }, []);
 

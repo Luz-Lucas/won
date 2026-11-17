@@ -15,14 +15,18 @@ impl Sink for TauriSink {
 }
 
 pub fn run() {
-    commands::system::wait_for_previous_instance();
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // A instância elevada (`--wait-pid`) nunca registra a instância única.
+    let relaunched = commands::system::wait_for_previous_instance();
+    let mut builder = tauri::Builder::default();
+    if !relaunched {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
-        }))
+        }));
+    }
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -31,11 +35,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             // Fechar a janela principal cancela operações em andamento, sem bloquear o fechamento.
-            if window.label() == "main"
-                && matches!(event, WindowEvent::CloseRequested { .. })
+            if matches!(event, WindowEvent::CloseRequested { .. })
                 && let Some(jobs) = window.try_state::<Arc<JobRegistry>>()
             {
-                jobs.cancel_all();
+                commands::system::on_window_close(window.label(), &jobs);
             }
         })
         .invoke_handler(tauri::generate_handler![

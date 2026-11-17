@@ -7,6 +7,7 @@ use sentinela_core::activity::{self, ActivityEntry};
 use sentinela_core::status::{self, DbStatus};
 use sentinela_core::{clean, quarantine, signatures};
 use serde::Serialize;
+use std::ffi::OsString;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
@@ -49,8 +50,14 @@ pub fn job_cancel(id: JobId, jobs: State<'_, Arc<JobRegistry>>) -> bool {
 }
 
 #[tauri::command]
-pub fn relaunch_elevated(app: AppHandle, jobs: State<'_, Arc<JobRegistry>>) -> Result<(), String> {
-    shell_execute_runas()?;
+pub async fn relaunch_elevated(
+    app: AppHandle,
+    jobs: State<'_, Arc<JobRegistry>>,
+) -> Result<(), String> {
+    // O prompt do UAC bloqueia a chamada: fora da thread principal.
+    tauri::async_runtime::spawn_blocking(shell_execute_runas)
+        .await
+        .map_err(|_| "Não foi possível reiniciar como administrador.".to_string())??;
     jobs.cancel_all();
     app.exit(0);
     Ok(())
@@ -93,25 +100,70 @@ fn shell_execute_runas() -> Result<(), String> {
     }
 }
 
+/// Extrai o PID de `--wait-pid=<n>` dos argumentos, se presente.
+fn parse_wait_pid<I: IntoIterator<Item = OsString>>(args: I) -> Option<u32> {
+    args.into_iter()
+        .find_map(|a| a.to_str()?.strip_prefix(WAIT_PID_ARG)?.parse::<u32>().ok())
+}
+
 /// Se o processo foi iniciado com `--wait-pid=<n>`, espera esse processo sair
-/// (no máximo 10 s). Chamado antes de a instância única ser registrada.
-pub fn wait_for_previous_instance() {
+/// (no máximo 10 s; no timeout segue em frente) e devolve `true`. Esse processo
+/// (a instância elevada) não deve registrar a instância única: sempre abre.
+pub fn wait_for_previous_instance() -> bool {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{OpenProcess, WaitForSingleObject};
 
     const SYNCHRONIZE: u32 = 0x0010_0000;
-    let Some(pid) = std::env::args().find_map(|a| {
-        a.strip_prefix(WAIT_PID_ARG)
-            .and_then(|p| p.parse::<u32>().ok())
-    }) else {
-        return;
+    let Some(pid) = parse_wait_pid(std::env::args_os()) else {
+        return false;
     };
     // SAFETY: handle obtido aqui e fechado logo após a espera.
     unsafe {
         let handle = OpenProcess(SYNCHRONIZE, 0, pid);
         if !handle.is_null() {
-            WaitForSingleObject(handle, 10_000);
+            // Timeout ou falha: apenas continua.
+            let _ = WaitForSingleObject(handle, 10_000);
             CloseHandle(handle);
         }
+    }
+    true
+}
+
+/// Fechar a janela principal cancela as operações em andamento (sem bloquear o fechamento).
+pub fn on_window_close(label: &str, jobs: &JobRegistry) {
+    if label == "main" {
+        jobs.cancel_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jobs::JobKind;
+    use std::sync::atomic::Ordering;
+
+    fn os(args: &[&str]) -> Vec<OsString> {
+        args.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn parses_wait_pid() {
+        assert_eq!(
+            parse_wait_pid(os(&["app.exe", "--wait-pid=1234"])),
+            Some(1234)
+        );
+        assert_eq!(parse_wait_pid(os(&["app.exe"])), None);
+        assert_eq!(parse_wait_pid(os(&["--wait-pid=abc"])), None);
+        assert_eq!(parse_wait_pid(os(&["--wait-pid="])), None);
+    }
+
+    #[test]
+    fn close_cancels_only_for_main() {
+        let reg = JobRegistry::new();
+        let (_, flag) = reg.start(JobKind::Scan).unwrap();
+        on_window_close("outra", &reg);
+        assert!(!flag.load(Ordering::Relaxed));
+        on_window_close("main", &reg);
+        assert!(flag.load(Ordering::Relaxed));
     }
 }
