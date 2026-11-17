@@ -17,6 +17,7 @@ pub enum ActivityKind {
     Quarantine,
     Restore,
     Update,
+    Tweak,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +76,26 @@ pub fn recent(path: &Path, n: usize) -> Vec<ActivityEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tweak_kind_serializes_as_tweak_and_old_files_still_load() {
+        assert_eq!(
+            serde_json::to_string(&ActivityKind::Tweak).unwrap(),
+            "\"tweak\""
+        );
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("a.json");
+        std::fs::write(
+            &p,
+            br#"[{"at":"2026-01-01T00:00:00Z","kind":"clean","summary":"x"}]"#,
+        )
+        .unwrap();
+        append(&p, ActivityKind::Tweak, "y").unwrap();
+        let r = recent(&p, 10);
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].kind, ActivityKind::Tweak);
+        assert_eq!(r[1].kind, ActivityKind::Clean);
+    }
 
     #[test]
     fn recent_returns_newest_first() {

@@ -78,7 +78,7 @@ fn snapshot_text(s: &Snapshot) -> String {
     }
 }
 
-fn describe(action: &Action) -> String {
+pub(crate) fn describe(action: &Action) -> String {
     match action {
         Action::Registry {
             hive, path, name, ..
