@@ -96,6 +96,47 @@ describe("useJob", () => {
     expect(result.current.result).toBe(3);
   });
 
+  it("ignora start enquanto há um job vivo", async () => {
+    const { result } = await setup();
+    await act(async () => {
+      await result.current.start(async () => 1);
+    });
+    const second = vi.fn(async () => 2);
+    await act(async () => {
+      await result.current.start(second);
+    });
+    expect(second).not.toHaveBeenCalled();
+    expect(result.current.state).toBe("running");
+    emit("job:done", { job: 1, kind: "scan", result: 11 });
+    expect(result.current.state).toBe("done");
+    expect(result.current.result).toBe(11);
+    // terminado, um novo start volta a funcionar
+    await act(async () => {
+      await result.current.start(second);
+    });
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancel pedido antes do id é enviado quando o id chega", async () => {
+    const { result } = await setup();
+    let resolveId!: (id: number) => void;
+    let started!: Promise<void>;
+    await act(async () => {
+      started = result.current.start(
+        () => new Promise<number>((r) => (resolveId = r)),
+      );
+    });
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+    await act(async () => {
+      resolveId(3);
+      await started;
+    });
+    expect(invokeMock).toHaveBeenCalledWith("job_cancel", { id: 3 });
+  });
+
   it("cancel chama job_cancel com o id", async () => {
     const { result } = await setup();
     await act(async () => {

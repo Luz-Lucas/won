@@ -30,13 +30,18 @@ export function useJob<T>() {
   const idRef = useRef<number | null>(null);
   // Eventos recebidos enquanto o comando ainda não devolveu o id do job.
   const pendingRef = useRef<JobEvent[] | null>(null);
+  // True enquanto há um job vivo (inclusive aguardando o id).
+  const liveRef = useRef(false);
+  const cancelRequestedRef = useRef(false);
 
   const apply = useCallback((ev: JobEvent) => {
     if (ev.type === "progress") setProgress(ev.payload);
     else if (ev.type === "done") {
+      liveRef.current = false;
       setResult(ev.payload.result as T);
       setState("done");
     } else {
+      liveRef.current = false;
       setError(ev.payload.message);
       setState("error");
     }
@@ -67,6 +72,9 @@ export function useJob<T>() {
 
   const start = useCallback(
     async (invokeFn: () => Promise<number>) => {
+      if (liveRef.current) return; // já há um job vivo: ignora cliques repetidos
+      liveRef.current = true;
+      cancelRequestedRef.current = false;
       setState("running");
       setProgress(null);
       setResult(null);
@@ -79,8 +87,11 @@ export function useJob<T>() {
         const buffered = pendingRef.current ?? [];
         pendingRef.current = null;
         buffered.filter((ev) => ev.payload.job === id).forEach(apply);
+        if (cancelRequestedRef.current && liveRef.current)
+          await invoke("job_cancel", { id });
       } catch (e) {
         pendingRef.current = null;
+        liveRef.current = false;
         setError(typeof e === "string" ? e : String(e));
         setState("error");
       }
@@ -89,7 +100,9 @@ export function useJob<T>() {
   );
 
   const cancel = useCallback(async () => {
-    if (idRef.current !== null) await invoke("job_cancel", { id: idRef.current });
+    if (idRef.current !== null)
+      await invoke("job_cancel", { id: idRef.current });
+    else if (liveRef.current) cancelRequestedRef.current = true;
   }, []);
 
   return { state, progress, result, error, start, cancel };
