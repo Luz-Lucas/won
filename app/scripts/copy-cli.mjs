@@ -10,7 +10,7 @@ const origem = resolve(alvo, "release", "sentinela.exe");
 const destino = resolve(raiz, "app", "src-tauri", "bin", "sentinela.exe");
 
 if (!existsSync(origem)) {
-  console.error(`sentinela.exe não encontrado em ${origem}`);
+  console.error(`sentinela.exe não encontrado em ${origem}; rode ${"`"}cargo build --release -p sentinela${"`"} antes`);
   process.exit(1);
 }
 mkdirSync(dirname(destino), { recursive: true });

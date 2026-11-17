@@ -36,9 +36,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": {
-      "bin/sentinela.exe": "sentinela.exe"
-    },
     "windows": {
       "nsis": {
         "installMode": "perMachine",

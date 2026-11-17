@@ -8,7 +8,7 @@ Antivírus e limpador de arquivos para Windows, escrito em Rust, com janela (Tau
 
 ## Download
 
-Baixe o instalador `Sentinela_<versão>_x64-setup.exe` mais recente na página de [releases](https://github.com/Luz-Lucas/sentinela/releases). Ele instala para todos os usuários (em `C:Program FilesSentinela`, pede permissão de administrador) e coloca lado a lado a janela (`sentinela-gui.exe`) e o `sentinela.exe`. Não há versão portátil. A release também anexa o `sentinela.exe` solto, para quem só quer a linha de comando.
+Baixe o instalador `Sentinela_<versão>_x64-setup.exe` mais recente na página de [releases](https://github.com/Luz-Lucas/sentinela/releases). Ele instala para todos os usuários (em `C:\Program Files\Sentinela`, pede permissão de administrador) e coloca lado a lado a janela (`sentinela-gui.exe`) e o `sentinela.exe`. Não há versão portátil. A release também anexa o `sentinela.exe` solto, para quem só quer a linha de comando.
 
 ### Interface gráfica
 
@@ -24,7 +24,7 @@ O rodapé da barra lateral mostra se o programa está como administrador e ofere
 
 ### Linha de comando
 
-Depois de instalar, o `sentinela.exe` fica na pasta de instalação (`C:Program FilesSentinela`); adicione-a ao `PATH` ou use o caminho completo.
+Depois de instalar, o `sentinela.exe` fica na pasta de instalação (`C:\Program Files\Sentinela`); adicione-a ao `PATH` ou use o caminho completo.
 
 ## Comandos
 
@@ -220,7 +220,7 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Janela e instalador (em `app/`; para compilar o `sentinela-gui` com `cargo`, o `dist` do frontend e o arquivo `app/src-tauri/bin/sentinela.exe` precisam existir; o `npm run tauri build` cria o segundo, e um arquivo vazio basta para `cargo clippy`/`cargo test`):
+Janela e instalador (em `app/`; o `dist` do frontend precisa existir para compilar o `sentinela-gui` com `cargo`):
 
 ```bash
 cd app
