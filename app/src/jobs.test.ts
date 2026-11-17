@@ -137,6 +137,47 @@ describe("useJob", () => {
     expect(invokeMock).toHaveBeenCalledWith("job_cancel", { id: 3 });
   });
 
+  it("falha no cancel adiado não encerra o job nem libera novo start", async () => {
+    const { result } = await setup();
+    let resolveId!: (id: number) => void;
+    let started!: Promise<void>;
+    await act(async () => {
+      started = result.current.start(
+        () => new Promise<number>((r) => (resolveId = r)),
+      );
+    });
+    await act(async () => {
+      await result.current.cancel();
+    });
+    invokeMock.mockRejectedValueOnce("falhou");
+    await act(async () => {
+      resolveId(8);
+      await started;
+    });
+    expect(invokeMock).toHaveBeenCalledWith("job_cancel", { id: 8 });
+    expect(result.current.state).toBe("running");
+    const second = vi.fn(async () => 9);
+    await act(async () => {
+      await result.current.start(second);
+    });
+    expect(second).not.toHaveBeenCalled();
+    emit("job:done", { job: 8, kind: "scan", result: 5 });
+    expect(result.current.state).toBe("done");
+    expect(result.current.result).toBe(5);
+  });
+
+  it("cancel depois de concluir não faz nada", async () => {
+    const { result } = await setup();
+    await act(async () => {
+      await result.current.start(async () => 2);
+    });
+    emit("job:done", { job: 2, kind: "scan", result: 1 });
+    await act(async () => {
+      await result.current.cancel();
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
   it("cancel chama job_cancel com o id", async () => {
     const { result } = await setup();
     await act(async () => {

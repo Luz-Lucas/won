@@ -38,10 +38,12 @@ export function useJob<T>() {
     if (ev.type === "progress") setProgress(ev.payload);
     else if (ev.type === "done") {
       liveRef.current = false;
+      idRef.current = null;
       setResult(ev.payload.result as T);
       setState("done");
     } else {
       liveRef.current = false;
+      idRef.current = null;
       setError(ev.payload.message);
       setState("error");
     }
@@ -81,19 +83,27 @@ export function useJob<T>() {
       setError(null);
       idRef.current = null;
       pendingRef.current = [];
+      let id: number;
       try {
-        const id = await invokeFn();
-        idRef.current = id;
-        const buffered = pendingRef.current ?? [];
-        pendingRef.current = null;
-        buffered.filter((ev) => ev.payload.job === id).forEach(apply);
-        if (cancelRequestedRef.current && liveRef.current)
-          await invoke("job_cancel", { id });
+        id = await invokeFn();
       } catch (e) {
         pendingRef.current = null;
         liveRef.current = false;
         setError(typeof e === "string" ? e : String(e));
         setState("error");
+        return;
+      }
+      idRef.current = id;
+      const buffered = pendingRef.current ?? [];
+      pendingRef.current = null;
+      buffered.filter((ev) => ev.payload.job === id).forEach(apply);
+      if (cancelRequestedRef.current && liveRef.current) {
+        // Falha ao cancelar não encerra o job: o evento terminal limpa o estado.
+        try {
+          await invoke("job_cancel", { id });
+        } catch {
+          /* o job segue em andamento */
+        }
       }
     },
     [apply],
