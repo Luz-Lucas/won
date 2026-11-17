@@ -61,7 +61,7 @@ const searchLarge = async () => {
 };
 
 const searchDupes = async () => {
-  vi.mocked(api.diskFindDupes).mockResolvedValue(7);
+  vi.mocked(api.diskFindDupes).mockResolvedValue(8);
   await userEvent.click(screen.getByRole("tab", { name: "Duplicados" }));
   await pick();
   await userEvent.click(screen.getByRole("button", { name: "Procurar" }));
@@ -85,7 +85,7 @@ describe("Disco", () => {
       sha256: "ab",
       paths: ["C:/a.bin", "C:/b.bin", "C:/c.bin"],
     };
-    await finish(result([group]), "find_dupes");
+    await finish(result([group]), "find_dupes", 8);
     expect(
       await screen.findByText("Espaço desperdiçado: 200 B"),
     ).toBeInTheDocument();
@@ -171,9 +171,76 @@ describe("Disco", () => {
   it("duplicados vazio mostra o estado vazio", async () => {
     render(<Disco />);
     await searchDupes();
-    await finish(result<DupGroup>([]), "find_dupes");
+    await finish(result<DupGroup>([]), "find_dupes", 8);
     expect(
       await screen.findByText("Nenhum duplicado encontrado."),
     ).toBeInTheDocument();
+  });
+
+  it("valida os campos no cliente e não chama o backend", async () => {
+    render(<Disco />);
+    await pick();
+    const qty = screen.getByLabelText("Quantidade");
+    const search = screen.getByRole("button", { name: "Procurar" });
+    for (const bad of ["-1", "0", "501", "abc", ""]) {
+      await userEvent.clear(qty);
+      if (bad) await userEvent.type(qty, bad);
+      await userEvent.click(search);
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+    }
+    const mb = screen.getByLabelText("Tamanho mínimo (MB)");
+    await userEvent.clear(qty);
+    await userEvent.type(qty, "5");
+    expect(screen.queryByRole("alert")).toBeNull();
+    await userEvent.clear(mb);
+    await userEvent.click(search);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/inteiros/);
+    await userEvent.type(mb, "-1");
+    await userEvent.click(search);
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Duplicados" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const kb = screen.getByLabelText("Tamanho mínimo (KB)");
+    for (const bad of ["", "-1", "abc"]) {
+      await userEvent.clear(kb);
+      if (bad) await userEvent.type(kb, bad);
+      await userEvent.click(screen.getByRole("button", { name: "Procurar" }));
+      expect(await screen.findByRole("alert")).toBeInTheDocument();
+    }
+    expect(api.diskFindLarge).not.toHaveBeenCalled();
+    expect(api.diskFindDupes).not.toHaveBeenCalled();
+  });
+
+  it("evento de outro job não afeta a aba em andamento nem a outra aba", async () => {
+    render(<Disco />);
+    await searchLarge(); // maiores arquivos = job 7
+    await finish(result<DupGroup>([]), "find_dupes", 8);
+    expect(screen.getByText("Procurando…")).toBeInTheDocument();
+    expect(screen.queryByText("Nenhum duplicado encontrado.")).toBeNull();
+    await finish(result<LargeFile>([]), "find_large", 7);
+    expect(
+      await screen.findByText("Nenhum arquivo encontrado."),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Duplicados" }));
+    expect(screen.queryByText("Nenhum duplicado encontrado.")).toBeNull();
+  });
+
+  it("limita a lista de não verificados a 200", async () => {
+    render(<Disco />);
+    await searchLarge();
+    await finish(
+      result<LargeFile>([], {
+        errors: Array.from({ length: 250 }, (_, i) => ({
+          path: "p" + i,
+          reason: "negado",
+        })),
+      }),
+      "find_large",
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Não verificados/ }),
+    );
+    expect(screen.getByText("Mostrando 200 de 250")).toBeInTheDocument();
+    expect(screen.queryByText("p249")).toBeNull();
   });
 });

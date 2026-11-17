@@ -15,6 +15,8 @@ type Tab = "large" | "dupes";
 
 const number = new Intl.NumberFormat("pt-BR");
 const INPUT_ERROR = "Informe apenas números inteiros não negativos.";
+const TOP_ERROR = "Quantidade deve ser um inteiro entre 1 e 500.";
+const ERRORS_SHOWN = 200;
 
 async function reveal(path: string) {
   try {
@@ -49,11 +51,16 @@ function Unverified({ result }: { result: FindResult<unknown> }) {
       </button>
       {show && (
         <ul className="sample">
-          {result.errors.map((e, i) => (
+          {result.errors.slice(0, ERRORS_SHOWN).map((e, i) => (
             <li key={`${e.path}-${i}`}>
               <span>{e.path}</span> <span className="muted">{e.reason}</span>
             </li>
           ))}
+          {result.errors.length > ERRORS_SHOWN && (
+            <li className="muted">
+              {`Mostrando ${ERRORS_SHOWN} de ${number.format(result.errors.length)}`}
+            </li>
+          )}
         </ul>
       )}
     </div>
@@ -118,7 +125,8 @@ export default function Disco() {
     if (tab === "large") {
       const t = parseCount(top);
       const m = parseCount(minMb);
-      if (t === null || m === null) return setInputError(INPUT_ERROR);
+      if (t === null || t < 1 || t > 500) return setInputError(TOP_ERROR);
+      if (m === null) return setInputError(INPUT_ERROR);
       setInputError(null);
       void largeJob.start(() => diskFindLarge(folder, t, m));
     } else {
@@ -149,7 +157,10 @@ export default function Disco() {
           className="btn"
           aria-selected={tab === "large"}
           disabled={busy}
-          onClick={() => setTab("large")}
+          onClick={() => {
+            setTab("large");
+            setInputError(null);
+          }}
         >
           Maiores arquivos
         </button>
@@ -159,7 +170,10 @@ export default function Disco() {
           className="btn"
           aria-selected={tab === "dupes"}
           disabled={busy}
-          onClick={() => setTab("dupes")}
+          onClick={() => {
+            setTab("dupes");
+            setInputError(null);
+          }}
         >
           Duplicados
         </button>
@@ -184,7 +198,10 @@ export default function Disco() {
                 max={500}
                 value={top}
                 disabled={busy}
-                onChange={(e) => setTop(e.target.value)}
+                onChange={(e) => {
+                  setTop(e.target.value);
+                  setInputError(null);
+                }}
               />
             </label>
             <label>
@@ -194,7 +211,10 @@ export default function Disco() {
                 min={0}
                 value={minMb}
                 disabled={busy}
-                onChange={(e) => setMinMb(e.target.value)}
+                onChange={(e) => {
+                  setMinMb(e.target.value);
+                  setInputError(null);
+                }}
               />
             </label>
           </>
@@ -206,7 +226,10 @@ export default function Disco() {
               min={0}
               value={minKb}
               disabled={busy}
-              onChange={(e) => setMinKb(e.target.value)}
+              onChange={(e) => {
+                setMinKb(e.target.value);
+                setInputError(null);
+              }}
             />
           </label>
         )}
