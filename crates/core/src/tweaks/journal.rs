@@ -43,7 +43,7 @@ pub fn default_journal_path() -> PathBuf {
 }
 
 /// Move um diário ilegível para `journal.json.corrompido-{segundos}`, sem perdê-lo.
-fn set_aside(path: &Path) {
+fn set_aside(path: &Path) -> Result<(), String> {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -58,30 +58,34 @@ fn set_aside(path: &Path) {
         }
         let dest = PathBuf::from(name);
         if !dest.exists() {
-            let _ = std::fs::rename(path, dest);
-            return;
+            return std::fs::rename(path, &dest)
+                .map_err(|e| format!("não foi possível separar o diário corrompido: {e}"));
         }
         n += 1;
     }
 }
 
 impl Journal {
-    /// Ausente → vazio. Ilegível/corrompido → vazio, com o arquivo posto de lado.
-    pub fn load(path: &Path) -> Journal {
+    /// Leitura estrita, usada antes de qualquer escrita no sistema.
+    /// Ausente → vazio. Conteúdo inválido → posto de lado (Err se não der).
+    /// Qualquer outro erro de E/S → Err, sem tocar no arquivo.
+    pub fn load_checked(path: &Path) -> Result<Journal, String> {
         match std::fs::read(path) {
             Ok(bytes) => match serde_json::from_slice::<Journal>(&bytes) {
-                Ok(j) => j,
+                Ok(j) => Ok(j),
                 Err(_) => {
-                    set_aside(path);
-                    Journal::default()
+                    set_aside(path)?;
+                    Ok(Journal::default())
                 }
             },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Journal::default(),
-            Err(_) => {
-                set_aside(path);
-                Journal::default()
-            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Journal::default()),
+            Err(e) => Err(format!("não foi possível ler {}: {e}", path.display())),
         }
+    }
+
+    /// Leitura tolerante, só para exibição: qualquer falha vale como vazio.
+    pub fn load(path: &Path) -> Journal {
+        Self::load_checked(path).unwrap_or_default()
     }
 
     /// Temp + sync + rename: o arquivo nunca fica pela metade.
@@ -216,6 +220,32 @@ mod tests {
             .collect();
         assert_eq!(kept.len(), 1);
         assert_eq!(std::fs::read(kept[0].path()).unwrap(), b"{isto nao e json");
+    }
+
+    #[test]
+    fn unreadable_journal_is_an_error_and_left_alone() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("journal.json");
+        std::fs::create_dir(&p).unwrap(); // ler um diretório falha
+        assert!(Journal::load_checked(&p).is_err());
+        assert!(p.is_dir());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn corrupt_journal_whose_set_aside_fails_is_an_error_and_untouched() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("journal.json");
+        std::fs::write(&p, b"{lixo").unwrap();
+        // Handle sem FILE_SHARE_DELETE: leitura funciona, renomear não.
+        let _hold = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&p)
+            .unwrap();
+        assert!(Journal::load_checked(&p).is_err());
+        assert_eq!(std::fs::read(&p).unwrap(), b"{lixo");
     }
 
     #[test]

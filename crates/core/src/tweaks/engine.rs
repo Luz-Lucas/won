@@ -145,7 +145,19 @@ pub fn apply(
     b: &dyn SystemBackend,
     journal_path: &Path,
 ) -> ApplyReport {
-    let mut journal = Journal::load(journal_path);
+    let mut journal = match Journal::load_checked(journal_path) {
+        Ok(j) => j,
+        Err(e) => {
+            return ApplyReport {
+                results: ids
+                    .iter()
+                    .map(|id| item(id, false, inaccessible(&e)))
+                    .collect(),
+                effect: Effect::Immediate,
+                restore_point: None,
+            };
+        }
+    };
     journal.reconcile(b);
     let mut results = Vec::new();
     let mut effect = Effect::Immediate;
@@ -189,9 +201,17 @@ pub fn apply(
     }
 }
 
-fn undo_ids(ids: &[String], b: &dyn SystemBackend, journal_path: &Path) -> UndoReport {
-    let mut journal = Journal::load(journal_path);
-    journal.reconcile(b);
+fn inaccessible(reason: &str) -> String {
+    format!("falhou: diário inacessível ({reason})")
+}
+
+/// `journal` já reconciliado.
+fn undo_ids(
+    ids: &[String],
+    b: &dyn SystemBackend,
+    mut journal: Journal,
+    journal_path: &Path,
+) -> UndoReport {
     let mut results = Vec::new();
     let mut conflicts = Vec::new();
 
@@ -248,12 +268,18 @@ fn undo_ids(ids: &[String], b: &dyn SystemBackend, journal_path: &Path) -> UndoR
             journal.entries[pos].actions = remaining;
         }
         // Se falhar, o próximo desfazer vê `atual == before` e conclui sem conflito.
-        let _ = journal.save(journal_path);
+        let saved = journal.save(journal_path);
 
         if let Some(e) = errors.first() {
             results.push(item(id, false, format!("falhou: {e}")));
         } else if restored == 0 && kept > 0 {
             results.push(item(id, false, "mantida (alterada depois)"));
+        } else if let Err(e) = saved {
+            results.push(item(
+                id,
+                true,
+                format!("desfeita (histórico não atualizado: {e})"),
+            ));
         } else {
             results.push(item(id, true, "desfeita"));
         }
@@ -263,18 +289,43 @@ fn undo_ids(ids: &[String], b: &dyn SystemBackend, journal_path: &Path) -> UndoR
 }
 
 pub fn undo(ids: &[String], b: &dyn SystemBackend, journal_path: &Path) -> UndoReport {
-    undo_ids(ids, b, journal_path)
+    match Journal::load_checked(journal_path) {
+        Ok(mut journal) => {
+            journal.reconcile(b);
+            undo_ids(ids, b, journal, journal_path)
+        }
+        Err(e) => UndoReport {
+            results: ids
+                .iter()
+                .map(|id| item(id, false, inaccessible(&e)))
+                .collect(),
+            conflicts: Vec::new(),
+        },
+    }
 }
 
 /// Desfaz tudo, do mais recente para o mais antigo.
 pub fn undo_all(b: &dyn SystemBackend, journal_path: &Path) -> UndoReport {
-    let ids: Vec<String> = Journal::load(journal_path)
-        .entries
-        .iter()
-        .rev()
-        .map(|e| e.tweak_id.clone())
-        .collect();
-    undo_ids(&ids, b, journal_path)
+    match Journal::load_checked(journal_path) {
+        Ok(mut journal) => {
+            journal.reconcile(b);
+            let ids: Vec<String> = journal
+                .entries
+                .iter()
+                .rev()
+                .map(|e| e.tweak_id.clone())
+                .collect();
+            if ids.is_empty() {
+                // Persiste a limpeza feita pelo reconcile (nada mais vai gravar).
+                let _ = journal.save(journal_path);
+            }
+            undo_ids(&ids, b, journal, journal_path)
+        }
+        Err(e) => UndoReport {
+            results: vec![item("*", false, inaccessible(&e))],
+            conflicts: Vec::new(),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -537,6 +588,86 @@ mod tests {
     }
 
     #[test]
+    fn unreadable_journal_blocks_apply_and_undo_without_touching_anything() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("journal.json");
+        std::fs::create_dir(&p).unwrap(); // leitura falha
+        let b = MemoryBackend::new();
+        let a = reg("A", 1);
+        let c = cat(vec![tweak("a", Effect::Immediate, vec![a.clone()])]);
+        let r = apply(&ids(&["a", "zzz"]), &c, &b, &p);
+        assert!(r.results.iter().all(|x| !x.ok));
+        assert!(
+            r.results[0]
+                .message
+                .starts_with("falhou: diário inacessível (")
+        );
+        assert_eq!(b.get(&a), absent());
+        assert!(p.is_dir());
+        let u = undo(&ids(&["a"]), &b, &p);
+        assert!(!u.results[0].ok);
+        assert!(
+            u.results[0]
+                .message
+                .starts_with("falhou: diário inacessível (")
+        );
+        let ua = undo_all(&b, &p);
+        assert_eq!(ua.results.len(), 1);
+        assert_eq!(ua.results[0].tweak_id, "*");
+        assert!(!ua.results[0].ok);
+        assert!(p.is_dir());
+    }
+
+    #[test]
+    fn undo_all_reconciles_before_collecting_ids() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let a = reg("A", 1);
+        // Entrada só com ação pendente cujo valor atual == before.
+        let j = Journal {
+            entries: vec![crate::tweaks::journal::JournalEntry {
+                tweak_id: "a".into(),
+                title: "T".into(),
+                applied_at: "x".into(),
+                actions: vec![crate::tweaks::journal::JournalAction {
+                    action: a.clone(),
+                    before: absent(),
+                    written: target_of(&a),
+                    done: false,
+                }],
+            }],
+        };
+        j.save(&p).unwrap();
+        let u = undo_all(&b, &p);
+        assert!(u.results.is_empty(), "{:?}", u.results);
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn undo_reports_when_the_journal_cannot_be_updated() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let a = reg("A", 1);
+        let c = cat(vec![tweak("a", Effect::Immediate, vec![a.clone()])]);
+        apply(&ids(&["a"]), &c, &b, &p);
+        let mut tmp = p.as_os_str().to_owned();
+        tmp.push(".tmp");
+        std::fs::create_dir(PathBuf::from(tmp)).unwrap(); // a gravação do diário falha
+        let r = undo(&ids(&["a"]), &b, &p);
+        assert_eq!(b.get(&a), absent());
+        assert!(r.results[0].ok);
+        assert!(
+            r.results[0]
+                .message
+                .starts_with("desfeita (histórico não atualizado: "),
+            "{}",
+            r.results[0].message
+        );
+    }
+
+    #[test]
     fn undo_of_unknown_entry_says_so() {
         let d = tempfile::tempdir().unwrap();
         let r = undo(&ids(&["x"]), &MemoryBackend::new(), &jpath(&d));
@@ -630,6 +761,32 @@ mod tests {
                 initial.push((a.clone(), s));
             }
         }
+        // Os estados iniciais "difíceis" realmente aconteceram.
+        let absent_starts = initial
+            .iter()
+            .filter(|(a, s)| {
+                matches!(a, Action::Registry { .. }) && *s == Snapshot::Registry { value: None }
+            })
+            .count();
+        let string_for_dword = initial
+            .iter()
+            .filter(|(a, s)| {
+                matches!(
+                    (a, s),
+                    (
+                        Action::Registry {
+                            value: Some(RegValue::Dword(_)),
+                            ..
+                        },
+                        Snapshot::Registry {
+                            value: Some(RegValue::String(_))
+                        }
+                    )
+                )
+            })
+            .count();
+        assert!(absent_starts >= 1, "nenhum estado inicial ausente");
+        assert!(string_for_dword >= 1, "nenhum String onde o alvo é DWORD");
         let all: Vec<String> = c.tweaks.iter().map(|t| t.id.clone()).collect();
         let r = apply(&all, c, &b, &p);
         for x in &r.results {
