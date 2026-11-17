@@ -127,6 +127,19 @@ describe("Segurança", () => {
     expect(
       await screen.findByText("Verificação interrompida: resultado parcial."),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Nenhuma ameaça conhecida encontrada/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("nenhum arquivo verificado não diz que nada foi encontrado", async () => {
+    render(<Seguranca />);
+    await startQuick();
+    await finish(summary({ scanned: 0 }));
+    expect(await screen.findByText(/0 arquivos verificados/)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Nenhuma ameaça conhecida encontrada/),
+    ).not.toBeInTheDocument();
   });
 
   it("sem achados não promete segurança", async () => {
@@ -279,5 +292,6 @@ describe("Segurança", () => {
     expect(
       await screen.findByText("Nenhum arquivo em quarentena."),
     ).toBeInTheDocument();
+    expect(screen.getByText("Restaurado: C:\\x\\mal.exe")).toBeInTheDocument();
   });
 });

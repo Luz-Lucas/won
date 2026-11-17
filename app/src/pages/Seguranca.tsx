@@ -30,6 +30,7 @@ export default function Seguranca({
   const [quarantineError, setQuarantineError] = useState<string | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [restored, setRestored] = useState<string | null>(null);
 
   const running = job.state === "running";
   const busy = running || picking;
@@ -74,9 +75,11 @@ export default function Seguranca({
 
   const restore = async (id: string) => {
     setRestoreError(null);
+    setRestored(null);
     setRestoring(id);
     try {
-      await quarantineRestore(id);
+      const path = await quarantineRestore(id);
+      setRestored(path);
       loadQuarantine();
     } catch (e) {
       setRestoreError(errorText(e));
@@ -86,8 +89,13 @@ export default function Seguranca({
   };
 
   const result = job.state === "done" ? job.result : null;
+  // Resultado parcial ou sem arquivos lidos nunca diz que nada foi encontrado.
   const nothingFound =
-    result !== null && result.malicious === 0 && result.suspicious === 0;
+    result !== null &&
+    !result.interrupted &&
+    result.scanned > 0 &&
+    result.malicious === 0 &&
+    result.suspicious === 0;
 
   return (
     <section className="page">
@@ -228,6 +236,7 @@ export default function Seguranca({
           {restoreError}
         </p>
       )}
+      {restored && <p className="notice">{`Restaurado: ${restored}`}</p>}
       {quarantine && quarantine.length === 0 && (
         <p className="muted">Nenhum arquivo em quarentena.</p>
       )}

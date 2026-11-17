@@ -239,7 +239,7 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let report = run_scan_with_progress(&engine, &opts, &cancel, &NoProgress);
         let s = summarize(report, &r.missing, false, warnings);
-        if s.malicious == 0 && (s.errors_total > 0 || !f.exists()) {
+        if !f.exists() || (s.malicious == 0 && s.errors_total > 0) {
             eprintln!("PULADO: o arquivo EICAR foi bloqueado ou removido (antivírus?)");
             return;
         }
