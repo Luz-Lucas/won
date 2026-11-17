@@ -134,3 +134,25 @@ export const abuseKeySet = (key: string) =>
   invoke<void>("abuse_key_set", { key });
 export const abuseKeyClear = () => invoke<void>("abuse_key_clear");
 export const abuseKeyPresent = () => invoke<boolean>("abuse_key_present");
+
+export interface LargeFile {
+  path: string;
+  size: number;
+}
+
+export interface DupGroup {
+  size: number;
+  sha256: string;
+  paths: string[];
+}
+
+export interface FindResult<T> {
+  items: T[];
+  errors: WalkError[];
+  interrupted: boolean;
+}
+
+export const diskFindLarge = (path: string, top: number, minMb: number) =>
+  invoke<number>("disk_find_large", { path, top, minMb });
+export const diskFindDupes = (path: string, minKb: number) =>
+  invoke<number>("disk_find_dupes", { path, minKb });

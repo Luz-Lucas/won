@@ -409,3 +409,42 @@ body {
 .finding-suspicious h3 {
   color: var(--accent);
 }
+
+.disk-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+
+.disk-tabs [aria-selected="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.disk-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: end;
+  margin-bottom: var(--sp-3);
+}
+
+.disk-form label {
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+}
+
+.disk-form input[type="number"] {
+  width: 8rem;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-2);
+}
+
+.disk-folder {
+  margin: 0 0 var(--sp-3);
+}
