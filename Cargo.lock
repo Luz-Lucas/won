@@ -2419,11 +2419,24 @@ dependencies = [
  "assert_cmd",
  "clap",
  "ctrlc",
+ "globset",
+ "hex",
+ "predicates",
+ "sentinela-core",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+]
+
+[[package]]
+name = "sentinela-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "dirs",
  "globset",
  "goblin",
  "hex",
- "predicates",
  "rayon",
  "serde",
  "serde_json",

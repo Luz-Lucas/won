@@ -1,11 +1,8 @@
 pub mod clean;
-pub mod cli;
 pub mod finder;
 pub mod full;
 pub mod platform_fs;
-pub mod progress;
 pub mod quarantine;
-pub mod report;
 pub mod scan;
 pub mod signatures;
 pub mod updater;

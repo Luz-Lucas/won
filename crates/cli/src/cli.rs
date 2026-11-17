@@ -6,14 +6,14 @@ use std::sync::atomic::AtomicBool;
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
-use crate::clean::category::Env;
-use crate::clean::{self, CleanReport, platform};
-use crate::full::{self, FullOptions};
 use crate::progress::{self, TerminalProgress};
 use crate::report::{self, human_bytes};
-use crate::scan::{Engine, NoProgress, Progress, ScanOptions, run_scan_with_progress};
-use crate::walker::WalkOptions;
-use crate::{finder, platform_fs, quarantine, signatures, updater};
+use sentinela_core::clean::category::Env;
+use sentinela_core::clean::{self, CleanReport, platform};
+use sentinela_core::full::{self, FullOptions};
+use sentinela_core::scan::{Engine, NoProgress, Progress, ScanOptions, run_scan_with_progress};
+use sentinela_core::walker::WalkOptions;
+use sentinela_core::{finder, platform_fs, quarantine, signatures, updater};
 
 #[derive(Parser)]
 #[command(

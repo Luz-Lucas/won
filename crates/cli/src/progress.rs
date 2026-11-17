@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::report::human_bytes;
-use crate::scan::Progress;
+use sentinela_core::scan::Progress;
 
 const BAR_CELLS: usize = 20;
 /// Used when the terminal width is unknown. Stays under the classic 80

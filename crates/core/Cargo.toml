@@ -1,0 +1,27 @@
+[package]
+name = "sentinela-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+dirs.workspace = true
+globset.workspace = true
+goblin.workspace = true
+hex.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sysinfo.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
+walkdir.workspace = true
+yara-x.workspace = true
+zip.workspace = true
+
+[target."cfg(windows)".dependencies]
+windows-sys = { workspace = true }
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -2,13 +2,13 @@ use std::io::Write;
 
 use serde_json::json;
 
-use crate::clean::CleanReport;
-use crate::finder::{DupGroup, LargeFile};
-use crate::full::FullReport;
-use crate::quarantine::QuarantineEntry;
-use crate::scan::ScanReport;
-use crate::scan::detector::Severity;
-use crate::walker::WalkError;
+use sentinela_core::clean::CleanReport;
+use sentinela_core::finder::{DupGroup, LargeFile};
+use sentinela_core::full::FullReport;
+use sentinela_core::quarantine::QuarantineEntry;
+use sentinela_core::scan::ScanReport;
+use sentinela_core::scan::detector::Severity;
+use sentinela_core::walker::WalkError;
 
 /// Human-readable size (binary units).
 pub fn human_bytes(n: u64) -> String {
@@ -386,9 +386,9 @@ pub fn write_finder_dupes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scan::detector::{Finding, Severity};
-    use crate::scan::{ScanItem, ScanReport};
-    use crate::walker::WalkError;
+    use sentinela_core::scan::detector::{Finding, Severity};
+    use sentinela_core::scan::{ScanItem, ScanReport};
+    use sentinela_core::walker::WalkError;
     use std::path::PathBuf;
 
     fn sample() -> ScanReport {
@@ -448,7 +448,7 @@ mod tests {
     #[test]
     fn finder_json_envelopes() {
         let mut out = Vec::new();
-        let groups = vec![crate::finder::DupGroup {
+        let groups = vec![sentinela_core::finder::DupGroup {
             size: 10,
             sha256: "ab".repeat(32),
             paths: vec![PathBuf::from("a"), PathBuf::from("b")],
@@ -462,8 +462,8 @@ mod tests {
 
     #[test]
     fn clean_json_totals() {
-        use crate::clean::category::{ApplyReport, Plan};
-        use crate::clean::{CategoryResult, CleanReport};
+        use sentinela_core::clean::category::{ApplyReport, Plan};
+        use sentinela_core::clean::{CategoryResult, CleanReport};
         let report = CleanReport {
             categories: vec![CategoryResult {
                 id: "user-temp".into(),

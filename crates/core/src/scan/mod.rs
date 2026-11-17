@@ -418,7 +418,7 @@ mod tests {
         assert_eq!(report.items.len(), 1);
         assert!(report.items[0].path.ends_with("relatório_ção.txt"));
         let mut out = Vec::new();
-        crate::report::write_scan(&report, true, &mut out).unwrap();
+        serde_json::to_writer(&mut out, &report).unwrap();
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         let p = v["items"][0]["path"].as_str().unwrap();
         assert!(p.ends_with("relatório_ção.txt"));
