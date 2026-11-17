@@ -334,3 +334,78 @@ body {
   display: flex;
   gap: var(--sp-2);
 }
+
+.page h2 {
+  margin: var(--sp-6) 0 var(--sp-3);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.scan-actions,
+.scan-running {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-bottom: var(--sp-3);
+}
+
+.scan-running {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.progress-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.progress-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.finding-list,
+.finding-rules,
+.quarantine-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.finding,
+.quarantine-row {
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.finding-head,
+.quarantine-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
+.finding-path {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  user-select: text;
+  word-break: break-all;
+}
+
+.finding-malicious h3 {
+  color: var(--danger);
+}
+
+.finding-suspicious h3 {
+  color: var(--accent);
+}

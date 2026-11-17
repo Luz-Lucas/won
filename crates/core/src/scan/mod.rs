@@ -1,6 +1,7 @@
 pub mod detector;
 pub mod hash;
 pub mod pe;
+pub mod targets;
 pub mod yara;
 
 use std::fs::File;

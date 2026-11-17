@@ -37,7 +37,7 @@ export default function App() {
           <Inicio status={status} error={statusError} onNavigate={setPage} />
         )}
         {page === "limpeza" && <Limpeza />}
-        {page === "seguranca" && <Seguranca />}
+        {page === "seguranca" && <Seguranca onNavigate={setPage} />}
         {page === "disco" && <Disco />}
         {page === "ajustes" && <Ajustes />}
       </main>

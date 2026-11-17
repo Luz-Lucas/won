@@ -44,6 +44,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::clean::clean_apply,
             commands::clean::clean_plan,
+            commands::scan::scan_start,
+            commands::scan::quarantine_list,
+            commands::scan::quarantine_restore,
             commands::system::system_status,
             commands::system::relaunch_elevated,
             commands::system::job_cancel,
