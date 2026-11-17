@@ -346,15 +346,7 @@ fn cmd_update() -> Result<i32> {
 
 fn cmd_clean(selected: Vec<String>, apply: bool, yes: bool, json: bool) -> Result<i32> {
     let cats = clean::all_categories();
-    let valid: Vec<&str> = cats.iter().map(|c| c.id()).collect();
-    for s in &selected {
-        if !valid.contains(&s.as_str()) {
-            bail!(
-                "categoria desconhecida: {s}. Categorias válidas: {}",
-                valid.join(", ")
-            );
-        }
-    }
+    clean::summary::validate_selection(&selected, &cats).map_err(|e| anyhow::anyhow!(e))?;
     let elevated = platform::is_elevated();
     let mut env = Env::from_system();
     env.elevated = elevated;

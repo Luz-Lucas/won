@@ -9,6 +9,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: () => Promise.resolve(() => {}),
+}));
+
 const status = (over: Partial<SystemStatus> = {}): SystemStatus => ({
   version: "0.3.0",
   elevated: false,
@@ -30,7 +34,18 @@ const status = (over: Partial<SystemStatus> = {}): SystemStatus => ({
 describe("App", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    invokeMock.mockResolvedValue(status());
+    invokeMock.mockImplementation(async (cmd: string) =>
+      cmd === "clean_plan"
+        ? {
+            categories: [],
+            total_files: 0,
+            total_bytes: 0,
+            deleted: 0,
+            freed: 0,
+            elevated: false,
+          }
+        : status(),
+    );
   });
 
   it("mostra as cinco páginas e troca de página", async () => {

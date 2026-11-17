@@ -10,21 +10,7 @@ use sentinela_core::scan::ScanReport;
 use sentinela_core::scan::detector::Severity;
 use sentinela_core::walker::WalkError;
 
-/// Human-readable size (binary units).
-pub fn human_bytes(n: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut v = n as f64;
-    let mut unit = 0;
-    while v >= 1024.0 && unit < UNITS.len() - 1 {
-        v /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{n} B")
-    } else {
-        format!("{v:.1} {}", UNITS[unit])
-    }
-}
+pub use sentinela_core::format::human_bytes;
 
 fn write_json(out: &mut dyn Write, doc: &serde_json::Value) -> std::io::Result<()> {
     serde_json::to_writer_pretty(&mut *out, doc)?;

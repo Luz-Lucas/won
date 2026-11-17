@@ -1,6 +1,7 @@
 pub mod activity;
 pub mod clean;
 pub mod finder;
+pub mod format;
 pub mod full;
 pub mod platform_fs;
 pub mod quarantine;
