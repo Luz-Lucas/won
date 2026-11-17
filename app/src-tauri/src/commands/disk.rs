@@ -3,6 +3,9 @@
 use crate::TauriSink;
 use crate::jobs::{JobId, JobKind, JobRegistry, spawn_job};
 use sentinela_core::finder::{self, DupGroup, FindResult, LargeFile};
+use sentinela_core::scan::targets::ERRORS_LIMIT;
+use sentinela_core::walker::WalkError;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -21,39 +24,83 @@ pub fn validate(path: &Path, top: usize, min: u64, unit: u64) -> Result<(usize, 
     Ok((top.clamp(1, MAX_TOP), min_size))
 }
 
+/// Resultado enviado à janela: no máximo `ERRORS_LIMIT` erros, com o total.
+#[derive(Debug, Serialize)]
+pub struct FindSummary<T> {
+    pub items: Vec<T>,
+    pub errors: Vec<WalkError>,
+    pub errors_total: usize,
+    pub interrupted: bool,
+}
+
+pub fn cap_errors<T>(r: FindResult<T>) -> FindSummary<T> {
+    let FindResult {
+        items,
+        mut errors,
+        interrupted,
+    } = r;
+    let errors_total = errors.len();
+    errors.truncate(ERRORS_LIMIT);
+    FindSummary {
+        items,
+        errors,
+        errors_total,
+        interrupted,
+    }
+}
+
+/// Valida fora da thread principal (`symlink_metadata` pode travar num disco lento).
+async fn validate_off_thread(
+    path: PathBuf,
+    top: usize,
+    min: u64,
+    unit: u64,
+) -> Result<(PathBuf, usize, u64), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        validate(&path, top, min, unit).map(|(t, m)| (path, t, m))
+    })
+    .await
+    .map_err(|_| "Não foi possível iniciar a busca.".to_string())?
+}
+
 #[tauri::command]
-pub fn disk_find_large(
+pub async fn disk_find_large(
     path: PathBuf,
     top: usize,
     min_mb: u64,
     app: AppHandle,
     jobs: State<'_, Arc<JobRegistry>>,
 ) -> Result<JobId, String> {
-    let (top, min_size) = validate(&path, top, min_mb, 1024 * 1024)?;
+    let (path, top, min_size) = validate_off_thread(path, top, min_mb, 1024 * 1024).await?;
     spawn_job(
         jobs.inner().clone(),
         Arc::new(TauriSink(app)),
         JobKind::FindLarge,
-        move |_id, cancel, _sink| -> Result<FindResult<LargeFile>, String> {
-            Ok(finder::find_large(&[path], top, min_size, cancel))
+        move |_id, cancel, _sink| -> Result<FindSummary<LargeFile>, String> {
+            Ok(cap_errors(finder::find_large(
+                &[path],
+                top,
+                min_size,
+                cancel,
+            )))
         },
     )
 }
 
 #[tauri::command]
-pub fn disk_find_dupes(
+pub async fn disk_find_dupes(
     path: PathBuf,
     min_kb: u64,
     app: AppHandle,
     jobs: State<'_, Arc<JobRegistry>>,
 ) -> Result<JobId, String> {
-    let (_, min_size) = validate(&path, 1, min_kb, 1024)?;
+    let (path, _, min_size) = validate_off_thread(path, 1, min_kb, 1024).await?;
     spawn_job(
         jobs.inner().clone(),
         Arc::new(TauriSink(app)),
         JobKind::FindDupes,
-        move |_id, cancel, _sink| -> Result<FindResult<DupGroup>, String> {
-            Ok(finder::find_dupes(&[path], min_size, cancel))
+        move |_id, cancel, _sink| -> Result<FindSummary<DupGroup>, String> {
+            Ok(cap_errors(finder::find_dupes(&[path], min_size, cancel)))
         },
     )
 }
@@ -61,6 +108,30 @@ pub fn disk_find_dupes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn erros_limitados_a_200_com_total() {
+        let errors = (0..250)
+            .map(|i| WalkError {
+                path: format!("p{i}").into(),
+                reason: "negado".into(),
+            })
+            .collect();
+        let r = cap_errors(FindResult::<LargeFile> {
+            items: vec![],
+            errors,
+            interrupted: true,
+        });
+        assert_eq!(r.errors.len(), 200);
+        assert_eq!(r.errors_total, 250);
+        assert!(r.interrupted);
+        let r = cap_errors(FindResult::<LargeFile> {
+            items: vec![],
+            errors: vec![],
+            interrupted: false,
+        });
+        assert_eq!((r.errors.len(), r.errors_total), (0, 0));
+    }
 
     #[test]
     fn caminho_inexistente_e_erro() {

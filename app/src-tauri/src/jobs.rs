@@ -3,7 +3,7 @@
 //! Independente de tipos do Tauri: o envio de eventos passa pelo trait `Sink`.
 
 use sentinela_core::scan::Progress;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 pub type JobId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum JobKind {
     Scan,
@@ -57,6 +57,11 @@ impl JobRegistry {
 
     pub fn finish(&self, id: JobId) {
         lock(&self.running).retain(|_, (job, _)| *job != id);
+    }
+
+    /// Id do job vivo deste tipo, se houver (a janela se reconecta após recarregar).
+    pub fn running(&self, kind: JobKind) -> Option<JobId> {
+        lock(&self.running).get(&kind).map(|(id, _)| *id)
     }
 
     pub fn cancel(&self, id: JobId) -> bool {
@@ -265,6 +270,27 @@ mod tests {
         let (id, _) = r.start(JobKind::Scan).unwrap();
         r.finish(id);
         assert!(r.start(JobKind::Scan).is_ok());
+    }
+
+    #[test]
+    fn running_finds_the_live_job_of_a_kind() {
+        let r = JobRegistry::new();
+        assert_eq!(r.running(JobKind::Scan), None);
+        let (id, _) = r.start(JobKind::Scan).unwrap();
+        assert_eq!(r.running(JobKind::Scan), Some(id));
+        assert_eq!(r.running(JobKind::Clean), None);
+        r.finish(id);
+        assert_eq!(r.running(JobKind::Scan), None);
+    }
+
+    #[test]
+    fn job_kind_round_trips_as_snake_case() {
+        let k: JobKind = serde_json::from_value(json!("find_large")).unwrap();
+        assert_eq!(k, JobKind::FindLarge);
+        assert_eq!(
+            serde_json::to_value(JobKind::FindDupes).unwrap(),
+            "find_dupes"
+        );
     }
 
     #[test]

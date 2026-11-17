@@ -11,11 +11,33 @@ use sentinela_core::secrets::{
 };
 use sentinela_core::signatures;
 use sentinela_core::updater::{self, AuthRequired, Fetcher, UpdateSummary};
+use serde::Serialize;
 use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 const AUTH_REJECTED: &str = "A chave da abuse.ch foi recusada. Confira a chave em Ajustes.";
+const SERVER_REFUSED: &str = "O servidor recusou o download das assinaturas.";
+const ENV_KEY: &str = "ABUSE_CH_AUTH_KEY";
+
+/// De onde vem a chave usada na atualização. Nunca carrega a chave em si.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KeySource {
+    Stored,
+    Env,
+    None,
+}
+
+fn key_source(store: &dyn SecretStore, env_value: Option<String>) -> KeySource {
+    if key_present(store) {
+        KeySource::Stored
+    } else if resolve_abuse_key(store, env_value).is_some() {
+        KeySource::Env
+    } else {
+        KeySource::None
+    }
+}
 
 /// Atualiza o banco; a mensagem de erro nunca inclui a chave.
 fn run_update(
@@ -29,7 +51,13 @@ fn run_update(
         if e.chain()
             .any(|c| c.downcast_ref::<AuthRequired>().is_some())
         {
-            return AUTH_REJECTED.to_string();
+            // Sem chave não há o que conferir: quem recusou foi o servidor.
+            return if key.is_some() {
+                AUTH_REJECTED
+            } else {
+                SERVER_REFUSED
+            }
+            .to_string();
         }
         let msg = format!("{e:#}");
         match key.as_deref() {
@@ -75,7 +103,7 @@ pub fn signatures_update(
                 &signatures::default_db_dir(),
                 &updater::HttpFetcher,
                 &WindowsCredentialStore,
-                std::env::var("ABUSE_CH_AUTH_KEY").ok(),
+                std::env::var(ENV_KEY).ok(),
             )?;
             let _ = activity::append(
                 &activity::default_activity_path(),
@@ -100,9 +128,10 @@ pub fn abuse_key_clear() -> Result<(), String> {
     clear_key(&WindowsCredentialStore)
 }
 
+/// Diz só de onde viria a chave (salva, variável de ambiente ou nenhuma).
 #[tauri::command]
-pub fn abuse_key_present() -> bool {
-    key_present(&WindowsCredentialStore)
+pub fn abuse_key_present() -> KeySource {
+    key_source(&WindowsCredentialStore, std::env::var(ENV_KEY).ok())
 }
 
 #[cfg(test)]
@@ -145,10 +174,47 @@ mod tests {
     }
 
     #[test]
-    fn auth_error_maps_to_the_friendly_message() {
+    fn auth_error_with_a_key_blames_the_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = MemoryStore::default();
+        store.set(ABUSE_CH_KEY, KEY).unwrap();
+        let err = run_update(dir.path(), &AuthFetcher, &store, None).unwrap_err();
+        assert_eq!(err, AUTH_REJECTED);
+        let err = run_update(
+            dir.path(),
+            &AuthFetcher,
+            &MemoryStore::default(),
+            Some(KEY.into()),
+        )
+        .unwrap_err();
+        assert_eq!(err, AUTH_REJECTED);
+    }
+
+    #[test]
+    fn auth_error_without_a_key_blames_the_server() {
         let dir = tempfile::tempdir().unwrap();
         let err = run_update(dir.path(), &AuthFetcher, &MemoryStore::default(), None).unwrap_err();
-        assert_eq!(err, AUTH_REJECTED);
+        assert_eq!(err, SERVER_REFUSED);
+        let err = run_update(
+            dir.path(),
+            &AuthFetcher,
+            &MemoryStore::default(),
+            Some("   ".into()),
+        )
+        .unwrap_err();
+        assert_eq!(err, SERVER_REFUSED);
+    }
+
+    #[test]
+    fn key_source_reports_stored_then_env_then_none() {
+        let s = MemoryStore::default();
+        assert_eq!(key_source(&s, None), KeySource::None);
+        assert_eq!(key_source(&s, Some("  ".into())), KeySource::None);
+        assert_eq!(key_source(&s, Some("abc".into())), KeySource::Env);
+        store_key(&s, "def").unwrap();
+        assert_eq!(key_source(&s, Some("abc".into())), KeySource::Stored);
+        assert_eq!(key_source(&s, None), KeySource::Stored);
+        assert_eq!(serde_json::to_value(KeySource::Env).unwrap(), "env");
     }
 
     #[test]

@@ -56,6 +56,7 @@ pub fn run() {
             commands::system::system_status,
             commands::system::relaunch_elevated,
             commands::system::job_cancel,
+            commands::system::job_running,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela");

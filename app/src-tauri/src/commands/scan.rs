@@ -19,13 +19,18 @@ use tauri::{AppHandle, State};
 const MAX_SIZE: u64 = 256 * 1024 * 1024;
 
 #[tauri::command]
-pub fn scan_start(
+pub async fn scan_start(
     target: ScanTarget,
     app: AppHandle,
     jobs: State<'_, Arc<JobRegistry>>,
 ) -> Result<JobId, String> {
-    // Sem pasta válida o erro volta direto: não cria operação.
-    let resolved = resolve(&target, &quick_folders(), &platform_fs::fixed_drive_roots())?;
+    // Sem pasta válida o erro volta direto: não cria operação. Consultar as
+    // pastas e os discos toca o disco: fora da thread principal.
+    let resolved = tauri::async_runtime::spawn_blocking(move || {
+        resolve(&target, &quick_folders(), &platform_fs::fixed_drive_roots())
+    })
+    .await
+    .map_err(|_| "Não foi possível iniciar a verificação.".to_string())??;
     spawn_job(
         jobs.inner().clone(),
         Arc::new(TauriSink(app)),
@@ -62,9 +67,8 @@ pub fn quarantine_list() -> Vec<QuarantineEntry> {
     quarantine::list(&quarantine::default_quarantine_dir())
 }
 
-#[tauri::command]
-pub fn quarantine_restore(id: String) -> Result<String, String> {
-    let path = quarantine::restore(&quarantine::default_quarantine_dir(), &id)
+fn restore(id: &str) -> Result<String, String> {
+    let path = quarantine::restore(&quarantine::default_quarantine_dir(), id)
         .map_err(|e| e.to_string())?;
     let shown = path.to_string_lossy().into_owned();
     let _ = activity::append(
@@ -73,4 +77,12 @@ pub fn quarantine_restore(id: String) -> Result<String, String> {
         &format!("Restaurado: {shown}"),
     );
     Ok(shown)
+}
+
+#[tauri::command]
+pub async fn quarantine_restore(id: String) -> Result<String, String> {
+    // Copia e confere o hash do arquivo: fora da thread principal.
+    tauri::async_runtime::spawn_blocking(move || restore(&id))
+        .await
+        .map_err(|_| "Não foi possível restaurar o arquivo.".to_string())?
 }

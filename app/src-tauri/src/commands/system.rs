@@ -2,7 +2,7 @@
 //!
 //! Camada fina: a lógica de negócio vive em `sentinela_core`.
 
-use crate::jobs::{JobId, JobRegistry};
+use crate::jobs::{JobId, JobKind, JobRegistry};
 use sentinela_core::activity::{self, ActivityEntry};
 use sentinela_core::status::{self, DbStatus};
 use sentinela_core::{clean, quarantine, signatures};
@@ -47,6 +47,11 @@ pub async fn system_status() -> Result<SystemStatus, String> {
 #[tauri::command]
 pub fn job_cancel(id: JobId, jobs: State<'_, Arc<JobRegistry>>) -> bool {
     jobs.cancel(id)
+}
+
+#[tauri::command]
+pub fn job_running(kind: JobKind, jobs: State<'_, Arc<JobRegistry>>) -> Option<JobId> {
+    jobs.running(kind)
 }
 
 #[tauri::command]
@@ -139,7 +144,6 @@ pub fn on_window_close(label: &str, jobs: &JobRegistry) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jobs::JobKind;
     use std::sync::atomic::Ordering;
 
     fn os(args: &[&str]) -> Vec<OsString> {
