@@ -34,12 +34,22 @@ export default function Aplicativos() {
   const [openError, setOpenError] = useState<string | null>(null);
   // O job "apps" é global: só mostra resultados de uma fila iniciada aqui.
   const [started, setStarted] = useState<Action | null>(null);
+  const [results, setResults] = useState<AppOutcome[] | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const handled = useRef<unknown>(null);
   const job = useJob<AppOutcome[]>("apps");
 
   const load = useCallback((refresh: boolean) => {
     setLoadError(null);
-    (refresh ? appsPageRefresh : appsPage)().then(setData, (e) => setLoadError(errorText(e)));
+    (refresh ? appsPageRefresh : appsPage)().then(
+      (p) => {
+        setData(p);
+        // Quem já está instalado (sem atualização) sai da seleção.
+        const done = new Set(p.apps.filter((a) => a.state === "installed").map((a) => a.app.id));
+        setSelected((s) => (done.size === 0 ? s : new Set([...s].filter((id) => !done.has(id)))));
+      },
+      (e) => setLoadError(errorText(e)),
+    );
   }, []);
 
   useEffect(() => load(false), [load]);
@@ -49,12 +59,24 @@ export default function Aplicativos() {
     if (!started || job.state !== "done" || !Array.isArray(job.result)) return;
     if (handled.current === job.result) return;
     handled.current = job.result;
+    setResults(job.result);
+    setStarted(null);
     const ok = new Set(job.result.filter((r) => r.ok).map((r) => r.id));
     setSelected((s) => new Set([...s].filter((id) => !ok.has(id))));
     load(true);
   }, [job.state, job.result, started, load]);
 
   const running = job.state === "running";
+
+  // O cancelamento vale só para o job em andamento.
+  useEffect(() => {
+    if (job.state !== "running") setCancelling(false);
+  }, [job.state]);
+
+  const stop = () => {
+    setCancelling(true);
+    job.cancel().catch(() => setCancelling(false));
+  };
   const apps = data?.apps ?? [];
   const byId = (id: string) => apps.find((a) => a.app.id === id);
   const nameOf = (id: string) => byId(id)?.app.name ?? id;
@@ -91,6 +113,7 @@ export default function Aplicativos() {
     const { action, ids } = pending;
     setPending(null);
     setStarted(action);
+    setResults(null);
     void job.start(() => (action === "install" ? appsInstall(ids) : appsUpgrade(ids)));
   };
 
@@ -101,7 +124,6 @@ export default function Aplicativos() {
 
   const progress = job.progress && job.progress.phase === "apps" ? job.progress : null;
   const verb = started === "upgrade" ? "Atualizando" : "Instalando";
-  const results = started && job.state === "done" && Array.isArray(job.result) ? job.result : null;
 
   return (
     <section className="page">
@@ -183,11 +205,11 @@ export default function Aplicativos() {
           {running && (
             <div className="notice" role="status">
               {progress && (
-                <p>{`${verb} ${progress.index + 1} de ${progress.total}: ${nameOf(progress.current)}…`}</p>
+                <p>{`${verb} ${progress.index + 1} de ${progress.total}: ${progress.current}…`}</p>
               )}
               <ProgressBar progress={job.progress} />
-              <button type="button" className="btn" onClick={() => void job.cancel()}>
-                Parar depois deste
+              <button type="button" className="btn" disabled={cancelling} onClick={stop}>
+                {cancelling ? "Parando…" : "Parar depois deste"}
               </button>
             </div>
           )}

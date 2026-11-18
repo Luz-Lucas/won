@@ -181,7 +181,7 @@ describe("Aplicativos", () => {
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Instalar" }));
     await act(async () => {
       listeners.get("job:progress")!({
-        payload: { job: 9, phase: "apps", index: 1, total: 2, current: "vlc" },
+        payload: { job: 9, phase: "apps", index: 1, total: 2, current: "VLC" },
       });
     });
     expect(screen.getByText("Instalando 2 de 2: VLC…")).toBeInTheDocument();
@@ -200,6 +200,42 @@ describe("Aplicativos", () => {
     expect(api.appsPageRefresh).toHaveBeenCalled();
     // sucesso sai da seleção; falha continua selecionada
     await waitFor(() => expect(screen.getByText("1 selecionado(s)")).toBeInTheDocument());
+  });
+
+  it("cancel failure re-enables the stop button", async () => {
+    vi.mocked(api.jobCancel).mockRejectedValue("falhou");
+    render(<Aplicativos />);
+    await screen.findByText("Firefox");
+    await userEvent.click(screen.getByRole("checkbox", { name: /Firefox/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Instalar" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Instalar" }));
+    await act(async () => {
+      listeners.get("job:progress")!({
+        payload: { job: 9, phase: "apps", index: 0, total: 1, current: "Firefox" },
+      });
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Parar depois deste" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Parar depois deste" })).toBeEnabled(),
+    );
+  });
+
+  it("stop button shows Parando… and is disabled", async () => {
+    let release: (v: boolean) => void = () => {};
+    vi.mocked(api.jobCancel).mockReturnValue(new Promise<boolean>((r) => (release = r)));
+    render(<Aplicativos />);
+    await screen.findByText("Firefox");
+    await userEvent.click(screen.getByRole("checkbox", { name: /Firefox/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Instalar" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Instalar" }));
+    await act(async () => {
+      listeners.get("job:progress")!({
+        payload: { job: 9, phase: "apps", index: 0, total: 1, current: "Firefox" },
+      });
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Parar depois deste" }));
+    expect(screen.getByRole("button", { name: "Parando…" })).toBeDisabled();
+    release(true);
   });
 
   it("selection survives filtering", async () => {
