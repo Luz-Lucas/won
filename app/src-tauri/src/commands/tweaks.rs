@@ -90,6 +90,16 @@ pub struct TweaksPage {
     pub elevated: bool,
     pub hkcu_allowed: bool,
     pub journal_count: usize,
+    /// Já houve ponto de restauração com sucesso nesta sessão.
+    pub restore_point_done: bool,
+}
+
+/// Histórico mais o contexto da janela (elevada? mesma conta?).
+#[derive(Serialize)]
+pub struct HistoryPage {
+    pub entries: Vec<JournalEntry>,
+    pub elevated: bool,
+    pub hkcu_allowed: bool,
 }
 
 /// Leitura pura: o diário é lido sem efeitos (a reconciliação ocorre em apply/undo).
@@ -99,8 +109,9 @@ fn build_page(
     journal_path: &Path,
     laptop: bool,
     hkcu_allowed: bool,
-) -> TweaksPage {
-    let journal = Journal::read_only(journal_path).unwrap_or_default();
+    restore_point_done: bool,
+) -> Result<TweaksPage, String> {
+    let journal = Journal::read_for_list(journal_path)?;
     let tweaks = cat
         .tweaks
         .iter()
@@ -110,13 +121,26 @@ fn build_page(
             in_journal: journal.entries.iter().any(|e| e.tweak_id == t.id),
         })
         .collect();
-    TweaksPage {
+    Ok(TweaksPage {
         tweaks,
         laptop,
         elevated: b.elevated(),
         hkcu_allowed,
         journal_count: journal.entries.len(),
-    }
+        restore_point_done,
+    })
+}
+
+fn build_history(
+    b: &dyn SystemBackend,
+    journal_path: &Path,
+    hkcu_allowed: bool,
+) -> Result<HistoryPage, String> {
+    Ok(HistoryPage {
+        entries: Journal::read_only(journal_path)?.entries,
+        elevated: b.elevated(),
+        hkcu_allowed,
+    })
 }
 
 /// Quantos ajustes do catálogo estão aplicados agora.
@@ -180,12 +204,9 @@ fn run_apply(
     report
 }
 
-/// Conta só o que de fato mudou ("aplicada" / "desfeita..."), não os ok sem efeito.
-fn changed_count(results: &[ItemResult], word: &str) -> usize {
-    results
-        .iter()
-        .filter(|r| r.ok && r.message.starts_with(word))
-        .count()
+/// Conta só o que o motor marcou como mudança real no sistema.
+fn changed_count(results: &[ItemResult]) -> usize {
+    results.iter().filter(|r| r.changed).count()
 }
 
 /// Remove ids repetidos, mantendo a ordem.
@@ -212,14 +233,14 @@ fn log_activity(text: &str) {
 }
 
 fn log_applied(report: &ApplyReport) {
-    let n = changed_count(&report.results, "aplicada");
+    let n = changed_count(&report.results);
     if n > 0 {
         log_activity(&format!("Otimizações aplicadas: {n}"));
     }
 }
 
 fn log_undone(report: &UndoReport) {
-    let n = changed_count(&report.results, "desfeita");
+    let n = changed_count(&report.results);
     if n > 0 {
         log_activity(&format!("Otimizações desfeitas: {n}"));
     }
@@ -235,10 +256,11 @@ pub async fn tweaks_list(state: State<'_, TweaksState>) -> Result<TweaksPage, St
             &default_journal_path(),
             is_laptop(),
             state.hkcu_allowed,
+            state.restore_done.load(Ordering::Relaxed),
         )
     })
     .await
-    .map_err(|_| "Não foi possível ler as otimizações.".to_string())
+    .map_err(|_| "Não foi possível ler as otimizações.".to_string())?
 }
 
 #[tauri::command]
@@ -313,9 +335,14 @@ pub fn tweaks_undo_all(
 }
 
 #[tauri::command]
-pub async fn tweaks_journal() -> Result<Vec<JournalEntry>, String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        Journal::read_only(&default_journal_path()).map(|j| j.entries)
+pub async fn tweaks_journal(state: State<'_, TweaksState>) -> Result<HistoryPage, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        build_history(
+            state.backend().as_ref(),
+            &default_journal_path(),
+            state.hkcu_allowed,
+        )
     })
     .await
     .map_err(|_| "Não foi possível ler o histórico.".to_string())?
@@ -393,22 +420,76 @@ mod tests {
     }
 
     #[test]
-    fn activity_counts_only_real_changes() {
-        let r = |ok: bool, m: &str| ItemResult {
+    fn activity_counts_the_changed_flag_not_the_message() {
+        let r = |changed: bool, m: &str| ItemResult {
             tweak_id: "x".into(),
-            ok,
+            ok: !m.starts_with("falhou") && !m.starts_with("bloqueado"),
+            changed,
             message: m.into(),
         };
         let rs = [
             r(true, "aplicada"),
-            r(true, "já estava aplicada"),
+            r(false, "já estava aplicada"),
             r(false, "falhou: x"),
-            r(true, "desfeita"),
             r(true, "desfeita (histórico não atualizado: e)"),
-            r(false, "mantida (alterada depois)"),
+            r(
+                true,
+                "bloqueado: a janela elevada está em outra conta do Windows",
+            ),
+            r(false, "desfeita"),
         ];
-        assert_eq!(changed_count(&rs, "aplicada"), 1);
-        assert_eq!(changed_count(&rs, "desfeita"), 2);
+        assert_eq!(changed_count(&rs), 3);
+    }
+
+    #[test]
+    fn page_reports_restore_point_done_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let jp = dir.path().join("j.json");
+        let b = MemoryBackend::new();
+        assert!(
+            !build_page(&cat(), &b, &jp, false, true, false)
+                .unwrap()
+                .restore_point_done
+        );
+        assert!(
+            build_page(&cat(), &b, &jp, false, true, true)
+                .unwrap()
+                .restore_point_done
+        );
+    }
+
+    #[test]
+    fn list_surfaces_a_journal_read_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let jp = dir.path().join("j.json");
+        std::fs::create_dir(&jp).unwrap();
+        let b = MemoryBackend::new();
+        assert!(build_page(&cat(), &b, &jp, false, true, false).is_err());
+    }
+
+    #[test]
+    fn list_with_corrupt_journal_still_loads_and_moves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let jp = dir.path().join("j.json");
+        std::fs::write(&jp, "{lixo").unwrap();
+        let b = MemoryBackend::new();
+        let page = build_page(&cat(), &b, &jp, false, true, false).unwrap();
+        assert_eq!(page.journal_count, 0);
+        assert_eq!(std::fs::read_to_string(&jp).unwrap(), "{lixo");
+    }
+
+    #[test]
+    fn history_page_carries_window_flags_and_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let jp = dir.path().join("j.json");
+        let b = MemoryBackend::new();
+        b.set_elevated(false);
+        let h = build_history(&b, &jp, false).unwrap();
+        assert!(h.entries.is_empty());
+        assert!(!h.elevated);
+        assert!(!h.hkcu_allowed);
+        std::fs::write(&jp, "{lixo").unwrap();
+        assert!(build_history(&b, &jp, true).is_err());
     }
 
     #[test]
@@ -509,7 +590,7 @@ mod tests {
         let c = cat();
         let b = MemoryBackend::new();
         assert_eq!(applied_count(&c, &b), 0);
-        let page = build_page(&c, &b, &jp, false, true);
+        let page = build_page(&c, &b, &jp, false, true, false).unwrap();
         assert_eq!(page.tweaks.len(), 1);
         assert!(!page.tweaks[0].in_journal);
         assert_eq!(page.journal_count, 0);
@@ -518,7 +599,7 @@ mod tests {
         let done = AtomicBool::new(false);
         run_apply(&["t1".into()], &c, &b, &jp, &done, &|_| Ok(()));
         assert_eq!(applied_count(&c, &b), 1);
-        let page = build_page(&c, &b, &jp, false, true);
+        let page = build_page(&c, &b, &jp, false, true, false).unwrap();
         assert!(page.tweaks[0].in_journal);
         assert_eq!(page.journal_count, 1);
     }

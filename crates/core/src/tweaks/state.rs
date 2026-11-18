@@ -95,7 +95,7 @@ pub fn describe(action: &Action) -> String {
     }
 }
 
-fn is_hkcu(action: &Action) -> bool {
+pub(crate) fn is_hkcu(action: &Action) -> bool {
     matches!(
         action,
         Action::Registry {

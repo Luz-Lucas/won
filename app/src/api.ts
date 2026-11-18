@@ -242,11 +242,14 @@ export interface TweaksPage {
   elevated: boolean;
   hkcu_allowed: boolean;
   journal_count: number;
+  restore_point_done: boolean;
 }
 
 export interface TweakItemResult {
   tweak_id: string;
   ok: boolean;
+  /** Algo foi de fato escrito no sistema. */
+  changed: boolean;
   message: string;
 }
 
@@ -254,11 +257,13 @@ export interface ApplyReport {
   results: TweakItemResult[];
   effect: TweakEffect;
   restore_point: string | null;
+  notice: string | null;
 }
 
 export interface UndoReport {
   results: TweakItemResult[];
   conflicts: string[];
+  notice: string | null;
 }
 
 export type JournalSnapshot =
@@ -288,4 +293,10 @@ export const tweaksApply = (ids: string[]) =>
 export const tweaksUndo = (ids: string[]) =>
   invoke<number>("tweaks_undo", { ids });
 export const tweaksUndoAll = () => invoke<number>("tweaks_undo_all");
-export const tweaksJournal = () => invoke<JournalEntry[]>("tweaks_journal");
+export interface HistoryPage {
+  entries: JournalEntry[];
+  elevated: boolean;
+  hkcu_allowed: boolean;
+}
+
+export const tweaksJournal = () => invoke<HistoryPage>("tweaks_journal");

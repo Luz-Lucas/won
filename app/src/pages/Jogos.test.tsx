@@ -68,6 +68,7 @@ const page = (tweaks: TweakItem[], over: Partial<TweaksPage> = {}): TweaksPage =
   elevated: true,
   hkcu_allowed: true,
   journal_count: 0,
+  restore_point_done: false,
   ...over,
 });
 
@@ -165,7 +166,7 @@ describe("Jogos", () => {
     await screen.findByRole("checkbox", { name: /Título a/ });
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
     expect(
-      screen.getByText("Um ponto de restauração do Windows será criado antes."),
+      screen.getByText("Um ponto de restauração do Windows será solicitado antes."),
     ).toBeInTheDocument();
     await userEvent.click(
       screen.getAllByRole("button", { name: "Aplicar" }).slice(-1)[0],
@@ -180,6 +181,69 @@ describe("Jogos", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Ponto de restauração: Sentinela 1")).toBeInTheDocument();
     await waitFor(() => expect(api.tweaksList).toHaveBeenCalledTimes(2));
+  });
+
+  const RP_NOTE = "Um ponto de restauração do Windows será solicitado antes.";
+
+  const openConfirm = async () => {
+    await screen.findByRole("checkbox", { name: /Título a/ });
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    return screen.getByRole("dialog");
+  };
+
+  it("restore_point_note_for_any_writing_tweak_when_elevated_and_not_done", async () => {
+    // Ajuste sem admin também escreve: o backend pede o ponto do mesmo jeito.
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
+    render(<Jogos />);
+    expect((await openConfirm()).textContent).toContain(RP_NOTE);
+  });
+
+  it("no_restore_point_note_when_already_done_this_session", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(
+      page([item("a")], { restore_point_done: true }),
+    );
+    render(<Jogos />);
+    expect((await openConfirm()).textContent).not.toContain(RP_NOTE);
+  });
+
+  it("no_restore_point_note_when_not_elevated", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")], { elevated: false }));
+    render(<Jogos />);
+    expect((await openConfirm()).textContent).not.toContain(RP_NOTE);
+  });
+
+  it("other_account_notice_when_hkcu_not_allowed", async () => {
+    const text =
+      "Esta janela está em outra conta do Windows. O histórico e os ajustes do usuário mostrados aqui são dessa conta.";
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")], { hkcu_allowed: false }));
+    const { unmount } = render(<Jogos />);
+    expect(await screen.findByText(text)).toBeVisible();
+    unmount();
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
+    render(<Jogos />);
+    await screen.findByRole("checkbox", { name: /Título a/ });
+    expect(screen.queryByText(text)).toBeNull();
+  });
+
+  it("apply_report_notice_is_shown", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
+    vi.mocked(api.tweaksApply).mockResolvedValue(7);
+    render(<Jogos />);
+    await openConfirm();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Aplicar" }).slice(-1)[0],
+    );
+    await finish({
+      results: [{ tweak_id: "a", ok: true, changed: true, message: "aplicada" }],
+      effect: "immediate",
+      restore_point: null,
+      notice: "O histórico anterior estava corrompido e foi guardado como C:\\j.corrompido-1.",
+    });
+    expect(
+      await screen.findByText(
+        "O histórico anterior estava corrompido e foi guardado como C:\\j.corrompido-1.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("item_failure_is_listed_with_reason", async () => {

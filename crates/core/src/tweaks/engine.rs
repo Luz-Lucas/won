@@ -1,20 +1,34 @@
 //! Aplicar e desfazer ajustes. Regra de ouro: o valor anterior vai para o
 //! diário (em disco) ANTES de qualquer escrita no sistema.
+//!
+//! Cada operação segura a trava do diário (`journal.lock`) do carregamento à
+//! última gravação, para que dois processos não apaguem a entrada um do outro.
 
 use std::path::Path;
+use std::time::Duration;
 
 use serde::Serialize;
 
 use super::backend::{Snapshot, SystemBackend, target_of};
 use super::catalog::Catalog;
-use super::journal::{Journal, JournalAction, JournalEntry};
+use super::journal::{Journal, JournalAction, JournalEntry, JournalLock, LOCK_BUSY, LockError};
 use super::model::{Action, Effect, Tweak};
-use super::state::{TweakStatus, describe, view};
+use super::state::{TweakStatus, describe, is_hkcu, view};
+
+/// Espera máxima pela trava do diário.
+#[cfg(not(test))]
+const LOCK_WAIT: Duration = Duration::from_secs(10);
+#[cfg(test)]
+const LOCK_WAIT: Duration = Duration::from_millis(200);
+
+const BLOCKED_OTHER_ACCOUNT: &str = "bloqueado: a janela elevada está em outra conta do Windows";
 
 #[derive(Debug, Serialize)]
 pub struct ItemResult {
     pub tweak_id: String,
     pub ok: bool,
+    /// `true` só quando algo foi de fato escrito no sistema.
+    pub changed: bool,
     pub message: String,
 }
 
@@ -25,20 +39,56 @@ pub struct ApplyReport {
     pub effect: Effect,
     /// Preenchido pela camada de cima; o motor não cria pontos de restauração.
     pub restore_point: Option<String>,
+    /// Aviso geral (ex.: diário corrompido posto de lado).
+    pub notice: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct UndoReport {
     pub results: Vec<ItemResult>,
     pub conflicts: Vec<String>,
+    /// Aviso geral (ex.: diário corrompido posto de lado).
+    pub notice: Option<String>,
 }
 
 fn item(id: &str, ok: bool, message: impl Into<String>) -> ItemResult {
     ItemResult {
         tweak_id: id.to_string(),
         ok,
+        changed: false,
         message: message.into(),
     }
+}
+
+fn changed_item(id: &str, ok: bool, message: impl Into<String>) -> ItemResult {
+    ItemResult {
+        changed: true,
+        ..item(id, ok, message)
+    }
+}
+
+/// Diário travado, carregado e reconciliado.
+struct Opened {
+    _lock: JournalLock,
+    journal: Journal,
+    notice: Option<String>,
+}
+
+/// `Err` já vem com a mensagem final de cada item.
+fn open(journal_path: &Path, b: &dyn SystemBackend) -> Result<Opened, String> {
+    let lock = match Journal::lock(journal_path, LOCK_WAIT) {
+        Ok(l) => l,
+        Err(LockError::Busy) => return Err(LOCK_BUSY.to_string()),
+        Err(LockError::Io(e)) => return Err(inaccessible(&e)),
+    };
+    let (mut journal, notice) =
+        Journal::load_checked_with_notice(journal_path).map_err(|e| inaccessible(&e))?;
+    journal.reconcile(b);
+    Ok(Opened {
+        _lock: lock,
+        journal,
+        notice,
+    })
 }
 
 /// Registra no diário a intenção de escrever `target` em `action`.
@@ -145,20 +195,21 @@ pub fn apply(
     b: &dyn SystemBackend,
     journal_path: &Path,
 ) -> ApplyReport {
-    let mut journal = match Journal::load_checked(journal_path) {
-        Ok(j) => j,
-        Err(e) => {
+    let Opened {
+        _lock,
+        mut journal,
+        notice,
+    } = match open(journal_path, b) {
+        Ok(o) => o,
+        Err(msg) => {
             return ApplyReport {
-                results: ids
-                    .iter()
-                    .map(|id| item(id, false, inaccessible(&e)))
-                    .collect(),
+                results: ids.iter().map(|id| item(id, false, msg.clone())).collect(),
                 effect: Effect::Immediate,
                 restore_point: None,
+                notice: None,
             };
         }
     };
-    journal.reconcile(b);
     let mut results = Vec::new();
     let mut effect = Effect::Immediate;
 
@@ -184,12 +235,11 @@ pub fn apply(
             TweakStatus::NotApplied | TweakStatus::Partial => {}
         }
         match apply_one(t, b, &mut journal, journal_path) {
-            Ok(wrote) => {
-                if wrote {
-                    effect = effect.max(t.effect);
-                }
-                results.push(item(id, true, "aplicada"));
+            Ok(true) => {
+                effect = effect.max(t.effect);
+                results.push(changed_item(id, true, "aplicada"));
             }
+            Ok(false) => results.push(item(id, true, "aplicada")),
             Err(msg) => results.push(item(id, false, format!("falhou: {msg}"))),
         }
     }
@@ -198,6 +248,7 @@ pub fn apply(
         results,
         effect,
         restore_point: None,
+        notice,
     }
 }
 
@@ -205,15 +256,16 @@ fn inaccessible(reason: &str) -> String {
     format!("falhou: diário inacessível ({reason})")
 }
 
-/// `journal` já reconciliado.
+/// `journal` já travado e reconciliado.
 fn undo_ids(
     ids: &[String],
     b: &dyn SystemBackend,
-    mut journal: Journal,
+    journal: &mut Journal,
     journal_path: &Path,
-) -> UndoReport {
+) -> (Vec<ItemResult>, Vec<String>) {
     let mut results = Vec::new();
     let mut conflicts = Vec::new();
+    let hkcu_ok = b.hkcu_allowed();
 
     for id in ids {
         let Some(pos) = journal.entries.iter().position(|e| e.tweak_id == *id) else {
@@ -222,11 +274,19 @@ fn undo_ids(
         };
         let entry = journal.entries[pos].clone();
         let mut restored = 0usize;
+        let mut wrote = false;
         let mut kept = 0usize;
+        let mut blocked = false;
         let mut errors: Vec<String> = Vec::new();
         let mut remaining: Vec<JournalAction> = Vec::new();
 
         for ja in entry.actions.iter().rev() {
+            if !hkcu_ok && is_hkcu(&ja.action) {
+                // §5.1: o HKCU desta janela é de outra conta; fica para depois.
+                blocked = true;
+                remaining.push(ja.clone());
+                continue;
+            }
             if !ja.done {
                 errors.push("estado não verificado".to_string());
                 remaining.push(ja.clone());
@@ -245,7 +305,10 @@ fn undo_ids(
                 restored += 1;
             } else if cur == ja.written {
                 match b.write(&ja.action, &ja.before) {
-                    Ok(()) => restored += 1,
+                    Ok(()) => {
+                        restored += 1;
+                        wrote = true;
+                    }
                     Err(e) => {
                         errors.push(e);
                         remaining.push(ja.clone());
@@ -270,45 +333,56 @@ fn undo_ids(
         // Se falhar, o próximo desfazer vê `atual == before` e conclui sem conflito.
         let saved = journal.save(journal_path);
 
-        if let Some(e) = errors.first() {
-            results.push(item(id, false, format!("falhou: {e}")));
+        let (ok, message) = if let Some(e) = errors.first() {
+            (false, format!("falhou: {e}"))
+        } else if blocked {
+            (false, BLOCKED_OTHER_ACCOUNT.to_string())
         } else if restored == 0 && kept > 0 {
-            results.push(item(id, false, "mantida (alterada depois)"));
+            (false, "mantida (alterada depois)".to_string())
         } else if let Err(e) = saved {
-            results.push(item(
-                id,
-                true,
-                format!("desfeita (histórico não atualizado: {e})"),
-            ));
+            (true, format!("desfeita (histórico não atualizado: {e})"))
         } else {
-            results.push(item(id, true, "desfeita"));
-        }
+            (true, "desfeita".to_string())
+        };
+        results.push(ItemResult {
+            changed: wrote,
+            ..item(id, ok, message)
+        });
     }
 
-    UndoReport { results, conflicts }
+    (results, conflicts)
 }
 
 pub fn undo(ids: &[String], b: &dyn SystemBackend, journal_path: &Path) -> UndoReport {
-    match Journal::load_checked(journal_path) {
-        Ok(mut journal) => {
-            journal.reconcile(b);
-            undo_ids(ids, b, journal, journal_path)
+    match open(journal_path, b) {
+        Ok(Opened {
+            _lock,
+            mut journal,
+            notice,
+        }) => {
+            let (results, conflicts) = undo_ids(ids, b, &mut journal, journal_path);
+            UndoReport {
+                results,
+                conflicts,
+                notice,
+            }
         }
-        Err(e) => UndoReport {
-            results: ids
-                .iter()
-                .map(|id| item(id, false, inaccessible(&e)))
-                .collect(),
+        Err(msg) => UndoReport {
+            results: ids.iter().map(|id| item(id, false, msg.clone())).collect(),
             conflicts: Vec::new(),
+            notice: None,
         },
     }
 }
 
 /// Desfaz tudo, do mais recente para o mais antigo.
 pub fn undo_all(b: &dyn SystemBackend, journal_path: &Path) -> UndoReport {
-    match Journal::load_checked(journal_path) {
-        Ok(mut journal) => {
-            journal.reconcile(b);
+    match open(journal_path, b) {
+        Ok(Opened {
+            _lock,
+            mut journal,
+            notice,
+        }) => {
             let ids: Vec<String> = journal
                 .entries
                 .iter()
@@ -319,11 +393,17 @@ pub fn undo_all(b: &dyn SystemBackend, journal_path: &Path) -> UndoReport {
                 // Persiste a limpeza feita pelo reconcile (nada mais vai gravar).
                 let _ = journal.save(journal_path);
             }
-            undo_ids(&ids, b, journal, journal_path)
+            let (results, conflicts) = undo_ids(&ids, b, &mut journal, journal_path);
+            UndoReport {
+                results,
+                conflicts,
+                notice,
+            }
         }
-        Err(e) => UndoReport {
-            results: vec![item("*", false, inaccessible(&e))],
+        Err(msg) => UndoReport {
+            results: vec![item("*", false, msg)],
             conflicts: Vec::new(),
+            notice: None,
         },
     }
 }
@@ -645,6 +725,158 @@ mod tests {
     }
 
     #[test]
+    fn lock_held_elsewhere_fails_every_id_and_writes_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let a = reg("A", 1);
+        let c = cat(vec![tweak("a", Effect::Immediate, vec![a.clone()])]);
+        apply(&ids(&["a"]), &c, &b, &p);
+        let before_bytes = std::fs::read(&p).unwrap();
+        b.set(&a, absent());
+        let held = Journal::lock(&p, std::time::Duration::from_millis(10)).unwrap();
+
+        let r = apply(&ids(&["a", "zzz"]), &c, &b, &p);
+        assert_eq!(r.results.len(), 2);
+        for x in &r.results {
+            assert!(!x.ok);
+            assert!(!x.changed);
+            assert_eq!(x.message, LOCK_BUSY);
+        }
+        assert_eq!(b.get(&a), absent(), "nada escrito no sistema");
+        let u = undo(&ids(&["a"]), &b, &p);
+        assert_eq!(u.results[0].message, LOCK_BUSY);
+        let ua = undo_all(&b, &p);
+        assert_eq!(ua.results.len(), 1);
+        assert_eq!(ua.results[0].tweak_id, "*");
+        assert_eq!(ua.results[0].message, LOCK_BUSY);
+        assert_eq!(std::fs::read(&p).unwrap(), before_bytes, "diário intacto");
+
+        drop(held);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+    }
+
+    #[test]
+    fn two_sequential_applies_both_land_in_the_journal() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let c = cat(vec![
+            tweak("a", Effect::Immediate, vec![reg("A", 1)]),
+            tweak("b", Effect::Immediate, vec![reg("B", 1)]),
+        ]);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        assert!(apply(&ids(&["b"]), &c, &b, &p).results[0].ok);
+        let j = Journal::load(&p);
+        let got: Vec<&str> = j.entries.iter().map(|e| e.tweak_id.as_str()).collect();
+        assert_eq!(got, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn undo_in_another_account_keeps_hkcu_and_restores_hklm() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let cu = reg("CU", 1);
+        let lm = Action::Registry {
+            hive: Hive::Hklm,
+            path: "SOFTWARE\\Policies\\Microsoft\\Windows\\X".into(),
+            name: "LM".into(),
+            value: Some(RegValue::Dword(1)),
+        };
+        let mut mixed = tweak("m", Effect::Immediate, vec![cu.clone(), lm.clone()]);
+        mixed.needs_admin = true;
+        let c = cat(vec![
+            mixed,
+            tweak("u", Effect::Immediate, vec![reg("U", 1)]),
+        ]);
+        assert!(
+            apply(&ids(&["m", "u"]), &c, &b, &p)
+                .results
+                .iter()
+                .all(|x| x.ok)
+        );
+
+        b.set_hkcu_allowed(false);
+        let r = undo(&ids(&["m", "u"]), &b, &p);
+        let blocked = "bloqueado: a janela elevada está em outra conta do Windows";
+        assert_eq!(r.results[0].message, blocked);
+        assert!(!r.results[0].ok);
+        assert!(r.results[0].changed, "o HKLM foi restaurado");
+        assert_eq!(r.results[1].message, blocked);
+        assert!(!r.results[1].changed);
+        assert_eq!(b.get(&lm), absent(), "HKLM restaurado");
+        assert_eq!(b.get(&cu), target_of(&cu), "HKCU intocado");
+        assert_eq!(b.get(&reg("U", 1)), target_of(&reg("U", 1)));
+        let j = Journal::load(&p);
+        let em = j.entries.iter().find(|e| e.tweak_id == "m").unwrap();
+        assert_eq!(em.actions.len(), 1);
+        assert_eq!(em.actions[0].action, cu);
+        assert_eq!(em.actions[0].before, absent());
+        assert!(j.entries.iter().any(|e| e.tweak_id == "u"));
+
+        // De volta à conta certa, o desfazer conclui.
+        b.set_hkcu_allowed(true);
+        let r = undo_all(&b, &p);
+        assert!(r.results.iter().all(|x| x.ok), "{:?}", r.results);
+        assert_eq!(b.get(&cu), absent());
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn corrupt_journal_set_aside_is_reported_by_apply_and_undo() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        let b = MemoryBackend::new();
+        let c = cat(vec![tweak("a", Effect::Immediate, vec![reg("A", 1)])]);
+        std::fs::write(&p, b"{lixo").unwrap();
+        let r = apply(&ids(&["a"]), &c, &b, &p);
+        assert!(r.results[0].ok);
+        let n = r.notice.expect("aviso");
+        assert!(
+            n.starts_with("O histórico anterior estava corrompido e foi guardado como "),
+            "{n}"
+        );
+        // Diário bom: sem aviso.
+        assert!(apply(&ids(&["a"]), &c, &b, &p).notice.is_none());
+        std::fs::write(&p, b"{lixo").unwrap();
+        assert!(undo(&ids(&["a"]), &b, &p).notice.is_some());
+        std::fs::write(&p, b"{lixo").unwrap();
+        assert!(undo_all(&b, &p).notice.is_some());
+        assert!(undo_all(&b, &p).notice.is_none());
+    }
+
+    #[test]
+    fn changed_flag_marks_only_real_changes() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let (a, k) = (reg("A", 1), reg("K", 1));
+        let c = cat(vec![
+            tweak("a", Effect::Immediate, vec![a.clone()]),
+            tweak("k", Effect::Immediate, vec![k.clone()]),
+        ]);
+        let r = apply(&ids(&["a", "k"]), &c, &b, &p);
+        assert!(r.results.iter().all(|x| x.ok && x.changed));
+        let r = apply(&ids(&["a"]), &c, &b, &p);
+        assert_eq!(r.results[0].message, "já estava aplicada");
+        assert!(!r.results[0].changed);
+        b.set(
+            &k,
+            Snapshot::Registry {
+                value: Some(RegValue::Dword(5)),
+            },
+        );
+        let u = undo(&ids(&["a", "k"]), &b, &p);
+        assert_eq!(u.results[0].message, "desfeita");
+        assert!(u.results[0].changed);
+        assert_eq!(u.results[1].message, "mantida (alterada depois)");
+        assert!(!u.results[1].changed);
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn undo_reports_when_the_journal_cannot_be_updated() {
         let d = tempfile::tempdir().unwrap();
         let p = jpath(&d);
@@ -652,9 +884,13 @@ mod tests {
         let a = reg("A", 1);
         let c = cat(vec![tweak("a", Effect::Immediate, vec![a.clone()])]);
         apply(&ids(&["a"]), &c, &b, &p);
-        let mut tmp = p.as_os_str().to_owned();
-        tmp.push(".tmp");
-        std::fs::create_dir(PathBuf::from(tmp)).unwrap(); // a gravação do diário falha
+        // Handle sem FILE_SHARE_DELETE: a leitura funciona, substituir o diário não.
+        use std::os::windows::fs::OpenOptionsExt;
+        let _hold = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&p)
+            .unwrap();
         let r = undo(&ids(&["a"]), &b, &p);
         assert_eq!(b.get(&a), absent());
         assert!(r.results[0].ok);

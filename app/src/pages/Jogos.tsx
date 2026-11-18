@@ -40,10 +40,18 @@ const EFFECT_NOTICE: Partial<Record<TweakEffect, string>> = {
 
 const POWER_PLAN = "power-high-performance";
 
+const OTHER_ACCOUNT =
+  "Esta janela está em outra conta do Windows. O histórico e os ajustes do usuário mostrados aqui são dessa conta.";
+
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 
 const selectable = (i: TweakItem) =>
   i.view.blocked === null && i.view.status !== "unavailable";
+
+/** Vai escrever algo no sistema (mesma regra do backend). */
+const willWrite = (i: TweakItem) =>
+  i.view.blocked === null &&
+  (i.view.status === "not_applied" || i.view.status === "partial");
 
 /** Perfil "Recomendado": recomendados disponíveis e ainda não aplicados. */
 const recommendedIds = (p: TweaksPage) =>
@@ -110,6 +118,9 @@ export default function Jogos() {
   const chosen = items.filter((i) => checked.has(i.tweak.id));
   const elevated = data?.elevated ?? false;
   const needsAdmin = (i: TweakItem) => i.tweak.needs_admin;
+  // Igual ao backend: elevado, algo vai escrever e nenhum ponto nesta sessão.
+  const restorePointNote =
+    elevated && !(data?.restore_point_done ?? false) && chosen.some(willWrite);
   const bannerNeeded =
     data !== null &&
     !elevated &&
@@ -163,6 +174,7 @@ export default function Jogos() {
   return (
     <section className="page">
       <h1>Jogos</h1>
+      {data && !data.hkcu_allowed && <p className="notice">{OTHER_ACCOUNT}</p>}
       {bannerNeeded && (
         <div className="notice">
           <p>Algumas otimizações exigem administrador.</p>
@@ -195,6 +207,7 @@ export default function Jogos() {
       {running && <p className="muted">Aplicando…</p>}
       {report && (
         <div className="notice">
+          {report.notice && <p>{report.notice}</p>}
           <ul className="tweak-results">
             {report.results.map((r) => (
               <li key={r.tweak_id} className={r.ok ? undefined : "form-error"}>
@@ -324,8 +337,8 @@ export default function Jogos() {
           onConfirm={confirm}
           onCancel={() => setConfirming(false)}
         >
-          {elevated && chosen.some(needsAdmin) && (
-            <p>Um ponto de restauração do Windows será criado antes.</p>
+          {restorePointNote && (
+            <p>Um ponto de restauração do Windows será solicitado antes.</p>
           )}
         </ConfirmDialog>
       )}
