@@ -423,6 +423,22 @@ mod tests {
     }
 
     #[test]
+    fn embedded_descriptions_and_sources_match_what_the_settings_do() {
+        let c = Catalog::embedded();
+        let d = |id: &str| c.get(id).unwrap().description.clone();
+        assert!(d("hags").contains("agendar"), "{}", d("hags"));
+        assert!(!d("hags").contains("memória de vídeo"));
+        assert!(d("game-dvr-off").contains("gravação e as capturas"));
+        assert!(!d("activity-history-off").contains("linha do tempo"));
+        assert!(d("telemetry-reduced").contains("gerenciado pela organização"));
+        assert!(d("game-mode").contains("já vem ligado"));
+        assert_eq!(
+            c.get("windowed-optimizations").unwrap().source,
+            "https://devblogs.microsoft.com/directx/updates-in-graphics-and-gaming/"
+        );
+    }
+
+    #[test]
     fn registry_value_json_shape() {
         let a: Action = serde_json::from_str(r#"{"kind":"registry","hive":"HKCU","path":"Software\\Microsoft\\GameBar","name":"AutoGameModeEnabled","value":{"type":"dword","data":1}}"#).unwrap();
         assert!(matches!(

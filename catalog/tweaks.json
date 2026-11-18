@@ -3,7 +3,7 @@
     {
       "id": "game-mode",
       "title": "Modo de Jogo",
-      "description": "Mantém o Modo de Jogo do Windows ativo, priorizando o jogo em primeiro plano. Efeito imediato; sem custo conhecido.",
+      "description": "Deixa o Modo de Jogo do Windows ativo, priorizando o jogo em primeiro plano. Normalmente ele já vem ligado de fábrica; aqui a opção fica gravada de forma explícita. Efeito imediato; sem custo conhecido.",
       "group": "jogos",
       "evidence": "comprovado",
       "effect": "immediate",
@@ -27,7 +27,7 @@
     {
       "id": "game-dvr-off",
       "title": "Desligar gravação em segundo plano (Game DVR)",
-      "description": "Desativa a captura de vídeo em segundo plano do Xbox Game Bar, que consome CPU/GPU e pode limitar o FPS. Você perde o 'gravar os últimos minutos'.",
+      "description": "Desativa a gravação e as capturas do Xbox Game Bar, inclusive a gravação em segundo plano, que consome CPU/GPU e pode limitar o FPS. Você deixa de gravar vídeos e tirar capturas pela Game Bar.",
       "group": "jogos",
       "evidence": "comprovado",
       "effect": "immediate",
@@ -61,7 +61,7 @@
     {
       "id": "hags",
       "title": "Agendamento de GPU acelerado por hardware (HAGS)",
-      "description": "Deixa a própria placa de vídeo gerenciar a memória de vídeo, o que pode reduzir latência. Exige reinício. Em algumas placas antigas pode piorar; desfaça se notar travamentos.",
+      "description": "Deixa a própria placa de vídeo agendar o trabalho da GPU, em vez do processador, o que pode reduzir latência. Exige reinício. Em algumas placas antigas pode piorar; desfaça se notar travamentos.",
       "group": "jogos",
       "evidence": "comprovado",
       "effect": "reboot",
@@ -92,7 +92,7 @@
       "needs_admin": false,
       "laptop_warning": false,
       "recommended": true,
-      "source": "https://learn.microsoft.com/en-us/answers/questions/3996584/hdr-video-streaming-keeps-turning-on-at-restart",
+      "source": "https://devblogs.microsoft.com/directx/updates-in-graphics-and-gaming/",
       "actions": [
         {
           "kind": "list_entry",
@@ -235,7 +235,7 @@
     {
       "id": "telemetry-reduced",
       "title": "Reduzir telemetria",
-      "description": "Reduz o envio de dados de diagnóstico ao nível mínimo permitido e deixa os serviços de telemetria (DiagTrack, dmwappushservice) em modo manual. Exige reinício. Alguns recursos de feedback da Microsoft deixam de funcionar.",
+      "description": "Reduz o envio de dados de diagnóstico ao nível mínimo permitido e deixa os serviços de telemetria (DiagTrack, dmwappushservice) em modo manual. Exige reinício. Alguns recursos de feedback da Microsoft deixam de funcionar, e a opção de dados de diagnóstico nas Configurações passa a aparecer como \"gerenciado pela organização\".",
       "group": "privacidade",
       "evidence": "comprovado",
       "effect": "reboot",
@@ -269,7 +269,7 @@
     {
       "id": "activity-history-off",
       "title": "Desligar histórico de atividades",
-      "description": "Impede o Windows de registrar e enviar à nuvem as atividades (linha do tempo). Vale após sair e entrar de novo no Windows; a linha do tempo deixa de lembrar o que você fez.",
+      "description": "Impede o Windows de registrar o histórico de atividades e de enviá-lo à nuvem. Vale após sair e entrar de novo no Windows; recursos que retomam o que você fazia em outro dispositivo deixam de funcionar.",
       "group": "privacidade",
       "evidence": "comprovado",
       "effect": "relogon",
