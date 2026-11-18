@@ -17,6 +17,6 @@ pub use journal::{
     lock_path,
 };
 pub use model::{Action, Effect, Evidence, Group, Hive, RegValue, StartType, Tweak};
-pub use state::{Change, TweakStatus, TweakView, describe, snapshot_text, view};
+pub use state::{Change, TweakStatus, TweakView, describe, snapshot_label, snapshot_text, view};
 #[cfg(windows)]
 pub use windows::{WindowsBackend, create_restore_point, current_user_sid, is_laptop};

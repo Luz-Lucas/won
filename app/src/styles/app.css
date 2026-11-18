@@ -499,3 +499,12 @@ body {
   margin-top: 24px;
   font-size: 12px;
 }
+
+.tweak-preview ul {
+  margin: var(--sp-1) 0 var(--sp-3);
+  padding-left: var(--sp-4);
+}
+
+.tweak-preview li {
+  margin-bottom: var(--sp-1);
+}
