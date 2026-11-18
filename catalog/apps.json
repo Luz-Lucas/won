@@ -1,679 +1,679 @@
 {
-    "apps":  [
-                 {
-                     "id":  "firefox",
-                     "name":  "Firefox",
-                     "description":  "Navegador rápido e focado em privacidade, da Mozilla.",
-                     "category":  "navegadores",
-                     "winget":  "Mozilla.Firefox",
-                     "link":  "https://www.mozilla.org/firefox/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "chrome",
-                     "name":  "Google Chrome",
-                     "description":  "Navegador do Google, com sincronização de conta e muitas extensões.",
-                     "category":  "navegadores",
-                     "winget":  "Google.Chrome",
-                     "link":  "https://www.google.com/chrome/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "brave",
-                     "name":  "Brave",
-                     "description":  "Navegador baseado em Chromium com bloqueio de anúncios e rastreadores embutido.",
-                     "category":  "navegadores",
-                     "winget":  "Brave.Brave",
-                     "link":  "https://brave.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "vivaldi",
-                     "name":  "Vivaldi",
-                     "description":  "Navegador muito personalizável, com painéis laterais e grupos de abas.",
-                     "category":  "navegadores",
-                     "winget":  "Vivaldi.Vivaldi",
-                     "link":  "https://vivaldi.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "librewolf",
-                     "name":  "LibreWolf",
-                     "description":  "Variante do Firefox endurecida para privacidade, sem telemetria.",
-                     "category":  "navegadores",
-                     "winget":  "LibreWolf.LibreWolf",
-                     "link":  "https://librewolf.net/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "tor-browser",
-                     "name":  "Navegador Tor",
-                     "description":  "Navegação anônima pela rede Tor.",
-                     "category":  "navegadores",
-                     "winget":  "TorProject.TorBrowser",
-                     "link":  "https://www.torproject.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "opera",
-                     "name":  "Opera",
-                     "description":  "Navegador com VPN, barra lateral e mensageiros integrados.",
-                     "category":  "navegadores",
-                     "winget":  "Opera.Opera",
-                     "link":  "https://www.opera.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "thunderbird",
-                     "name":  "Thunderbird",
-                     "description":  "Cliente de e-mail gratuito e de código aberto, da Mozilla.",
-                     "category":  "comunicacao",
-                     "winget":  "Mozilla.Thunderbird",
-                     "link":  "https://www.thunderbird.net/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "telegram",
-                     "name":  "Telegram",
-                     "description":  "Mensageiro rápido com grupos grandes, canais e envio de arquivos.",
-                     "category":  "comunicacao",
-                     "winget":  "Telegram.TelegramDesktop",
-                     "link":  "https://desktop.telegram.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "signal",
-                     "name":  "Signal",
-                     "description":  "Mensageiro com criptografia de ponta a ponta e foco em privacidade.",
-                     "category":  "comunicacao",
-                     "winget":  "OpenWhisperSystems.Signal",
-                     "link":  "https://signal.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "zoom",
-                     "name":  "Zoom",
-                     "description":  "Videochamadas e reuniões online.",
-                     "category":  "comunicacao",
-                     "winget":  "Zoom.Zoom",
-                     "link":  "https://zoom.us/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "teams",
-                     "name":  "Microsoft Teams",
-                     "description":  "Reuniões, chat e colaboração em equipe da Microsoft.",
-                     "category":  "comunicacao",
-                     "winget":  "Microsoft.Teams",
-                     "link":  "https://www.microsoft.com/microsoft-teams/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "slack",
-                     "name":  "Slack",
-                     "description":  "Chat de equipe organizado por canais e integrações.",
-                     "category":  "comunicacao",
-                     "winget":  "SlackTechnologies.Slack",
-                     "link":  "https://slack.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "steam",
-                     "name":  "Steam",
-                     "description":  "Maior loja e biblioteca de jogos para PC, da Valve.",
-                     "category":  "jogos",
-                     "winget":  "Valve.Steam",
-                     "link":  "https://store.steampowered.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "epic-games",
-                     "name":  "Epic Games Launcher",
-                     "description":  "Loja e biblioteca da Epic, com jogos gratuitos toda semana.",
-                     "category":  "jogos",
-                     "winget":  "EpicGames.EpicGamesLauncher",
-                     "link":  "https://store.epicgames.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "gog-galaxy",
-                     "name":  "GOG Galaxy",
-                     "description":  "Biblioteca de jogos da GOG, sem DRM, que também reúne outras lojas.",
-                     "category":  "jogos",
-                     "winget":  "GOG.Galaxy",
-                     "link":  "https://www.gog.com/galaxy",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "battle-net",
-                     "name":  "Battle.net",
-                     "description":  "Launcher da Blizzard para Diablo, Overwatch, World of Warcraft e outros.",
-                     "category":  "jogos",
-                     "winget":  "Blizzard.BattleNet",
-                     "link":  "https://www.blizzard.com/apps/battle.net/desktop",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "ea-app",
-                     "name":  "EA app",
-                     "description":  "Launcher da Electronic Arts para os jogos da EA.",
-                     "category":  "jogos",
-                     "winget":  "ElectronicArts.EADesktop",
-                     "link":  "https://www.ea.com/ea-app",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "ubisoft-connect",
-                     "name":  "Ubisoft Connect",
-                     "description":  "Launcher da Ubisoft para os jogos e serviços da empresa.",
-                     "category":  "jogos",
-                     "winget":  "Ubisoft.Connect",
-                     "link":  "https://www.ubisoft.com/pt-br/ubisoft-connect",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "discord",
-                     "name":  "Discord",
-                     "description":  "Chat de voz, vídeo e texto, muito usado por comunidades de jogos.",
-                     "category":  "jogos",
-                     "winget":  "Discord.Discord",
-                     "link":  "https://discord.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "playnite",
-                     "name":  "Playnite",
-                     "description":  "Biblioteca única que reúne jogos de várias lojas e emuladores.",
-                     "category":  "jogos",
-                     "winget":  "Playnite.Playnite",
-                     "link":  "https://playnite.link/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "retroarch",
-                     "name":  "RetroArch",
-                     "description":  "Frontend para emuladores de consoles clássicos.",
-                     "category":  "jogos",
-                     "winget":  "Libretro.RetroArch",
-                     "link":  "https://www.retroarch.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "geforce-now",
-                     "name":  "NVIDIA GeForce NOW",
-                     "description":  "Jogos em nuvem: joga títulos da sua biblioteca com a GPU da NVIDIA.",
-                     "category":  "jogos",
-                     "winget":  "Nvidia.GeForceNow",
-                     "link":  "https://www.nvidia.com/geforce-now/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "msi-afterburner",
-                     "name":  "MSI Afterburner",
-                     "description":  "Overclock, curva de ventoinha e monitoramento da placa de vídeo.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "Guru3D.Afterburner",
-                     "link":  "https://www.msi.com/Landing/afterburner/graphics-cards",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "hwinfo",
-                     "name":  "HWiNFO",
-                     "description":  "Informações detalhadas e sensores de temperatura e consumo do hardware.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "REALiX.HWiNFO",
-                     "link":  "https://www.hwinfo.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "capframex",
-                     "name":  "CapFrameX",
-                     "description":  "Mede e analisa FPS e tempo de quadro em jogos.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "CXWorld.CapFrameX",
-                     "link":  "https://www.capframex.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "ddu",
-                     "name":  "Display Driver Uninstaller",
-                     "description":  "Remove por completo drivers de vídeo antes de instalar outros.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "Wagnardsoft.DisplayDriverUninstaller",
-                     "link":  "https://www.wagnardsoft.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "cpu-z",
-                     "name":  "CPU-Z",
-                     "description":  "Mostra detalhes do processador, da memória e da placa-mãe.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "CPUID.CPU-Z",
-                     "link":  "https://www.cpuid.com/softwares/cpu-z.html",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "gpu-z",
-                     "name":  "GPU-Z",
-                     "description":  "Mostra detalhes e sensores da placa de vídeo.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "TechPowerUp.GPU-Z",
-                     "link":  "https://www.techpowerup.com/gpuz/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "hwmonitor",
-                     "name":  "HWMonitor",
-                     "description":  "Monitora temperaturas, tensões e velocidade das ventoinhas.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "CPUID.HWMonitor",
-                     "link":  "https://www.cpuid.com/softwares/hwmonitor.html",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "crystaldiskinfo",
-                     "name":  "CrystalDiskInfo",
-                     "description":  "Verifica a saúde, a temperatura e o desgaste de HDs e SSDs.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "CrystalDewWorld.CrystalDiskInfo",
-                     "link":  "https://crystalmark.info/en/software/crystaldiskinfo/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "openrgb",
-                     "name":  "OpenRGB",
-                     "description":  "Controla a iluminação RGB de vários fabricantes em um só programa.",
-                     "category":  "ferramentas_jogos",
-                     "winget":  "OpenRGB.OpenRGB",
-                     "link":  "https://openrgb.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "vlc",
-                     "name":  "VLC media player",
-                     "description":  "Toca quase qualquer formato de áudio e vídeo.",
-                     "category":  "multimidia",
-                     "winget":  "VideoLAN.VLC",
-                     "link":  "https://www.videolan.org/vlc/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "mpc-hc",
-                     "name":  "MPC-HC",
-                     "description":  "Player de vídeo leve e simples, estilo clássico.",
-                     "category":  "multimidia",
-                     "winget":  "clsid2.mpc-hc",
-                     "link":  "https://github.com/clsid2/mpc-hc",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "spotify",
-                     "name":  "Spotify",
-                     "description":  "Streaming de músicas e podcasts.",
-                     "category":  "multimidia",
-                     "winget":  "Spotify.Spotify",
-                     "link":  "https://www.spotify.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "obs-studio",
-                     "name":  "OBS Studio",
-                     "description":  "Gravação de tela e transmissão ao vivo.",
-                     "category":  "multimidia",
-                     "winget":  "OBSProject.OBSStudio",
-                     "link":  "https://obsproject.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "audacity",
-                     "name":  "Audacity",
-                     "description":  "Editor de áudio gratuito e de código aberto.",
-                     "category":  "multimidia",
-                     "winget":  "Audacity.Audacity",
-                     "link":  "https://www.audacityteam.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "gimp",
-                     "name":  "GIMP",
-                     "description":  "Editor de imagens avançado, alternativa gratuita ao Photoshop.",
-                     "category":  "multimidia",
-                     "winget":  "GIMP.GIMP.3",
-                     "link":  "https://www.gimp.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "handbrake",
-                     "name":  "HandBrake",
-                     "description":  "Converte e comprime vídeos entre formatos.",
-                     "category":  "multimidia",
-                     "winget":  "HandBrake.HandBrake",
-                     "link":  "https://handbrake.fr/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "inkscape",
-                     "name":  "Inkscape",
-                     "description":  "Editor de gráficos vetoriais, alternativa gratuita ao Illustrator.",
-                     "category":  "multimidia",
-                     "winget":  "Inkscape.Inkscape",
-                     "link":  "https://inkscape.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "krita",
-                     "name":  "Krita",
-                     "description":  "Programa de pintura digital e ilustração.",
-                     "category":  "multimidia",
-                     "winget":  "KDE.Krita",
-                     "link":  "https://krita.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "kdenlive",
-                     "name":  "Kdenlive",
-                     "description":  "Editor de vídeo não linear de código aberto.",
-                     "category":  "multimidia",
-                     "winget":  "KDE.Kdenlive",
-                     "link":  "https://kdenlive.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "blender",
-                     "name":  "Blender",
-                     "description":  "Modelagem 3D, animação e renderização.",
-                     "category":  "multimidia",
-                     "winget":  "BlenderFoundation.Blender",
-                     "link":  "https://www.blender.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "yt-dlp",
-                     "name":  "yt-dlp",
-                     "description":  "Baixa vídeos e áudios de sites de vídeo pela linha de comando.",
-                     "category":  "multimidia",
-                     "winget":  "yt-dlp.yt-dlp",
-                     "link":  "https://github.com/yt-dlp/yt-dlp",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "7zip",
-                     "name":  "7-Zip",
-                     "description":  "Compactador e descompactador de arquivos gratuito.",
-                     "category":  "utilitarios",
-                     "winget":  "7zip.7zip",
-                     "link":  "https://www.7-zip.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "everything",
-                     "name":  "Everything",
-                     "description":  "Busca instantânea de arquivos e pastas por nome.",
-                     "category":  "utilitarios",
-                     "winget":  "voidtools.Everything",
-                     "link":  "https://www.voidtools.com/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "powertoys",
-                     "name":  "PowerToys",
-                     "description":  "Conjunto de utilitários da Microsoft: janelas, atalhos, renomear em lote e mais.",
-                     "category":  "utilitarios",
-                     "winget":  "Microsoft.PowerToys",
-                     "link":  "https://learn.microsoft.com/windows/powertoys/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "notepad-plus-plus",
-                     "name":  "Notepad++",
-                     "description":  "Editor de texto leve com abas e destaque de sintaxe.",
-                     "category":  "utilitarios",
-                     "winget":  "Notepad++.Notepad++",
-                     "link":  "https://notepad-plus-plus.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "sharex",
-                     "name":  "ShareX",
-                     "description":  "Capturas de tela, gravação e envio rápido de imagens.",
-                     "category":  "utilitarios",
-                     "winget":  "ShareX.ShareX",
-                     "link":  "https://getsharex.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "qbittorrent",
-                     "name":  "qBittorrent",
-                     "description":  "Cliente de torrent sem anúncios e de código aberto.",
-                     "category":  "utilitarios",
-                     "winget":  "qBittorrent.qBittorrent",
-                     "link":  "https://www.qbittorrent.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "bitwarden",
-                     "name":  "Bitwarden",
-                     "description":  "Gerenciador de senhas de código aberto, com sincronização.",
-                     "category":  "utilitarios",
-                     "winget":  "Bitwarden.Bitwarden",
-                     "link":  "https://bitwarden.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "keepassxc",
-                     "name":  "KeePassXC",
-                     "description":  "Gerenciador de senhas offline, com cofre em arquivo local.",
-                     "category":  "utilitarios",
-                     "winget":  "KeePassXCTeam.KeePassXC",
-                     "link":  "https://keepassxc.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "cloudflare-warp",
-                     "name":  "Cloudflare WARP",
-                     "description":  "Conexão com DNS 1.1.1.1 e túnel criptografado da Cloudflare.",
-                     "category":  "utilitarios",
-                     "winget":  "Cloudflare.Warp",
-                     "link":  "https://one.one.one.one/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "wireguard",
-                     "name":  "WireGuard",
-                     "description":  "Cliente de VPN moderno, rápido e simples.",
-                     "category":  "utilitarios",
-                     "winget":  "WireGuard.WireGuard",
-                     "link":  "https://www.wireguard.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "oh-my-posh",
-                     "name":  "Oh My Posh",
-                     "description":  "Deixa o prompt do terminal bonito e informativo.",
-                     "category":  "utilitarios",
-                     "winget":  "JanDeDobbeleer.OhMyPosh",
-                     "link":  "https://ohmyposh.dev/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "windows-terminal",
-                     "name":  "Windows Terminal",
-                     "description":  "Terminal moderno com abas para PowerShell, CMD e WSL.",
-                     "category":  "utilitarios",
-                     "winget":  "Microsoft.WindowsTerminal",
-                     "link":  "https://learn.microsoft.com/windows/terminal/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "rufus",
-                     "name":  "Rufus",
-                     "description":  "Cria pendrives de instalação do Windows e de outros sistemas.",
-                     "category":  "utilitarios",
-                     "winget":  "Rufus.Rufus",
-                     "link":  "https://rufus.ie/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "windirstat",
-                     "name":  "WinDirStat",
-                     "description":  "Mostra graficamente o que está ocupando espaço no disco.",
-                     "category":  "utilitarios",
-                     "winget":  "WinDirStat.WinDirStat",
-                     "link":  "https://windirstat.net/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "bcuninstaller",
-                     "name":  "BCUninstaller",
-                     "description":  "Desinstala programas em lote e limpa os restos que sobram.",
-                     "category":  "utilitarios",
-                     "winget":  "Klocman.BulkCrapUninstaller",
-                     "link":  "https://www.bcuninstaller.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "sumatrapdf",
-                     "name":  "SumatraPDF",
-                     "description":  "Leitor de PDF e e-books muito leve.",
-                     "category":  "utilitarios",
-                     "winget":  "SumatraPDF.SumatraPDF",
-                     "link":  "https://www.sumatrapdfreader.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "libreoffice",
-                     "name":  "LibreOffice",
-                     "description":  "Pacote de escritório gratuito: texto, planilhas e apresentações.",
-                     "category":  "utilitarios",
-                     "winget":  "TheDocumentFoundation.LibreOffice",
-                     "link":  "https://www.libreoffice.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "autohotkey",
-                     "name":  "AutoHotkey",
-                     "description":  "Automatiza tarefas e cria atalhos de teclado personalizados.",
-                     "category":  "utilitarios",
-                     "winget":  "AutoHotkey.AutoHotkey",
-                     "link":  "https://www.autohotkey.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "git",
-                     "name":  "Git",
-                     "description":  "Controle de versão distribuído.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Git.Git",
-                     "link":  "https://git-scm.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "vscode",
-                     "name":  "Visual Studio Code",
-                     "description":  "Editor de código leve e extensível, da Microsoft.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Microsoft.VisualStudioCode",
-                     "link":  "https://code.visualstudio.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "nodejs-lts",
-                     "name":  "Node.js LTS",
-                     "description":  "Ambiente de execução JavaScript, versão de suporte de longo prazo.",
-                     "category":  "desenvolvimento",
-                     "winget":  "OpenJS.NodeJS.LTS",
-                     "link":  "https://nodejs.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "python-3",
-                     "name":  "Python 3",
-                     "description":  "Linguagem Python 3, versão estável.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Python.Python.3.13",
-                     "link":  "https://www.python.org/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "rustup",
-                     "name":  "Rust (rustup)",
-                     "description":  "Instalador e gerenciador de toolchains da linguagem Rust.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Rustlang.Rustup",
-                     "link":  "https://rustup.rs/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "github-cli",
-                     "name":  "GitHub CLI",
-                     "description":  "Usa o GitHub (PRs, issues, repositórios) pelo terminal.",
-                     "category":  "desenvolvimento",
-                     "winget":  "GitHub.cli",
-                     "link":  "https://cli.github.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "github-desktop",
-                     "name":  "GitHub Desktop",
-                     "description":  "Interface gráfica simples para Git e GitHub.",
-                     "category":  "desenvolvimento",
-                     "winget":  "GitHub.GitHubDesktop",
-                     "link":  "https://desktop.github.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "powershell",
-                     "name":  "PowerShell 7",
-                     "description":  "Versão moderna e multiplataforma do PowerShell.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Microsoft.PowerShell",
-                     "link":  "https://learn.microsoft.com/powershell/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "docker-desktop",
-                     "name":  "Docker Desktop",
-                     "description":  "Executa contêineres e ambientes de desenvolvimento isolados.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Docker.DockerDesktop",
-                     "link":  "https://www.docker.com/products/docker-desktop/",
-                     "foss":  false
-                 },
-                 {
-                     "id":  "go",
-                     "name":  "Go",
-                     "description":  "Linguagem Go e suas ferramentas oficiais.",
-                     "category":  "desenvolvimento",
-                     "winget":  "GoLang.Go",
-                     "link":  "https://go.dev/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "dotnet-sdk-9",
-                     "name":  ".NET SDK 9",
-                     "description":  "Kit de desenvolvimento .NET 9 para C# e F#.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Microsoft.DotNet.SDK.9",
-                     "link":  "https://dotnet.microsoft.com/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "temurin-jdk-21",
-                     "name":  "Java JDK 21 (Temurin)",
-                     "description":  "Kit de desenvolvimento Java 21 da Eclipse Adoptium.",
-                     "category":  "desenvolvimento",
-                     "winget":  "EclipseAdoptium.Temurin.21.JDK",
-                     "link":  "https://adoptium.net/",
-                     "foss":  true
-                 },
-                 {
-                     "id":  "postman",
-                     "name":  "Postman",
-                     "description":  "Testa e documenta APIs.",
-                     "category":  "desenvolvimento",
-                     "winget":  "Postman.Postman",
-                     "link":  "https://www.postman.com/",
-                     "foss":  false
-                 }
-             ]
+  "apps": [
+    {
+      "id": "firefox",
+      "name": "Firefox",
+      "description": "Navegador rápido e focado em privacidade, da Mozilla.",
+      "category": "navegadores",
+      "winget": "Mozilla.Firefox",
+      "link": "https://www.mozilla.org/firefox/",
+      "foss": true
+    },
+    {
+      "id": "chrome",
+      "name": "Google Chrome",
+      "description": "Navegador do Google, com sincronização de conta e muitas extensões.",
+      "category": "navegadores",
+      "winget": "Google.Chrome",
+      "link": "https://www.google.com/chrome/",
+      "foss": false
+    },
+    {
+      "id": "brave",
+      "name": "Brave",
+      "description": "Navegador baseado em Chromium com bloqueio de anúncios e rastreadores embutido.",
+      "category": "navegadores",
+      "winget": "Brave.Brave",
+      "link": "https://brave.com/",
+      "foss": true
+    },
+    {
+      "id": "vivaldi",
+      "name": "Vivaldi",
+      "description": "Navegador muito personalizável, com painéis laterais e grupos de abas.",
+      "category": "navegadores",
+      "winget": "Vivaldi.Vivaldi",
+      "link": "https://vivaldi.com/",
+      "foss": false
+    },
+    {
+      "id": "librewolf",
+      "name": "LibreWolf",
+      "description": "Variante do Firefox endurecida para privacidade, sem telemetria.",
+      "category": "navegadores",
+      "winget": "LibreWolf.LibreWolf",
+      "link": "https://librewolf.net/",
+      "foss": true
+    },
+    {
+      "id": "tor-browser",
+      "name": "Navegador Tor",
+      "description": "Navegação anônima pela rede Tor.",
+      "category": "navegadores",
+      "winget": "TorProject.TorBrowser",
+      "link": "https://www.torproject.org/",
+      "foss": true
+    },
+    {
+      "id": "opera",
+      "name": "Opera",
+      "description": "Navegador com VPN, barra lateral e mensageiros integrados.",
+      "category": "navegadores",
+      "winget": "Opera.Opera",
+      "link": "https://www.opera.com/",
+      "foss": false
+    },
+    {
+      "id": "thunderbird",
+      "name": "Thunderbird",
+      "description": "Cliente de e-mail gratuito e de código aberto, da Mozilla.",
+      "category": "comunicacao",
+      "winget": "Mozilla.Thunderbird",
+      "link": "https://www.thunderbird.net/",
+      "foss": true
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "description": "Mensageiro rápido com grupos grandes, canais e envio de arquivos.",
+      "category": "comunicacao",
+      "winget": "Telegram.TelegramDesktop",
+      "link": "https://desktop.telegram.org/",
+      "foss": true
+    },
+    {
+      "id": "signal",
+      "name": "Signal",
+      "description": "Mensageiro com criptografia de ponta a ponta e foco em privacidade.",
+      "category": "comunicacao",
+      "winget": "OpenWhisperSystems.Signal",
+      "link": "https://signal.org/",
+      "foss": true
+    },
+    {
+      "id": "zoom",
+      "name": "Zoom",
+      "description": "Videochamadas e reuniões online.",
+      "category": "comunicacao",
+      "winget": "Zoom.Zoom",
+      "link": "https://zoom.us/",
+      "foss": false
+    },
+    {
+      "id": "teams",
+      "name": "Microsoft Teams",
+      "description": "Reuniões, chat e colaboração em equipe da Microsoft.",
+      "category": "comunicacao",
+      "winget": "Microsoft.Teams",
+      "link": "https://www.microsoft.com/microsoft-teams/",
+      "foss": false
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "description": "Chat de equipe organizado por canais e integrações.",
+      "category": "comunicacao",
+      "winget": "SlackTechnologies.Slack",
+      "link": "https://slack.com/",
+      "foss": false
+    },
+    {
+      "id": "steam",
+      "name": "Steam",
+      "description": "Maior loja e biblioteca de jogos para PC, da Valve.",
+      "category": "jogos",
+      "winget": "Valve.Steam",
+      "link": "https://store.steampowered.com/",
+      "foss": false
+    },
+    {
+      "id": "epic-games",
+      "name": "Epic Games Launcher",
+      "description": "Loja e biblioteca da Epic, com jogos gratuitos toda semana.",
+      "category": "jogos",
+      "winget": "EpicGames.EpicGamesLauncher",
+      "link": "https://store.epicgames.com/",
+      "foss": false
+    },
+    {
+      "id": "gog-galaxy",
+      "name": "GOG Galaxy",
+      "description": "Biblioteca de jogos da GOG, sem DRM, que também reúne outras lojas.",
+      "category": "jogos",
+      "winget": "GOG.Galaxy",
+      "link": "https://www.gog.com/galaxy",
+      "foss": false
+    },
+    {
+      "id": "battle-net",
+      "name": "Battle.net",
+      "description": "Launcher da Blizzard para Diablo, Overwatch, World of Warcraft e outros.",
+      "category": "jogos",
+      "winget": "Blizzard.BattleNet",
+      "link": "https://www.blizzard.com/apps/battle.net/desktop",
+      "foss": false
+    },
+    {
+      "id": "ea-app",
+      "name": "EA app",
+      "description": "Launcher da Electronic Arts para os jogos da EA.",
+      "category": "jogos",
+      "winget": "ElectronicArts.EADesktop",
+      "link": "https://www.ea.com/ea-app",
+      "foss": false
+    },
+    {
+      "id": "ubisoft-connect",
+      "name": "Ubisoft Connect",
+      "description": "Launcher da Ubisoft para os jogos e serviços da empresa.",
+      "category": "jogos",
+      "winget": "Ubisoft.Connect",
+      "link": "https://www.ubisoft.com/pt-br/ubisoft-connect",
+      "foss": false
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "description": "Chat de voz, vídeo e texto, muito usado por comunidades de jogos.",
+      "category": "jogos",
+      "winget": "Discord.Discord",
+      "link": "https://discord.com/",
+      "foss": false
+    },
+    {
+      "id": "playnite",
+      "name": "Playnite",
+      "description": "Biblioteca única que reúne jogos de várias lojas e emuladores.",
+      "category": "jogos",
+      "winget": "Playnite.Playnite",
+      "link": "https://playnite.link/",
+      "foss": true
+    },
+    {
+      "id": "retroarch",
+      "name": "RetroArch",
+      "description": "Frontend para emuladores de consoles clássicos.",
+      "category": "jogos",
+      "winget": "Libretro.RetroArch",
+      "link": "https://www.retroarch.com/",
+      "foss": true
+    },
+    {
+      "id": "geforce-now",
+      "name": "NVIDIA GeForce NOW",
+      "description": "Jogos em nuvem: joga títulos da sua biblioteca com a GPU da NVIDIA.",
+      "category": "jogos",
+      "winget": "Nvidia.GeForceNow",
+      "link": "https://www.nvidia.com/geforce-now/",
+      "foss": false
+    },
+    {
+      "id": "msi-afterburner",
+      "name": "MSI Afterburner",
+      "description": "Overclock, curva de ventoinha e monitoramento da placa de vídeo.",
+      "category": "ferramentas_jogos",
+      "winget": "Guru3D.Afterburner",
+      "link": "https://www.msi.com/Landing/afterburner/graphics-cards",
+      "foss": false
+    },
+    {
+      "id": "hwinfo",
+      "name": "HWiNFO",
+      "description": "Informações detalhadas e sensores de temperatura e consumo do hardware.",
+      "category": "ferramentas_jogos",
+      "winget": "REALiX.HWiNFO",
+      "link": "https://www.hwinfo.com/",
+      "foss": false
+    },
+    {
+      "id": "capframex",
+      "name": "CapFrameX",
+      "description": "Mede e analisa FPS e tempo de quadro em jogos.",
+      "category": "ferramentas_jogos",
+      "winget": "CXWorld.CapFrameX",
+      "link": "https://www.capframex.com/",
+      "foss": true
+    },
+    {
+      "id": "ddu",
+      "name": "Display Driver Uninstaller",
+      "description": "Remove por completo drivers de vídeo antes de instalar outros.",
+      "category": "ferramentas_jogos",
+      "winget": "Wagnardsoft.DisplayDriverUninstaller",
+      "link": "https://www.wagnardsoft.com/",
+      "foss": false
+    },
+    {
+      "id": "cpu-z",
+      "name": "CPU-Z",
+      "description": "Mostra detalhes do processador, da memória e da placa-mãe.",
+      "category": "ferramentas_jogos",
+      "winget": "CPUID.CPU-Z",
+      "link": "https://www.cpuid.com/softwares/cpu-z.html",
+      "foss": false
+    },
+    {
+      "id": "gpu-z",
+      "name": "GPU-Z",
+      "description": "Mostra detalhes e sensores da placa de vídeo.",
+      "category": "ferramentas_jogos",
+      "winget": "TechPowerUp.GPU-Z",
+      "link": "https://www.techpowerup.com/gpuz/",
+      "foss": false
+    },
+    {
+      "id": "hwmonitor",
+      "name": "HWMonitor",
+      "description": "Monitora temperaturas, tensões e velocidade das ventoinhas.",
+      "category": "ferramentas_jogos",
+      "winget": "CPUID.HWMonitor",
+      "link": "https://www.cpuid.com/softwares/hwmonitor.html",
+      "foss": false
+    },
+    {
+      "id": "crystaldiskinfo",
+      "name": "CrystalDiskInfo",
+      "description": "Verifica a saúde, a temperatura e o desgaste de HDs e SSDs.",
+      "category": "ferramentas_jogos",
+      "winget": "CrystalDewWorld.CrystalDiskInfo",
+      "link": "https://crystalmark.info/en/software/crystaldiskinfo/",
+      "foss": true
+    },
+    {
+      "id": "openrgb",
+      "name": "OpenRGB",
+      "description": "Controla a iluminação RGB de vários fabricantes em um só programa.",
+      "category": "ferramentas_jogos",
+      "winget": "OpenRGB.OpenRGB",
+      "link": "https://openrgb.org/",
+      "foss": true
+    },
+    {
+      "id": "vlc",
+      "name": "VLC media player",
+      "description": "Toca quase qualquer formato de áudio e vídeo.",
+      "category": "multimidia",
+      "winget": "VideoLAN.VLC",
+      "link": "https://www.videolan.org/vlc/",
+      "foss": true
+    },
+    {
+      "id": "mpc-hc",
+      "name": "MPC-HC",
+      "description": "Player de vídeo leve e simples, estilo clássico.",
+      "category": "multimidia",
+      "winget": "clsid2.mpc-hc",
+      "link": "https://github.com/clsid2/mpc-hc",
+      "foss": true
+    },
+    {
+      "id": "spotify",
+      "name": "Spotify",
+      "description": "Streaming de músicas e podcasts.",
+      "category": "multimidia",
+      "winget": "Spotify.Spotify",
+      "link": "https://www.spotify.com/",
+      "foss": false
+    },
+    {
+      "id": "obs-studio",
+      "name": "OBS Studio",
+      "description": "Gravação de tela e transmissão ao vivo.",
+      "category": "multimidia",
+      "winget": "OBSProject.OBSStudio",
+      "link": "https://obsproject.com/",
+      "foss": true
+    },
+    {
+      "id": "audacity",
+      "name": "Audacity",
+      "description": "Editor de áudio gratuito e de código aberto.",
+      "category": "multimidia",
+      "winget": "Audacity.Audacity",
+      "link": "https://www.audacityteam.org/",
+      "foss": true
+    },
+    {
+      "id": "gimp",
+      "name": "GIMP",
+      "description": "Editor de imagens avançado, alternativa gratuita ao Photoshop.",
+      "category": "multimidia",
+      "winget": "GIMP.GIMP.3",
+      "link": "https://www.gimp.org/",
+      "foss": true
+    },
+    {
+      "id": "handbrake",
+      "name": "HandBrake",
+      "description": "Converte e comprime vídeos entre formatos.",
+      "category": "multimidia",
+      "winget": "HandBrake.HandBrake",
+      "link": "https://handbrake.fr/",
+      "foss": true
+    },
+    {
+      "id": "inkscape",
+      "name": "Inkscape",
+      "description": "Editor de gráficos vetoriais, alternativa gratuita ao Illustrator.",
+      "category": "multimidia",
+      "winget": "Inkscape.Inkscape",
+      "link": "https://inkscape.org/",
+      "foss": true
+    },
+    {
+      "id": "krita",
+      "name": "Krita",
+      "description": "Programa de pintura digital e ilustração.",
+      "category": "multimidia",
+      "winget": "KDE.Krita",
+      "link": "https://krita.org/",
+      "foss": true
+    },
+    {
+      "id": "kdenlive",
+      "name": "Kdenlive",
+      "description": "Editor de vídeo não linear de código aberto.",
+      "category": "multimidia",
+      "winget": "KDE.Kdenlive",
+      "link": "https://kdenlive.org/",
+      "foss": true
+    },
+    {
+      "id": "blender",
+      "name": "Blender",
+      "description": "Modelagem 3D, animação e renderização.",
+      "category": "multimidia",
+      "winget": "BlenderFoundation.Blender",
+      "link": "https://www.blender.org/",
+      "foss": true
+    },
+    {
+      "id": "yt-dlp",
+      "name": "yt-dlp",
+      "description": "Baixa vídeos e áudios de sites de vídeo pela linha de comando.",
+      "category": "multimidia",
+      "winget": "yt-dlp.yt-dlp",
+      "link": "https://github.com/yt-dlp/yt-dlp",
+      "foss": true
+    },
+    {
+      "id": "7zip",
+      "name": "7-Zip",
+      "description": "Compactador e descompactador de arquivos gratuito.",
+      "category": "utilitarios",
+      "winget": "7zip.7zip",
+      "link": "https://www.7-zip.org/",
+      "foss": true
+    },
+    {
+      "id": "everything",
+      "name": "Everything",
+      "description": "Busca instantânea de arquivos e pastas por nome.",
+      "category": "utilitarios",
+      "winget": "voidtools.Everything",
+      "link": "https://www.voidtools.com/",
+      "foss": false
+    },
+    {
+      "id": "powertoys",
+      "name": "PowerToys",
+      "description": "Conjunto de utilitários da Microsoft: janelas, atalhos, renomear em lote e mais.",
+      "category": "utilitarios",
+      "winget": "Microsoft.PowerToys",
+      "link": "https://learn.microsoft.com/windows/powertoys/",
+      "foss": true
+    },
+    {
+      "id": "notepad-plus-plus",
+      "name": "Notepad++",
+      "description": "Editor de texto leve com abas e destaque de sintaxe.",
+      "category": "utilitarios",
+      "winget": "Notepad++.Notepad++",
+      "link": "https://notepad-plus-plus.org/",
+      "foss": true
+    },
+    {
+      "id": "sharex",
+      "name": "ShareX",
+      "description": "Capturas de tela, gravação e envio rápido de imagens.",
+      "category": "utilitarios",
+      "winget": "ShareX.ShareX",
+      "link": "https://getsharex.com/",
+      "foss": true
+    },
+    {
+      "id": "qbittorrent",
+      "name": "qBittorrent",
+      "description": "Cliente de torrent sem anúncios e de código aberto.",
+      "category": "utilitarios",
+      "winget": "qBittorrent.qBittorrent",
+      "link": "https://www.qbittorrent.org/",
+      "foss": true
+    },
+    {
+      "id": "bitwarden",
+      "name": "Bitwarden",
+      "description": "Gerenciador de senhas de código aberto, com sincronização.",
+      "category": "utilitarios",
+      "winget": "Bitwarden.Bitwarden",
+      "link": "https://bitwarden.com/",
+      "foss": true
+    },
+    {
+      "id": "keepassxc",
+      "name": "KeePassXC",
+      "description": "Gerenciador de senhas offline, com cofre em arquivo local.",
+      "category": "utilitarios",
+      "winget": "KeePassXCTeam.KeePassXC",
+      "link": "https://keepassxc.org/",
+      "foss": true
+    },
+    {
+      "id": "cloudflare-warp",
+      "name": "Cloudflare WARP",
+      "description": "Conexão com DNS 1.1.1.1 e túnel criptografado da Cloudflare.",
+      "category": "utilitarios",
+      "winget": "Cloudflare.Warp",
+      "link": "https://one.one.one.one/",
+      "foss": false
+    },
+    {
+      "id": "wireguard",
+      "name": "WireGuard",
+      "description": "Cliente de VPN moderno, rápido e simples.",
+      "category": "utilitarios",
+      "winget": "WireGuard.WireGuard",
+      "link": "https://www.wireguard.com/",
+      "foss": true
+    },
+    {
+      "id": "oh-my-posh",
+      "name": "Oh My Posh",
+      "description": "Deixa o prompt do terminal bonito e informativo.",
+      "category": "utilitarios",
+      "winget": "JanDeDobbeleer.OhMyPosh",
+      "link": "https://ohmyposh.dev/",
+      "foss": true
+    },
+    {
+      "id": "windows-terminal",
+      "name": "Windows Terminal",
+      "description": "Terminal moderno com abas para PowerShell, CMD e WSL.",
+      "category": "utilitarios",
+      "winget": "Microsoft.WindowsTerminal",
+      "link": "https://learn.microsoft.com/windows/terminal/",
+      "foss": true
+    },
+    {
+      "id": "rufus",
+      "name": "Rufus",
+      "description": "Cria pendrives de instalação do Windows e de outros sistemas.",
+      "category": "utilitarios",
+      "winget": "Rufus.Rufus",
+      "link": "https://rufus.ie/",
+      "foss": true
+    },
+    {
+      "id": "windirstat",
+      "name": "WinDirStat",
+      "description": "Mostra graficamente o que está ocupando espaço no disco.",
+      "category": "utilitarios",
+      "winget": "WinDirStat.WinDirStat",
+      "link": "https://windirstat.net/",
+      "foss": true
+    },
+    {
+      "id": "bcuninstaller",
+      "name": "BCUninstaller",
+      "description": "Desinstala programas em lote e limpa os restos que sobram.",
+      "category": "utilitarios",
+      "winget": "Klocman.BulkCrapUninstaller",
+      "link": "https://www.bcuninstaller.com/",
+      "foss": true
+    },
+    {
+      "id": "sumatrapdf",
+      "name": "SumatraPDF",
+      "description": "Leitor de PDF e e-books muito leve.",
+      "category": "utilitarios",
+      "winget": "SumatraPDF.SumatraPDF",
+      "link": "https://www.sumatrapdfreader.org/",
+      "foss": true
+    },
+    {
+      "id": "libreoffice",
+      "name": "LibreOffice",
+      "description": "Pacote de escritório gratuito: texto, planilhas e apresentações.",
+      "category": "utilitarios",
+      "winget": "TheDocumentFoundation.LibreOffice",
+      "link": "https://www.libreoffice.org/",
+      "foss": true
+    },
+    {
+      "id": "autohotkey",
+      "name": "AutoHotkey",
+      "description": "Automatiza tarefas e cria atalhos de teclado personalizados.",
+      "category": "utilitarios",
+      "winget": "AutoHotkey.AutoHotkey",
+      "link": "https://www.autohotkey.com/",
+      "foss": true
+    },
+    {
+      "id": "git",
+      "name": "Git",
+      "description": "Controle de versão distribuído.",
+      "category": "desenvolvimento",
+      "winget": "Git.Git",
+      "link": "https://git-scm.com/",
+      "foss": true
+    },
+    {
+      "id": "vscode",
+      "name": "Visual Studio Code",
+      "description": "Editor de código leve e extensível, da Microsoft.",
+      "category": "desenvolvimento",
+      "winget": "Microsoft.VisualStudioCode",
+      "link": "https://code.visualstudio.com/",
+      "foss": false
+    },
+    {
+      "id": "nodejs-lts",
+      "name": "Node.js LTS",
+      "description": "Ambiente de execução JavaScript, versão de suporte de longo prazo.",
+      "category": "desenvolvimento",
+      "winget": "OpenJS.NodeJS.LTS",
+      "link": "https://nodejs.org/",
+      "foss": true
+    },
+    {
+      "id": "python-3",
+      "name": "Python 3",
+      "description": "Linguagem Python 3, versão estável.",
+      "category": "desenvolvimento",
+      "winget": "Python.Python.3.13",
+      "link": "https://www.python.org/",
+      "foss": true
+    },
+    {
+      "id": "rustup",
+      "name": "Rust (rustup)",
+      "description": "Instalador e gerenciador de toolchains da linguagem Rust.",
+      "category": "desenvolvimento",
+      "winget": "Rustlang.Rustup",
+      "link": "https://rustup.rs/",
+      "foss": true
+    },
+    {
+      "id": "github-cli",
+      "name": "GitHub CLI",
+      "description": "Usa o GitHub (PRs, issues, repositórios) pelo terminal.",
+      "category": "desenvolvimento",
+      "winget": "GitHub.cli",
+      "link": "https://cli.github.com/",
+      "foss": true
+    },
+    {
+      "id": "github-desktop",
+      "name": "GitHub Desktop",
+      "description": "Interface gráfica simples para Git e GitHub.",
+      "category": "desenvolvimento",
+      "winget": "GitHub.GitHubDesktop",
+      "link": "https://desktop.github.com/",
+      "foss": true
+    },
+    {
+      "id": "powershell",
+      "name": "PowerShell 7",
+      "description": "Versão moderna e multiplataforma do PowerShell.",
+      "category": "desenvolvimento",
+      "winget": "Microsoft.PowerShell",
+      "link": "https://learn.microsoft.com/powershell/",
+      "foss": true
+    },
+    {
+      "id": "docker-desktop",
+      "name": "Docker Desktop",
+      "description": "Executa contêineres e ambientes de desenvolvimento isolados.",
+      "category": "desenvolvimento",
+      "winget": "Docker.DockerDesktop",
+      "link": "https://www.docker.com/products/docker-desktop/",
+      "foss": false
+    },
+    {
+      "id": "go",
+      "name": "Go",
+      "description": "Linguagem Go e suas ferramentas oficiais.",
+      "category": "desenvolvimento",
+      "winget": "GoLang.Go",
+      "link": "https://go.dev/",
+      "foss": true
+    },
+    {
+      "id": "dotnet-sdk-10",
+      "name": ".NET SDK 10",
+      "description": "Kit de desenvolvimento .NET 10 para C# e F#.",
+      "category": "desenvolvimento",
+      "winget": "Microsoft.DotNet.SDK.10",
+      "link": "https://dotnet.microsoft.com/",
+      "foss": true
+    },
+    {
+      "id": "temurin-jdk-21",
+      "name": "Java JDK 21 (Temurin)",
+      "description": "Kit de desenvolvimento Java 21 da Eclipse Adoptium.",
+      "category": "desenvolvimento",
+      "winget": "EclipseAdoptium.Temurin.21.JDK",
+      "link": "https://adoptium.net/",
+      "foss": true
+    },
+    {
+      "id": "postman",
+      "name": "Postman",
+      "description": "Testa e documenta APIs.",
+      "category": "desenvolvimento",
+      "winget": "Postman.Postman",
+      "link": "https://www.postman.com/",
+      "foss": false
+    }
+  ]
 }

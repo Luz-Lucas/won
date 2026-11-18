@@ -70,6 +70,7 @@ impl AppCatalog {
         self.apps.iter().find(|a| a.id == id)
     }
 }
+
 fn valid_id(id: &str) -> bool {
     !id.is_empty()
         && id
@@ -121,6 +122,7 @@ pub fn validate(c: &AppCatalog) -> Result<(), String> {
     }
     Ok(())
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
