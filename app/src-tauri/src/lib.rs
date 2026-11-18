@@ -2,14 +2,13 @@ pub mod commands;
 pub mod jobs;
 pub mod tray;
 
-use commands::settings::SettingsState;
+use commands::settings::{SettingsState, sync_autostart};
 use commands::system::{CloseAction, MINIMIZED_ARG, on_window_close, parse_minimized};
 use jobs::{JobRegistry, Sink};
 use sentinela_core::settings::default_settings_path;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 /// Envia os eventos de operações longas para a janela via Tauri.
 pub struct TauriSink(pub AppHandle);
@@ -37,10 +36,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![MINIMIZED_ARG]),
-        ))
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .args([MINIMIZED_ARG])
+                .app_name("Sentinela")
+                .build(),
+        )
         .setup(|app| {
             app.manage(Arc::new(JobRegistry::new()));
             app.manage(commands::tweaks::TweaksState::new(
@@ -51,10 +52,16 @@ pub fn run() {
                 eprintln!("Sentinela: sem ícone na bandeja: {e}");
             }
             sync_autostart(app.handle());
-            // A janela nasce escondida (tauri.conf); só o início automático a mantém assim.
+            // A janela nasce escondida (tauri.conf) e aparece quando o frontend
+            // avisa que carregou; só o início automático a mantém escondida.
             let tray_ok = app.state::<SettingsState>().tray_ok.load(Ordering::Relaxed);
-            if !(tray_ok && parse_minimized(std::env::args_os())) {
-                tray::show_main(app.handle());
+            let hidden = tray_ok && parse_minimized(std::env::args_os());
+            app.manage(tray::StartupShow {
+                hidden,
+                shown: AtomicBool::new(false),
+            });
+            if !hidden {
+                tray::schedule_startup_fallback(app.handle());
             }
             Ok(())
         })
@@ -92,6 +99,7 @@ pub fn run() {
             commands::system::relaunch_elevated,
             commands::system::job_cancel,
             commands::system::job_running,
+            tray::window_ready,
             commands::settings::settings_get,
             commands::settings::settings_set,
             commands::tweaks::tweaks_list,
@@ -102,22 +110,4 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela");
-}
-
-/// Deixa o registro do início automático igual à preferência (ligado por padrão
-/// na primeira execução). Só na instância sem elevação e fora de `tauri dev`,
-/// para nunca registrar o executável de desenvolvimento nem o processo elevado.
-fn sync_autostart(app: &AppHandle) {
-    if cfg!(debug_assertions) || sentinela_core::clean::platform::is_elevated() {
-        return;
-    }
-    let want = app.state::<SettingsState>().snapshot().start_with_windows;
-    let manager = app.autolaunch();
-    if manager.is_enabled().unwrap_or(!want) != want {
-        let _ = if want {
-            manager.enable()
-        } else {
-            manager.disable()
-        };
-    }
 }

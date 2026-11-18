@@ -50,6 +50,30 @@ pub fn load(path: &Path) -> Settings {
         .unwrap_or_default()
 }
 
+/// Como `load`, mas na primeira execução grava o arquivo (para que uma escolha
+/// posterior do usuário não seja desfeita pelos padrões) e, se o conteúdo estiver
+/// corrompido, o põe de lado em `settings.json.corrompido-{segundos}`.
+pub fn load_or_init(path: &Path) -> Settings {
+    match std::fs::read(path) {
+        Ok(bytes) => match serde_json::from_slice(&bytes) {
+            Ok(s) => return s,
+            Err(_) => {
+                let secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs());
+                let mut aside = path.as_os_str().to_owned();
+                aside.push(format!(".corrompido-{secs}"));
+                let _ = std::fs::rename(path, PathBuf::from(aside));
+            }
+        },
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Settings::default(),
+        Err(_) => {}
+    }
+    let s = Settings::default();
+    let _ = save(path, &s);
+    s
+}
+
 /// Grava de forma atômica (arquivo temporário + rename).
 pub fn save(path: &Path, settings: &Settings) -> Result<()> {
     let dir = path.parent().filter(|p| !p.as_os_str().is_empty());
@@ -114,6 +138,41 @@ mod tests {
         save(&p, &s).unwrap();
         assert_eq!(load(&p), s);
         assert!(!d.path().join("sub").join("s.json.tmp").exists());
+    }
+
+    #[test]
+    fn first_run_writes_the_defaults_file() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("sub").join("s.json");
+        assert_eq!(load_or_init(&p), Settings::default());
+        assert!(p.exists());
+        // Uma escolha posterior sobrevive a novas leituras.
+        let off = Settings {
+            start_with_windows: false,
+            ..Settings::default()
+        };
+        save(&p, &off).unwrap();
+        assert_eq!(load_or_init(&p), off);
+    }
+
+    #[test]
+    fn corrupt_file_is_set_aside_and_defaults_rewritten() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.json");
+        std::fs::write(&p, b"lixo").unwrap();
+        assert_eq!(load_or_init(&p), Settings::default());
+        assert_eq!(load(&p), Settings::default());
+        let aside: Vec<_> = std::fs::read_dir(d.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("s.json.corrompido-")
+            })
+            .collect();
+        assert_eq!(aside.len(), 1);
+        assert_eq!(std::fs::read(aside[0].path()).unwrap(), b"lixo");
     }
 
     #[test]

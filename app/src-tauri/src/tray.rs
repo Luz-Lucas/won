@@ -4,7 +4,7 @@ use crate::commands::settings::SettingsState;
 use crate::commands::system::on_tray_quit;
 use crate::jobs::JobRegistry;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
@@ -12,6 +12,41 @@ use tauri_plugin_notification::NotificationExt;
 
 const TRAY_NOTICE: &str =
     "O Sentinela continua rodando na área de notificação. Para sair, use o ícone perto do relógio.";
+
+/// Mostra a janela inicial uma única vez: quando o frontend avisa que carregou
+/// (`window_ready`) ou, se o aviso não vier, após um tempo limite.
+pub struct StartupShow {
+    /// Início automático: a janela fica escondida na bandeja.
+    pub hidden: bool,
+    pub shown: AtomicBool,
+}
+
+/// Tempo máximo esperando o frontend antes de mostrar a janela mesmo assim.
+const READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+fn show_startup(app: &AppHandle) {
+    if let Some(st) = app.try_state::<StartupShow>()
+        && !st.hidden
+        && !st.shown.swap(true, Ordering::SeqCst)
+    {
+        show_main(app);
+    }
+}
+
+/// Agenda a janela inicial: normalmente o frontend a mostra; isto é o plano B.
+pub fn schedule_startup_fallback(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(READY_TIMEOUT);
+        show_startup(&app);
+    });
+}
+
+/// Chamado pelo frontend assim que a interface foi desenhada.
+#[tauri::command]
+pub fn window_ready(app: AppHandle) {
+    show_startup(&app);
+}
 
 /// Mostra, restaura e foca a janela principal.
 pub fn show_main(app: &AppHandle) {

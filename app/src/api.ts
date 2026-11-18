@@ -312,3 +312,6 @@ export interface SettingsView {
 export const settingsGet = () => invoke<SettingsView>("settings_get");
 export const settingsSet = (startWithWindows: boolean, closeToTray: boolean) =>
   invoke<SettingsView>("settings_set", { startWithWindows, closeToTray });
+
+/** Avisa o backend que a interface carregou (ele mostra a janela). */
+export const windowReady = () => invoke<void>("window_ready");
