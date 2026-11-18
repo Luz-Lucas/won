@@ -113,7 +113,13 @@ pub fn parse_upgrade_table(text: &str) -> HashMap<String, String> {
             continue;
         }
         let id = slice(&chars, id_from, ver_from);
+        let installed = slice(&chars, ver_from, avail_from);
         let avail = slice(&chars, avail_from, avail_to);
+        // Versão instalada desconhecida ("Unknown"/"Desconhecido"): o `upgrade`
+        // sem `--include-unknown` não a atualiza; não é atualização disponível.
+        if !installed.starts_with(|c: char| c.is_ascii_digit() || c == '<' || c == '>') {
+            continue;
+        }
         if id.is_empty()
             || avail.is_empty()
             || id.contains(char::is_whitespace)
@@ -197,6 +203,24 @@ mod tests {
     #[test]
     fn upgrade_table_en_us() {
         assert_eq!(parse_upgrade_table(EN), parse_upgrade_table(PT));
+    }
+
+    #[test]
+    fn upgrade_table_skips_unknown_installed_version() {
+        // `--include-unknown` lista pacotes de versão desconhecida; o `upgrade`
+        // fixo não os atualiza, então não podem virar "atualização disponível".
+        for text in [PT, EN] {
+            let t = parse_upgrade_table(text);
+            assert!(!t.contains_key("spotify.spotify"), "{t:?}");
+            assert_eq!(t.len(), 8);
+        }
+        let text = "Name   Id     Version  Available  Source\n\
+                    ---------------------------------------\n\
+                    A      A.A    > 1.0    2.0        winget\n\
+                    B      B.B    Unknown  2.0        winget\n";
+        let t = parse_upgrade_table(text);
+        assert_eq!(t["a.a"], "2.0");
+        assert!(!t.contains_key("b.b"));
     }
 
     #[test]

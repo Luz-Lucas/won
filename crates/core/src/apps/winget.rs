@@ -100,6 +100,7 @@ fn run_err(e: &str) -> String {
 }
 
 impl<R: CommandRunner> Winget<R> {
+    /// `done`: "Instalado"/"Atualizado", base das mensagens de sucesso.
     fn change(&self, verb: &str, winget_id: &str, done: &str) -> ItemOutcome {
         let args = [
             verb,
@@ -121,9 +122,15 @@ impl<R: CommandRunner> Winget<R> {
                         out.code as u32,
                         0x8A15_002B | 0x8A15_0061 | 0x8A15_010D | 0x8A15_004F
                     );
-                // Código 0 = concluiu: a mensagem depende da operação.
+                // Código 0 e reinício pendente: a mensagem depende da operação.
                 if out.code == 0 {
-                    (ok, changed, done.to_string())
+                    (ok, changed, format!("{done}."))
+                } else if matches!(out.code as u32, 0x8A15_0109 | 0x8A15_010B) {
+                    (
+                        ok,
+                        changed,
+                        format!("{done}; reinicie o computador para concluir."),
+                    )
                 } else {
                     (ok, changed, msg)
                 }
@@ -237,11 +244,11 @@ impl<R: CommandRunner> PackageManager for Winget<R> {
     }
 
     fn install(&self, winget_id: &str) -> ItemOutcome {
-        self.change("install", winget_id, "Instalado.")
+        self.change("install", winget_id, "Instalado")
     }
 
     fn upgrade(&self, winget_id: &str) -> ItemOutcome {
-        self.change("upgrade", winget_id, "Atualizado.")
+        self.change("upgrade", winget_id, "Atualizado")
     }
 }
 
@@ -339,6 +346,28 @@ mod tests {
     }
 
     #[test]
+    fn reboot_message_follows_the_operation() {
+        let f = Fake::new(|_| {
+            Ok(Output {
+                code: 0x8A150109u32 as i32,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        });
+        let up = wg(&f).upgrade("A.B");
+        assert!(up.ok && up.changed);
+        assert_eq!(
+            up.message,
+            "Atualizado; reinicie o computador para concluir."
+        );
+        let inst = wg(&f).install("A.B");
+        assert_eq!(
+            inst.message,
+            "Instalado; reinicie o computador para concluir."
+        );
+    }
+
+    #[test]
     fn install_failure_is_reported() {
         let f = Fake::new(|_| {
             Ok(Output {
@@ -394,7 +423,7 @@ mod tests {
         w.install("A.B");
         w.availability();
         let v = seen.lock().unwrap();
-        assert_eq!(v[0], ("install".to_string(), Duration::from_secs(30 * 60)));
+        assert_eq!(v[0], ("install".to_string(), Duration::from_secs(120 * 60)));
         assert_eq!(v[1], ("--version".to_string(), Duration::from_secs(120)));
     }
 

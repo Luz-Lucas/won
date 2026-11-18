@@ -62,13 +62,27 @@ pub fn run(cmd: AppsCommand) -> Result<i32> {
     }
 }
 
-/// `SENTINELA_WINGET` (só para testes) aponta para outro executável.
+/// `SENTINELA_WINGET` (só para testes) aponta para outro executável; ignorado
+/// em builds de release, que sempre usam o winget do sistema.
+fn winget_override(var: Option<std::ffi::OsString>, debug: bool) -> Option<String> {
+    var.filter(|p| debug && !p.is_empty())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
 fn manager() -> Box<dyn PackageManager> {
     let mut w = Winget::system();
-    if let Some(p) = std::env::var_os("SENTINELA_WINGET").filter(|p| !p.is_empty()) {
-        w.program = p.to_string_lossy().into_owned();
+    if let Some(p) = winget_override(std::env::var_os("SENTINELA_WINGET"), cfg!(debug_assertions)) {
+        w.program = p;
     }
     Box::new(w)
+}
+
+/// Ctrl+C: pede a parada entre itens e avisa uma única vez.
+fn on_interrupt(stop: &AtomicBool, err: &mut dyn Write) {
+    if !stop.swap(true, Ordering::Relaxed) {
+        let _ = writeln!(err, "Parando depois do item atual…");
+        let _ = err.flush();
+    }
 }
 
 fn state_text(s: Option<&AppState>) -> &'static str {
@@ -245,7 +259,7 @@ fn cmd_change(op: Op, ids: Vec<String>, all: bool, yes: bool) -> Result<i32> {
     let stop = Arc::new(AtomicBool::new(false));
     {
         let stop = Arc::clone(&stop);
-        if let Err(e) = ctrlc::set_handler(move || stop.store(true, Ordering::Relaxed)) {
+        if let Err(e) = ctrlc::set_handler(move || on_interrupt(&stop, &mut io::stderr())) {
             eprintln!("aviso: não foi possível registrar o Ctrl+C: {e}");
         }
     }
@@ -429,5 +443,27 @@ mod tests {
             );
         }
         assert!(parse_category("nada").is_err());
+    }
+
+    #[test]
+    fn winget_override_only_in_debug_builds() {
+        let p = || Some(std::ffi::OsString::from(r"Z:\fake.exe"));
+        assert_eq!(winget_override(p(), true).as_deref(), Some(r"Z:\fake.exe"));
+        assert_eq!(winget_override(p(), false), None);
+        assert_eq!(winget_override(Some("".into()), true), None);
+        assert_eq!(winget_override(None, true), None);
+    }
+
+    #[test]
+    fn first_interrupt_prints_notice_once() {
+        let stop = AtomicBool::new(false);
+        let mut err = Vec::new();
+        on_interrupt(&stop, &mut err);
+        assert!(stop.load(Ordering::Relaxed));
+        on_interrupt(&stop, &mut err);
+        assert_eq!(
+            String::from_utf8(err).unwrap(),
+            "Parando depois do item atual…\n"
+        );
     }
 }

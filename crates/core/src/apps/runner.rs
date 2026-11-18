@@ -13,7 +13,7 @@ pub const TIMEOUT_QUICK: Duration = Duration::from_secs(2 * 60);
 /// Listagem de atualizações (`upgrade --include-unknown`), que consulta fontes.
 pub const TIMEOUT_LISTING: Duration = Duration::from_secs(5 * 60);
 /// Instalar/atualizar.
-pub const TIMEOUT_CHANGE: Duration = Duration::from_secs(30 * 60);
+pub const TIMEOUT_CHANGE: Duration = Duration::from_secs(120 * 60);
 /// Espera máxima pelos pipes depois que o winget já terminou.
 const PIPE_GRACE: Duration = Duration::from_secs(5);
 /// Mensagem devolvida quando o tempo limite estoura.
@@ -103,13 +103,22 @@ mod job {
     }
 }
 
+/// `%SystemRoot%\System32\taskkill.exe`, nunca resolvido pelo PATH.
+fn taskkill_path(system_root: Option<std::ffi::OsString>) -> std::path::PathBuf {
+    let root = system_root
+        .filter(|r| !r.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"));
+    root.join("System32").join("taskkill.exe")
+}
+
 /// Encerra o processo e todos os descendentes e recolhe o filho.
 fn kill_tree(child: &mut Child, job: Option<&job::Job>) {
     match job {
         Some(j) => j.terminate(),
         None => {
             // Sem job: `taskkill /T` derruba a árvore.
-            let mut cmd = std::process::Command::new("taskkill");
+            let mut cmd = std::process::Command::new(taskkill_path(std::env::var_os("SystemRoot")));
             cmd.args(["/T", "/F", "/PID", &child.id().to_string()])
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
@@ -339,6 +348,23 @@ mod tests {
             SystemRunner
                 .run("sentinela-no-such-program-xyz", &[], TIMEOUT_QUICK)
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn change_timeout_is_two_hours() {
+        assert_eq!(TIMEOUT_CHANGE, Duration::from_secs(120 * 60));
+    }
+
+    #[test]
+    fn taskkill_uses_system_root() {
+        assert_eq!(
+            taskkill_path(Some(std::ffi::OsString::from(r"D:\Win"))),
+            std::path::PathBuf::from(r"D:\Win\System32\taskkill.exe")
+        );
+        assert_eq!(
+            taskkill_path(None),
+            std::path::PathBuf::from(r"C:\Windows\System32\taskkill.exe")
         );
     }
 }
