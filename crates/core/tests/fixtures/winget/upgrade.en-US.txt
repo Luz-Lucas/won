@@ -1,0 +1,11 @@
+Name                                                         Id                                     Version           Available       Source
+--------------------------------------------------------------------------------------------------------------------------------------------
+7-Zip 26.00 (x64)                                            7zip.7zip                              26.00             26.06           winget
+Blender                                                      BlenderFoundation.Blender              5.2.3             5.3.0           winget
+Git                                                          Git.Git                                2.55.0.5          2.56.0.4        winget
+Java 8 Update 481 (64-bit)                                   Oracle.JavaRuntimeEnvironment          8.0.4810.10       8.0.5130.4      winget
+Microsoft .NET Framework 4.8.1 Targeting Pack                Microsoft.WindowsSDK.10.0.28000        < 10.0.28000.1721 10.0.28000.2957 winget
+Node.js                                                      OpenJS.NodeJS.22                       22.20.0           22.23.5         winget
+Windows Subsystem for Linux                                  Microsoft.WSL                          2.7.10.0          3.0.5           winget
+WinRAR 7.22 (64-bit)                                         RARLab.WinRAR                          7.22.0            7.23.0          winget
+33 upgrades available.
