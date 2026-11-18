@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { systemStatus, type SystemStatus } from "./api";
+import { systemStatus, windowReady, type SystemStatus } from "./api";
 import Sidebar, { type Page } from "./components/Sidebar";
 import { JobsProvider, useJobSettled } from "./jobs";
 import Ajustes from "./pages/Ajustes";
@@ -32,6 +32,14 @@ function Shell() {
           setStatusError(typeof e === "string" ? e : String(e));
       },
     );
+  }, []);
+
+  // A janela nasce escondida; avisa o backend assim que a interface montou.
+  // Efeito (não requestAnimationFrame): o WebView2 pausa rAF em página oculta.
+  useEffect(() => {
+    windowReady().catch(() => {
+      /* sem backend (navegador): nada a fazer */
+    });
   }, []);
 
   useEffect(

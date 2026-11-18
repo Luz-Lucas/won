@@ -78,6 +78,17 @@ pub fn snapshot_text(s: &Snapshot) -> String {
     }
 }
 
+/// Como `snapshot_text`, mas pede ao backend o nome de planos de energia desconhecidos.
+pub fn snapshot_label(s: &Snapshot, b: &dyn SystemBackend) -> String {
+    if let Snapshot::PowerPlan { scheme } = s
+        && plan_name(scheme) == *scheme
+        && let Some(name) = b.scheme_name(scheme)
+    {
+        return name;
+    }
+    snapshot_text(s)
+}
+
 pub fn describe(action: &Action) -> String {
     match action {
         Action::Registry {
@@ -129,15 +140,15 @@ pub fn view(t: &Tweak, b: &dyn SystemBackend) -> TweakView {
                 changes.push(Change {
                     description: describe(action),
                     current: format!("erro: {msg}"),
-                    target: snapshot_text(&target),
+                    target: snapshot_label(&target, b),
                 });
                 continue;
             }
         };
         changes.push(Change {
             description: describe(action),
-            current: snapshot_text(&current),
-            target: snapshot_text(&target),
+            current: snapshot_label(&current, b),
+            target: snapshot_label(&target, b),
         });
     }
 
@@ -281,6 +292,59 @@ mod tests {
         assert_eq!(v.changes[0].description, "Plano de energia ativo");
         assert_eq!(v.changes[0].current, "Equilibrado");
         assert_eq!(v.changes[0].target, "Alto desempenho");
+    }
+
+    /// Backend de teste que conhece o nome de um plano do fabricante.
+    struct Named(MemoryBackend);
+    impl SystemBackend for Named {
+        fn read(&self, a: &Action) -> Result<Snapshot, String> {
+            self.0.read(a)
+        }
+        fn write(&self, a: &Action, t: &Snapshot) -> Result<(), String> {
+            self.0.write(a, t)
+        }
+        fn elevated(&self) -> bool {
+            true
+        }
+        fn hkcu_allowed(&self) -> bool {
+            true
+        }
+        fn scheme_name(&self, guid: &str) -> Option<String> {
+            (guid == "79a86ab8-bbb6-4993-a1a6-710b272dfe44").then(|| "Plano da Lenovo".to_string())
+        }
+    }
+
+    #[test]
+    fn unknown_power_plan_uses_the_name_from_the_system() {
+        let b = Named(MemoryBackend::new());
+        let plan = Action::PowerPlan {
+            scheme: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".into(),
+        };
+        b.0.set(
+            &plan,
+            Snapshot::PowerPlan {
+                scheme: "79a86ab8-bbb6-4993-a1a6-710b272dfe44".into(),
+            },
+        );
+        let v = view(&tweak(vec![plan], false), &b);
+        assert_eq!(v.changes[0].current, "Plano da Lenovo");
+        assert_eq!(v.changes[0].target, "Alto desempenho");
+    }
+
+    #[test]
+    fn unknown_power_plan_without_a_name_falls_back_to_the_guid() {
+        let b = MemoryBackend::new();
+        let plan = Action::PowerPlan {
+            scheme: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".into(),
+        };
+        b.set(
+            &plan,
+            Snapshot::PowerPlan {
+                scheme: "79a86ab8-bbb6-4993-a1a6-710b272dfe44".into(),
+            },
+        );
+        let v = view(&tweak(vec![plan], false), &b);
+        assert_eq!(v.changes[0].current, "79a86ab8-bbb6-4993-a1a6-710b272dfe44");
     }
 
     #[test]

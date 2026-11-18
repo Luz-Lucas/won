@@ -14,13 +14,15 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 sentinela-core = { path = "../../crates/core" }
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 serde.workspace = true
 serde_json.workspace = true
 windows-sys = { workspace = true, features = ["Win32_UI_WindowsAndMessaging", "Win32_System_Threading"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
 
 [dev-dependencies]
 anyhow.workspace = true

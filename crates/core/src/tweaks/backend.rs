@@ -40,6 +40,10 @@ pub trait SystemBackend: Send + Sync {
     fn elevated(&self) -> bool;
     /// `false` quando a janela elevada está em outra conta (HKCU seria o errado).
     fn hkcu_allowed(&self) -> bool;
+    /// Nome legível de um plano de energia (GUID minúsculo), quando o sistema souber.
+    fn scheme_name(&self, _guid: &str) -> Option<String> {
+        None
+    }
 }
 
 /// O estado que a ação quer.

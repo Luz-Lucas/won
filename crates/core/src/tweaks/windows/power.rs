@@ -78,6 +78,36 @@ pub(super) fn scheme_exists(guid: &str) -> bool {
     rc == 0 || rc == ERROR_MORE_DATA
 }
 
+/// Nome do plano como o Windows o mostra (ex.: "Equilibrado", ou o nome de um plano do fabricante).
+pub(super) fn friendly_name(guid: &str) -> Option<String> {
+    let g = parse_guid(guid)?;
+    let mut size = 0u32;
+    // SAFETY: buffer nulo só pergunta o tamanho; `g` vive durante a chamada.
+    let rc =
+        unsafe { PowerReadFriendlyName(null_mut(), &g, null(), null(), null_mut(), &mut size) };
+    if (rc != 0 && rc != ERROR_MORE_DATA) || size < 2 {
+        return None;
+    }
+    let mut buf = vec![0u16; (size as usize).div_ceil(2)];
+    // SAFETY: `buf` tem pelo menos `size` bytes e vive durante a chamada.
+    let rc = unsafe {
+        PowerReadFriendlyName(
+            null_mut(),
+            &g,
+            null(),
+            null(),
+            buf.as_mut_ptr().cast(),
+            &mut size,
+        )
+    };
+    if rc != 0 {
+        return None;
+    }
+    let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    let name = String::from_utf16_lossy(&buf[..end]).trim().to_string();
+    (!name.is_empty()).then_some(name)
+}
+
 pub(super) fn set_active(guid: &str) -> Result<(), String> {
     let g = parse_guid(guid).ok_or_else(|| "GUID de plano de energia inválido".to_string())?;
     // SAFETY: raiz nula = usuário atual; `g` vive durante a chamada.
