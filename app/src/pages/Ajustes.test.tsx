@@ -53,6 +53,8 @@ const status = (over: Partial<SystemStatus["db"]> = {}): SystemStatus => ({
   },
   quarantine_count: 0,
   activity: [],
+  tweaks_applied: 0,
+  tweaks_total: 0,
 });
 
 const summary = (over: Partial<UpdateSummary> = {}): UpdateSummary => ({

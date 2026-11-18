@@ -56,6 +56,8 @@ const status = (over: Partial<SystemStatus> = {}): SystemStatus => ({
   activity: [
     { at: "2026-03-05T12:00:00Z", kind: "clean", summary: "Limpeza concluída" },
   ],
+  tweaks_applied: 0,
+  tweaks_total: 0,
   ...over,
 });
 

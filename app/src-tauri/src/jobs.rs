@@ -22,6 +22,7 @@ pub enum JobKind {
     FindLarge,
     FindDupes,
     Update,
+    Tweaks,
 }
 
 pub trait Sink: Send + Sync {

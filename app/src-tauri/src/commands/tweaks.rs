@@ -1,0 +1,461 @@
+//! Otimizações do Windows: listagem, aplicação e desfazer. A lógica vive em
+//! `sentinela_core::tweaks`; aqui ficam validação, ponto de restauração por
+//! sessão, atividade e a trava de outra conta (HKCU).
+
+use crate::TauriSink;
+use crate::jobs::{JobId, JobKind, JobRegistry, spawn_job};
+use sentinela_core::activity::{self, ActivityKind};
+use sentinela_core::tweaks::{
+    ApplyReport, Catalog, ItemResult, Journal, JournalEntry, SystemBackend, Tweak, TweakStatus,
+    TweakView, UndoReport, WindowsBackend, create_restore_point, current_user_sid,
+    default_journal_path, is_laptop, undo, undo_all, view,
+};
+use serde::Serialize;
+use std::ffi::OsString;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, State};
+
+/// Argumento que a instância elevada recebe com o SID de quem a abriu.
+pub const FOR_SID_ARG: &str = "--for-sid=";
+
+const RESTORE_POINT_DESCRIPTION: &str = "Sentinela: otimizações";
+const RESTORE_POINT_REQUESTED: &str =
+    "solicitado (o Windows pode reaproveitar um ponto das últimas 24 h)";
+
+/// Cria o backend do sistema; nos testes, devolve um `MemoryBackend`.
+pub type BackendFactory = Arc<dyn Fn() -> Box<dyn SystemBackend> + Send + Sync>;
+
+/// Estado gerenciado: decidido uma vez na inicialização / por sessão do app.
+#[derive(Clone)]
+pub struct TweaksState {
+    pub hkcu_allowed: bool,
+    restore_done: Arc<AtomicBool>,
+    backend: BackendFactory,
+}
+
+impl TweaksState {
+    pub fn new(hkcu_allowed: bool) -> Self {
+        Self {
+            hkcu_allowed,
+            restore_done: Arc::new(AtomicBool::new(false)),
+            backend: Arc::new(move || Box::new(WindowsBackend::new(hkcu_allowed))),
+        }
+    }
+
+    pub fn backend(&self) -> Box<dyn SystemBackend> {
+        (self.backend)()
+    }
+}
+
+/// Decide no início do processo, com `--for-sid=` (se houver) e o SID próprio.
+pub fn startup_hkcu_allowed() -> bool {
+    hkcu_allowed(
+        parse_for_sid(std::env::args_os()).as_deref(),
+        current_user_sid().as_deref(),
+    )
+}
+
+/// Extrai o SID de `--for-sid=<SID>` dos argumentos, se presente e não vazio.
+pub fn parse_for_sid<I: IntoIterator<Item = OsString>>(args: I) -> Option<String> {
+    args.into_iter().find_map(|a| {
+        let sid = a.to_str()?.strip_prefix(FOR_SID_ARG)?;
+        (!sid.is_empty()).then(|| sid.to_string())
+    })
+}
+
+/// Sem argumento: janela aberta normalmente (HKCU é o do usuário). Com
+/// argumento: só vale se o SID atual for o mesmo de quem pediu a elevação.
+pub fn hkcu_allowed(arg_sid: Option<&str>, own_sid: Option<&str>) -> bool {
+    match arg_sid {
+        None => true,
+        Some(arg) => own_sid == Some(arg),
+    }
+}
+
+#[derive(Serialize)]
+pub struct TweakItem {
+    pub tweak: Tweak,
+    pub view: TweakView,
+    pub in_journal: bool,
+}
+
+#[derive(Serialize)]
+pub struct TweaksPage {
+    pub tweaks: Vec<TweakItem>,
+    pub laptop: bool,
+    pub elevated: bool,
+    pub hkcu_allowed: bool,
+    pub journal_count: usize,
+}
+
+/// Leitura pura: o diário é lido sem efeitos (a reconciliação ocorre em apply/undo).
+fn build_page(
+    cat: &Catalog,
+    b: &dyn SystemBackend,
+    journal_path: &Path,
+    laptop: bool,
+    hkcu_allowed: bool,
+) -> TweaksPage {
+    let journal = Journal::read_only(journal_path).unwrap_or_default();
+    let tweaks = cat
+        .tweaks
+        .iter()
+        .map(|t| TweakItem {
+            tweak: t.clone(),
+            view: view(t, b),
+            in_journal: journal.entries.iter().any(|e| e.tweak_id == t.id),
+        })
+        .collect();
+    TweaksPage {
+        tweaks,
+        laptop,
+        elevated: b.elevated(),
+        hkcu_allowed,
+        journal_count: journal.entries.len(),
+    }
+}
+
+/// Quantos ajustes do catálogo estão aplicados agora.
+pub fn applied_count(cat: &Catalog, b: &dyn SystemBackend) -> usize {
+    cat.tweaks
+        .iter()
+        .filter(|t| view(t, b).status == TweakStatus::Applied)
+        .count()
+}
+
+fn validate_apply(ids: &[String], cat: &Catalog) -> Result<(), String> {
+    if ids.is_empty() {
+        return Err("Nenhuma otimização selecionada.".into());
+    }
+    match ids.iter().find(|id| cat.get(id).is_none()) {
+        Some(id) => Err(format!("otimização desconhecida: {id}")),
+        None => Ok(()),
+    }
+}
+
+/// Algum dos ajustes vai de fato escrever no sistema?
+fn will_write(ids: &[String], cat: &Catalog, b: &dyn SystemBackend) -> bool {
+    ids.iter().filter_map(|id| cat.get(id)).any(|t| {
+        let v = view(t, b);
+        v.blocked.is_none() && matches!(v.status, TweakStatus::NotApplied | TweakStatus::Partial)
+    })
+}
+
+/// Ponto de restauração uma vez por sessão: só se elevado, se algo vai escrever
+/// e se ainda não houve um com sucesso. `None` = não tentado.
+fn restore_point_step(
+    done: &AtomicBool,
+    needed: bool,
+    elevated: bool,
+    create: &dyn Fn(&str) -> Result<(), String>,
+) -> Option<String> {
+    if !needed || !elevated || done.load(Ordering::Relaxed) {
+        return None;
+    }
+    match create(RESTORE_POINT_DESCRIPTION) {
+        Ok(()) => {
+            done.store(true, Ordering::Relaxed);
+            Some(RESTORE_POINT_REQUESTED.to_string())
+        }
+        Err(e) => Some(format!("não criado: {e}")),
+    }
+}
+
+fn run_apply(
+    ids: &[String],
+    cat: &Catalog,
+    b: &dyn SystemBackend,
+    journal_path: &Path,
+    restore_done: &AtomicBool,
+    create: &dyn Fn(&str) -> Result<(), String>,
+) -> ApplyReport {
+    let restore_point =
+        restore_point_step(restore_done, will_write(ids, cat, b), b.elevated(), create);
+    let mut report = sentinela_core::tweaks::apply(ids, cat, b, journal_path);
+    report.restore_point = restore_point;
+    report
+}
+
+fn ok_count(results: &[ItemResult]) -> usize {
+    results.iter().filter(|r| r.ok).count()
+}
+
+fn log_activity(text: &str) {
+    let _ = activity::append(
+        &activity::default_activity_path(),
+        ActivityKind::Tweak,
+        text,
+    );
+}
+
+fn log_applied(report: &ApplyReport) {
+    let n = ok_count(&report.results);
+    if n > 0 {
+        log_activity(&format!("Otimizações aplicadas: {n}"));
+    }
+}
+
+fn log_undone(report: &UndoReport) {
+    let n = ok_count(&report.results);
+    if n > 0 {
+        log_activity(&format!("Otimizações desfeitas: {n}"));
+    }
+}
+
+#[tauri::command]
+pub async fn tweaks_list(state: State<'_, TweaksState>) -> Result<TweaksPage, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        build_page(
+            Catalog::embedded(),
+            state.backend().as_ref(),
+            &default_journal_path(),
+            is_laptop(),
+            state.hkcu_allowed,
+        )
+    })
+    .await
+    .map_err(|_| "Não foi possível ler as otimizações.".to_string())
+}
+
+#[tauri::command]
+pub fn tweaks_apply(
+    ids: Vec<String>,
+    app: AppHandle,
+    jobs: State<'_, Arc<JobRegistry>>,
+    state: State<'_, TweaksState>,
+) -> Result<JobId, String> {
+    validate_apply(&ids, Catalog::embedded())?;
+    let state = state.inner().clone();
+    spawn_job(
+        jobs.inner().clone(),
+        Arc::new(TauriSink(app)),
+        JobKind::Tweaks,
+        move |_, _, _| {
+            let backend = state.backend();
+            let report = run_apply(
+                &ids,
+                Catalog::embedded(),
+                backend.as_ref(),
+                &default_journal_path(),
+                &state.restore_done,
+                &create_restore_point,
+            );
+            log_applied(&report);
+            Ok(report)
+        },
+    )
+}
+
+#[tauri::command]
+pub fn tweaks_undo(
+    ids: Vec<String>,
+    app: AppHandle,
+    jobs: State<'_, Arc<JobRegistry>>,
+    state: State<'_, TweaksState>,
+) -> Result<JobId, String> {
+    if ids.is_empty() {
+        return Err("Nenhuma otimização selecionada.".into());
+    }
+    let state = state.inner().clone();
+    spawn_job(
+        jobs.inner().clone(),
+        Arc::new(TauriSink(app)),
+        JobKind::Tweaks,
+        move |_, _, _| {
+            let report = undo(&ids, state.backend().as_ref(), &default_journal_path());
+            log_undone(&report);
+            Ok(report)
+        },
+    )
+}
+
+#[tauri::command]
+pub fn tweaks_undo_all(
+    app: AppHandle,
+    jobs: State<'_, Arc<JobRegistry>>,
+    state: State<'_, TweaksState>,
+) -> Result<JobId, String> {
+    let state = state.inner().clone();
+    spawn_job(
+        jobs.inner().clone(),
+        Arc::new(TauriSink(app)),
+        JobKind::Tweaks,
+        move |_, _, _| {
+            let report = undo_all(state.backend().as_ref(), &default_journal_path());
+            log_undone(&report);
+            Ok(report)
+        },
+    )
+}
+
+#[tauri::command]
+pub async fn tweaks_journal() -> Result<Vec<JournalEntry>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        Journal::read_only(&default_journal_path()).map(|j| j.entries)
+    })
+    .await
+    .map_err(|_| "Não foi possível ler o histórico.".to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sentinela_core::tweaks::{
+        Action, Effect, Evidence, Group, Hive, MemoryBackend, RegValue, Snapshot,
+    };
+    use std::cell::Cell;
+
+    fn reg() -> Action {
+        Action::Registry {
+            hive: Hive::Hkcu,
+            path: "Software\\Microsoft\\X".into(),
+            name: "V".into(),
+            value: Some(RegValue::Dword(1)),
+        }
+    }
+
+    fn cat() -> Catalog {
+        Catalog {
+            tweaks: vec![Tweak {
+                id: "t1".into(),
+                title: "T1".into(),
+                description: "d".into(),
+                group: Group::Jogos,
+                evidence: Evidence::Comprovado,
+                effect: Effect::Immediate,
+                needs_admin: false,
+                laptop_warning: false,
+                recommended: false,
+                source: "https://example.com".into(),
+                actions: vec![reg()],
+            }],
+        }
+    }
+
+    fn os(args: &[&str]) -> Vec<OsString> {
+        args.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn apply_rejects_empty_selection() {
+        assert_eq!(
+            validate_apply(&[], &cat()).unwrap_err(),
+            "Nenhuma otimização selecionada."
+        );
+    }
+
+    #[test]
+    fn apply_rejects_unknown_id() {
+        assert_eq!(
+            validate_apply(&["t1".into(), "zzz".into()], &cat()).unwrap_err(),
+            "otimização desconhecida: zzz"
+        );
+        assert!(validate_apply(&["t1".into()], &cat()).is_ok());
+    }
+
+    #[test]
+    fn restore_point_only_once_per_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let jp = dir.path().join("tweaks").join("journal.json");
+        let c = cat();
+        let b = MemoryBackend::new();
+        let done = AtomicBool::new(false);
+        let calls = Cell::new(0);
+        let create = |_: &str| {
+            calls.set(calls.get() + 1);
+            Ok(())
+        };
+        let ids = vec!["t1".to_string()];
+
+        let r1 = run_apply(&ids, &c, &b, &jp, &done, &create);
+        assert_eq!(r1.restore_point.as_deref(), Some(RESTORE_POINT_REQUESTED));
+        assert!(r1.results[0].ok);
+
+        // Volta o valor no sistema para que o segundo apply escreva de novo.
+        b.set(&reg(), Snapshot::Registry { value: None });
+        let r2 = run_apply(&ids, &c, &b, &jp, &done, &create);
+        assert_eq!(r2.restore_point, None);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn restore_point_failure_reports_and_retries() {
+        let done = AtomicBool::new(false);
+        let fail = |_: &str| Err::<(), _>("serviço desligado".to_string());
+        assert_eq!(
+            restore_point_step(&done, true, true, &fail).as_deref(),
+            Some("não criado: serviço desligado")
+        );
+        assert!(!done.load(Ordering::Relaxed));
+        // Não elevado ou nada a escrever: não tenta.
+        let ok = |_: &str| Ok(());
+        assert_eq!(restore_point_step(&done, true, false, &ok), None);
+        assert_eq!(restore_point_step(&done, false, true, &ok), None);
+    }
+
+    #[test]
+    fn no_restore_point_when_nothing_to_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let jp = dir.path().join("j.json");
+        let c = cat();
+        let b = MemoryBackend::new();
+        b.set(
+            &reg(),
+            Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        );
+        let done = AtomicBool::new(false);
+        let calls = Cell::new(0);
+        let create = |_: &str| {
+            calls.set(calls.get() + 1);
+            Ok(())
+        };
+        let r = run_apply(&["t1".into()], &c, &b, &jp, &done, &create);
+        assert_eq!(r.restore_point, None);
+        assert_eq!(calls.get(), 0);
+    }
+
+    #[test]
+    fn hkcu_allowed_rules() {
+        assert!(hkcu_allowed(None, Some("S-1-5-21-1")));
+        assert!(hkcu_allowed(None, None));
+        assert!(hkcu_allowed(Some("S-1-5-21-1"), Some("S-1-5-21-1")));
+        assert!(!hkcu_allowed(Some("S-1-5-21-1"), Some("S-1-5-21-2")));
+        assert!(!hkcu_allowed(Some("S-1-5-21-1"), None));
+    }
+
+    #[test]
+    fn parse_for_sid_arg() {
+        assert_eq!(
+            parse_for_sid(os(&["app.exe", "--wait-pid=1", "--for-sid=S-1-5-21-9"])),
+            Some("S-1-5-21-9".to_string())
+        );
+        assert_eq!(parse_for_sid(os(&["app.exe"])), None);
+        assert_eq!(parse_for_sid(os(&["--for-sid="])), None);
+    }
+
+    #[test]
+    fn page_and_applied_count_reflect_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let jp = dir.path().join("j.json");
+        let c = cat();
+        let b = MemoryBackend::new();
+        assert_eq!(applied_count(&c, &b), 0);
+        let page = build_page(&c, &b, &jp, false, true);
+        assert_eq!(page.tweaks.len(), 1);
+        assert!(!page.tweaks[0].in_journal);
+        assert_eq!(page.journal_count, 0);
+        assert!(!jp.exists(), "listar não grava nada");
+
+        let done = AtomicBool::new(false);
+        run_apply(&["t1".into()], &c, &b, &jp, &done, &|_| Ok(()));
+        assert_eq!(applied_count(&c, &b), 1);
+        let page = build_page(&c, &b, &jp, false, true);
+        assert!(page.tweaks[0].in_journal);
+        assert_eq!(page.journal_count, 1);
+    }
+}

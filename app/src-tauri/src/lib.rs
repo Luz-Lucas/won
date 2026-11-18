@@ -31,6 +31,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             app.manage(Arc::new(JobRegistry::new()));
+            app.manage(commands::tweaks::TweaksState::new(
+                commands::tweaks::startup_hkcu_allowed(),
+            ));
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -57,6 +60,11 @@ pub fn run() {
             commands::system::relaunch_elevated,
             commands::system::job_cancel,
             commands::system::job_running,
+            commands::tweaks::tweaks_list,
+            commands::tweaks::tweaks_apply,
+            commands::tweaks::tweaks_undo,
+            commands::tweaks::tweaks_undo_all,
+            commands::tweaks::tweaks_journal,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela");

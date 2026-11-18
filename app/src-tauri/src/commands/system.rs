@@ -2,9 +2,11 @@
 //!
 //! Camada fina: a lógica de negócio vive em `sentinela_core`.
 
+use crate::commands::tweaks::{FOR_SID_ARG, TweaksState, applied_count};
 use crate::jobs::{JobId, JobKind, JobRegistry};
 use sentinela_core::activity::{self, ActivityEntry};
 use sentinela_core::status::{self, DbStatus};
+use sentinela_core::tweaks::{Catalog, current_user_sid};
 use sentinela_core::{clean, quarantine, signatures};
 use serde::Serialize;
 use std::ffi::OsString;
@@ -24,22 +26,28 @@ pub struct SystemStatus {
     pub db: DbStatus,
     pub quarantine_count: usize,
     pub activity: Vec<ActivityEntry>,
+    pub tweaks_applied: usize,
+    pub tweaks_total: usize,
 }
 
-fn collect_status() -> SystemStatus {
+fn collect_status(tweaks: &TweaksState) -> SystemStatus {
+    let cat = Catalog::embedded();
     SystemStatus {
         version: env!("CARGO_PKG_VERSION").to_string(),
         elevated: clean::platform::is_elevated(),
         db: status::db_status(&signatures::default_db_dir()),
         quarantine_count: quarantine::list(&quarantine::default_quarantine_dir()).len(),
         activity: activity::recent(&activity::default_activity_path(), RECENT_ACTIVITY),
+        tweaks_applied: applied_count(cat, tweaks.backend().as_ref()),
+        tweaks_total: cat.tweaks.len(),
     }
 }
 
 #[tauri::command]
-pub async fn system_status() -> Result<SystemStatus, String> {
+pub async fn system_status(tweaks: State<'_, TweaksState>) -> Result<SystemStatus, String> {
+    let tweaks = tweaks.inner().clone();
     // Leituras de disco fora da thread principal.
-    tauri::async_runtime::spawn_blocking(collect_status)
+    tauri::async_runtime::spawn_blocking(move || collect_status(&tweaks))
         .await
         .map_err(|_| "Não foi possível ler o estado do sistema.".to_string())
 }
@@ -81,7 +89,7 @@ fn shell_execute_runas() -> Result<(), String> {
         .map_err(|_| "Não foi possível reiniciar como administrador.".to_string())?;
     let verb = wide("runas".as_ref());
     let file = wide(exe.as_os_str());
-    let params = wide(format!("{WAIT_PID_ARG}{}", std::process::id()).as_ref());
+    let params = wide(runas_params(std::process::id(), current_user_sid().as_deref()).as_ref());
 
     // SAFETY: ponteiros para buffers terminados em NUL que vivem durante a chamada.
     let result = unsafe {
@@ -102,6 +110,15 @@ fn shell_execute_runas() -> Result<(), String> {
         Err("Elevação cancelada.".into())
     } else {
         Err("Não foi possível reiniciar como administrador.".into())
+    }
+}
+
+/// Parâmetros da instância elevada: espera o PID antigo e leva o SID de quem a
+/// pediu (para a trava de HKCU quando o UAC usa outra conta).
+fn runas_params(pid: u32, sid: Option<&str>) -> String {
+    match sid {
+        Some(sid) => format!("{WAIT_PID_ARG}{pid} {FOR_SID_ARG}{sid}"),
+        None => format!("{WAIT_PID_ARG}{pid}"),
     }
 }
 
@@ -159,6 +176,15 @@ mod tests {
         assert_eq!(parse_wait_pid(os(&["app.exe"])), None);
         assert_eq!(parse_wait_pid(os(&["--wait-pid=abc"])), None);
         assert_eq!(parse_wait_pid(os(&["--wait-pid="])), None);
+    }
+
+    #[test]
+    fn runas_params_carry_the_sid() {
+        assert_eq!(
+            runas_params(7, Some("S-1-5-21-1")),
+            "--wait-pid=7 --for-sid=S-1-5-21-1"
+        );
+        assert_eq!(runas_params(7, None), "--wait-pid=7");
     }
 
     #[test]
