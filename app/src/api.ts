@@ -14,7 +14,7 @@ export interface DbStatus {
   warnings: string[];
 }
 
-export type ActivityKind = "clean" | "scan" | "quarantine" | "restore" | "update";
+export type ActivityKind = "clean" | "scan" | "quarantine" | "restore" | "update" | "tweak";
 
 export interface ActivityEntry {
   at: string;
@@ -28,13 +28,15 @@ export interface SystemStatus {
   db: DbStatus;
   quarantine_count: number;
   activity: ActivityEntry[];
+  tweaks_applied: number;
+  tweaks_total: number;
 }
 
 export const systemStatus = () => invoke<SystemStatus>("system_status");
 export const relaunchElevated = () => invoke<void>("relaunch_elevated");
 export const jobCancel = (id: number) => invoke<boolean>("job_cancel", { id });
 
-export type JobKind = "scan" | "clean" | "find_large" | "find_dupes" | "update";
+export type JobKind = "scan" | "clean" | "find_large" | "find_dupes" | "update" | "tweaks";
 
 /** Id do job deste tipo que segue rodando no backend, se houver. */
 export const jobRunning = (kind: JobKind) =>
@@ -166,3 +168,135 @@ export const diskFindLarge = (path: string, top: number, minMb: number) =>
   invoke<number>("disk_find_large", { path, top, minMb });
 export const diskFindDupes = (path: string, minKb: number) =>
   invoke<number>("disk_find_dupes", { path, minKb });
+
+export type TweakGroup =
+  | "jogos"
+  | "energia"
+  | "segundo_plano"
+  | "privacidade"
+  | "visual";
+export type TweakEvidence = "comprovado" | "situacional" | "controverso";
+export type TweakEffect = "immediate" | "relogon" | "reboot";
+export type TweakStatus = "applied" | "not_applied" | "partial" | "unavailable";
+
+export type RegValue =
+  | { type: "dword"; data: number }
+  | { type: "qword"; data: number }
+  | { type: "string"; data: string };
+
+export type TweakAction =
+  | {
+      kind: "registry";
+      hive: "HKCU" | "HKLM";
+      path: string;
+      name: string;
+      value: RegValue | null;
+    }
+  | {
+      kind: "list_entry";
+      hive: "HKCU" | "HKLM";
+      path: string;
+      name: string;
+      key: string;
+      value: string;
+    }
+  | { kind: "service"; name: string; start: "automatic" | "manual" | "disabled" }
+  | { kind: "power_plan"; scheme: string };
+
+export interface Tweak {
+  id: string;
+  title: string;
+  description: string;
+  group: TweakGroup;
+  evidence: TweakEvidence;
+  effect: TweakEffect;
+  needs_admin: boolean;
+  laptop_warning: boolean;
+  recommended: boolean;
+  source: string;
+  actions: TweakAction[];
+}
+
+export interface TweakChange {
+  description: string;
+  current: string;
+  target: string;
+}
+
+export interface TweakView {
+  id: string;
+  status: TweakStatus;
+  blocked: string | null;
+  changes: TweakChange[];
+}
+
+export interface TweakItem {
+  tweak: Tweak;
+  view: TweakView;
+  in_journal: boolean;
+}
+
+export interface TweaksPage {
+  tweaks: TweakItem[];
+  laptop: boolean;
+  elevated: boolean;
+  hkcu_allowed: boolean;
+  journal_count: number;
+  restore_point_done: boolean;
+}
+
+export interface TweakItemResult {
+  tweak_id: string;
+  ok: boolean;
+  /** Algo foi de fato escrito no sistema. */
+  changed: boolean;
+  message: string;
+}
+
+export interface ApplyReport {
+  results: TweakItemResult[];
+  effect: TweakEffect;
+  restore_point: string | null;
+  notice: string | null;
+}
+
+export interface UndoReport {
+  results: TweakItemResult[];
+  conflicts: string[];
+  notice: string | null;
+}
+
+export type JournalSnapshot =
+  | { kind: "registry"; value: RegValue | null }
+  | { kind: "list_entry"; value: string | null }
+  | { kind: "service"; start: "automatic" | "manual" | "disabled" }
+  | { kind: "power_plan"; scheme: string }
+  | { kind: "unavailable"; reason: string };
+
+export interface JournalAction {
+  action: TweakAction;
+  before: JournalSnapshot;
+  written: JournalSnapshot;
+  done: boolean;
+}
+
+export interface JournalEntry {
+  tweak_id: string;
+  title: string;
+  applied_at: string;
+  actions: JournalAction[];
+}
+
+export const tweaksList = () => invoke<TweaksPage>("tweaks_list");
+export const tweaksApply = (ids: string[]) =>
+  invoke<number>("tweaks_apply", { ids });
+export const tweaksUndo = (ids: string[]) =>
+  invoke<number>("tweaks_undo", { ids });
+export const tweaksUndoAll = () => invoke<number>("tweaks_undo_all");
+export interface HistoryPage {
+  entries: JournalEntry[];
+  elevated: boolean;
+  hkcu_allowed: boolean;
+}
+
+export const tweaksJournal = () => invoke<HistoryPage>("tweaks_journal");

@@ -60,8 +60,15 @@ export default function Inicio({ status, error, onNavigate }: InicioProps) {
               </button>
             </article>
             <article className="card">
-              <h2>Sistema</h2>
-              <p>{`Versão ${status.version}`}</p>
+              <h2>Otimização</h2>
+              <p>{`${status.tweaks_applied} de ${status.tweaks_total}`}</p>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => onNavigate("jogos")}
+              >
+                Ir para Jogos
+              </button>
             </article>
           </div>
           <h2 className="section-title">Atividade recente</h2>
@@ -77,6 +84,7 @@ export default function Inicio({ status, error, onNavigate }: InicioProps) {
               ))}
             </ul>
           )}
+          <p className="muted page-footer">{`Sentinela ${status.version}`}</p>
         </>
       )}
     </section>

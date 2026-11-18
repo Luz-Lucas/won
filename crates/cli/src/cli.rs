@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 
 use crate::progress::{self, TerminalProgress};
 use crate::report::{self, human_bytes};
+use crate::tweak::{self, TweakCommand};
 use sentinela_core::clean::category::Env;
 use sentinela_core::clean::{self, CleanReport, platform};
 use sentinela_core::full::{self, FullOptions};
@@ -106,6 +107,11 @@ enum Command {
         #[arg(value_name = "ID")]
         id: String,
     },
+    /// Lista, aplica e desfaz otimizações do Windows
+    Tweak {
+        #[command(subcommand)]
+        action: TweakCommand,
+    },
     /// Mostra versão, banco de assinaturas e privilégios
     Info,
 }
@@ -180,6 +186,7 @@ fn dispatch(command: Command) -> Result<i32> {
             println!("Restaurado: {}", path.display());
             Ok(0)
         }
+        Command::Tweak { action } => tweak::run(action),
         Command::Info => cmd_info(),
     }
 }

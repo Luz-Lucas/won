@@ -56,6 +56,8 @@ const status = (over: Partial<SystemStatus> = {}): SystemStatus => ({
   activity: [
     { at: "2026-03-05T12:00:00Z", kind: "clean", summary: "Limpeza concluída" },
   ],
+  tweaks_applied: 0,
+  tweaks_total: 0,
   ...over,
 });
 
@@ -160,9 +162,9 @@ describe("App", () => {
     await waitFor(() => expect(statusCalls()).toBe(before + 1));
   });
 
-  it("mostra as cinco páginas e troca de página", async () => {
+  it("mostra as sete páginas e troca de página", async () => {
     render(<App />);
-    for (const n of ["Início", "Limpeza", "Segurança", "Disco", "Ajustes"])
+    for (const n of ["Início", "Jogos", "Limpeza", "Segurança", "Disco", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(
@@ -191,7 +193,7 @@ describe("App", () => {
     render(<App />);
     expect(await screen.findByText(/Banco atualizado em/)).toBeInTheDocument();
     expect(screen.getByText("2 na quarentena")).toBeInTheDocument();
-    expect(screen.getByText("Versão 0.3.0")).toBeInTheDocument();
+    expect(screen.getByText("Sentinela 0.3.0")).toBeInTheDocument();
     expect(screen.getByText("Limpeza concluída")).toBeInTheDocument();
     expect(
       screen.getByText(

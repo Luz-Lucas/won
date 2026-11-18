@@ -3,3 +3,4 @@ pub mod disk;
 pub mod scan;
 pub mod signatures;
 pub mod system;
+pub mod tweaks;

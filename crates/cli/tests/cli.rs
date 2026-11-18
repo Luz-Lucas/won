@@ -397,3 +397,113 @@ fn quarantine_list_empty_and_restore_unknown_id() {
         .assert()
         .code(2);
 }
+
+#[test]
+fn tweak_list_shows_catalog_ids() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["tweak", "list"])
+        .assert()
+        .success()
+        .stdout(contains("game-mode"))
+        .stdout(contains("hags"));
+}
+
+#[test]
+fn tweak_apply_unknown_id_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "apply", "nao-existe", "--yes"])
+        .assert()
+        .code(2)
+        .stderr(contains("otimização desconhecida: nao-existe"));
+}
+
+#[test]
+fn tweak_undo_requires_ids_or_all() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn tweak_undo_all_with_empty_journal_does_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo", "--all"])
+        .assert()
+        .success()
+        .stdout(contains("Nada a desfazer."));
+}
+
+#[test]
+fn tweak_undo_unknown_id_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo", "nao-existe"])
+        .assert()
+        .code(2)
+        .stderr(contains("otimização desconhecida: nao-existe"));
+}
+
+#[test]
+fn tweak_undo_all_with_ids_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo", "--all", "game-mode"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn tweak_undo_corrupt_journal_is_not_moved() {
+    let dir = tempfile::tempdir().unwrap();
+    let j = dir.path().join("journal.json");
+    fs::write(&j, "{ nao e json").unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", &j)
+        .args(["tweak", "undo", "game-mode"])
+        .assert()
+        .code(2)
+        .stderr(contains("diário inacessível"));
+    assert_eq!(fs::read_to_string(&j).unwrap(), "{ nao e json");
+}
+
+#[test]
+fn tweak_undo_accepts_an_id_that_is_only_in_the_journal() {
+    // Entrada de um ajuste que saiu do catálogo. Responde "n": nada é escrito.
+    let dir = tempfile::tempdir().unwrap();
+    let j = dir.path().join("journal.json");
+    fs::write(
+        &j,
+        r#"{"entries":[{"tweak_id":"removida-do-catalogo","title":"Antiga","applied_at":"x",
+        "actions":[{"action":{"kind":"registry","hive":"HKCU",
+        "path":"Software\\Microsoft\\SentinelaTesteInexistente","name":"X",
+        "value":{"type":"dword","data":1}},
+        "before":{"kind":"registry","value":null},
+        "written":{"kind":"registry","value":{"type":"dword","data":1}},"done":true}]}]}"#,
+    )
+    .unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", &j)
+        .args(["tweak", "undo", "removida-do-catalogo"])
+        .write_stdin("n\n")
+        .assert()
+        .success()
+        .stderr(contains("Antiga (removida-do-catalogo):"))
+        .stderr(contains("Cancelado: nada foi alterado."));
+}
