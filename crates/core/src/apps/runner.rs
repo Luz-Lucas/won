@@ -38,39 +38,24 @@ pub struct SystemRunner;
 
 #[cfg(windows)]
 mod job {
-    use std::ffi::c_void;
     use std::os::windows::io::AsRawHandle;
     use std::process::Child;
 
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-        SetInformationJobObject, TerminateJobObject,
+        AssignProcessToJobObject, CreateJobObjectW, TerminateJobObject,
     };
 
-    /// Job Object que encerra toda a árvore de processos ao ser fechado.
+    /// Job Object que agrupa a árvore de processos. SEM kill-on-close: fechar o
+    /// handle (inclusive quando o Sentinela sai) nunca mata nada; só
+    /// `terminate`, chamado no tempo limite, encerra a árvore.
     pub struct Job(HANDLE);
 
     // O handle de um Job Object pode ser usado de qualquer thread.
     unsafe impl Send for Job {}
 
-    fn set_flags(h: HANDLE, flags: u32) -> bool {
-        // SAFETY: estrutura zerada é válida; `h` é um handle de job válido.
-        unsafe {
-            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            info.BasicLimitInformation.LimitFlags = flags;
-            SetInformationJobObject(
-                h,
-                JobObjectExtendedLimitInformation,
-                &info as *const _ as *const c_void,
-                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-            ) != 0
-        }
-    }
-
     impl Job {
-        /// Cria o job (kill-on-close) e coloca o processo nele.
+        /// Cria o job e coloca o processo nele.
         pub fn assign(child: &Child) -> Option<Job> {
             // SAFETY: chamadas FFI com handles válidos; o handle é fechado no Drop.
             unsafe {
@@ -79,9 +64,7 @@ mod job {
                     return None;
                 }
                 let job = Job(h);
-                if !set_flags(h, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
-                    || AssignProcessToJobObject(h, child.as_raw_handle() as HANDLE) == 0
-                {
+                if AssignProcessToJobObject(h, child.as_raw_handle() as HANDLE) == 0 {
                     return None; // Drop fecha o handle
                 }
                 Some(job)
@@ -93,11 +76,6 @@ mod job {
             unsafe {
                 TerminateJobObject(self.0, 1);
             }
-        }
-
-        /// Após término normal: não mata processos que o instalador deixou rodando.
-        pub fn disarm(&self) -> bool {
-            set_flags(self.0, 0)
         }
     }
 
@@ -122,9 +100,6 @@ mod job {
             None
         }
         pub fn terminate(&self) {}
-        pub fn disarm(&self) -> bool {
-            true
-        }
     }
 }
 
@@ -209,15 +184,9 @@ impl CommandRunner for SystemRunner {
                 }
             }
         };
-        // Término normal: o job não pode mais matar o que o instalador deixou rodando.
-        if let Some(j) = job {
-            if j.disarm() {
-                drop(j);
-            } else {
-                // Sem conseguir desarmar, fechar o handle mataria os apps do usuário.
-                std::mem::forget(j);
-            }
-        }
+        // Término normal: fechar o job não mata nada (não é kill-on-close), então
+        // apps que o instalador deixou rodando continuam vivos.
+        drop(job);
         // Um descendente (app aberto pelo instalador) pode herdar os pipes e
         // segurá-los abertos: espera só um curto período e segue com o que veio.
         let grace_end = Instant::now() + PIPE_GRACE;
@@ -290,6 +259,59 @@ mod tests {
             }
             std::thread::sleep(Duration::from_secs(1));
         }
+    }
+
+    #[cfg(windows)]
+    fn wait_gone(marker: &str) {
+        for _ in 0..20 {
+            if ping_count(marker) == 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn closing_job_after_normal_exit_never_kills_descendants() {
+        // O pai espera ~1 s (já dentro do job) e então lança o neto e sai.
+        let marker = "-l 1239";
+        let mut child = std::process::Command::new("cmd")
+            .args([
+                "/c",
+                "ping -n 2 127.0.0.1 >nul & start /b ping -n 6 -l 1239 127.0.0.1 >nul & exit 0",
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let job = job::Job::assign(&child).expect("job");
+        assert!(child.wait().unwrap().success());
+        drop(job);
+        std::thread::sleep(Duration::from_millis(1000));
+        assert_eq!(ping_count(marker), 1, "fechar o job matou o neto");
+        wait_gone(marker);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn normal_exit_grandchild_survives_after_run_returns() {
+        let marker = "-l 1240";
+        {
+            let r = SystemRunner
+                .run(
+                    "cmd",
+                    // O neto herda os pipes: `run` espera até 5 s por eles.
+                    &["/c", "start /b ping -n 12 -l 1240 127.0.0.1 >nul & exit 0"],
+                    TIMEOUT_QUICK,
+                )
+                .expect("deve retornar Ok");
+            assert_eq!(r.code, 0);
+        }
+        std::thread::sleep(Duration::from_millis(1000));
+        assert_eq!(ping_count(marker), 1, "o neto deveria continuar vivo");
+        wait_gone(marker);
     }
 
     #[cfg(windows)]
