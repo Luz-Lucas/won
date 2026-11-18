@@ -163,6 +163,12 @@ fn print_results(results: &[ItemResult]) {
     }
 }
 
+fn print_notice(notice: &Option<String>) {
+    if let Some(n) = notice {
+        eprintln!("aviso: {n}");
+    }
+}
+
 fn cmd_apply(ids: Vec<String>, yes: bool, json: bool) -> Result<i32> {
     let ids = dedupe(ids);
     let cat = Catalog::embedded();
@@ -218,6 +224,7 @@ fn cmd_apply(ids: Vec<String>, yes: bool, json: bool) -> Result<i32> {
         serde_json::to_writer_pretty(io::stdout().lock(), &report)?;
         println!();
     } else {
+        print_notice(&report.notice);
         print_results(&report.results);
         match report.effect {
             Effect::Reboot => println!("Reinicie o computador para concluir."),
@@ -236,15 +243,16 @@ fn dedupe(ids: Vec<String>) -> Vec<String> {
 fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
     let ids = dedupe(ids);
     let cat = Catalog::embedded();
-    for id in &ids {
-        if cat.get(id).is_none() {
-            bail!("otimização desconhecida: {id}. Use `sentinela tweak list`.");
-        }
-    }
     let path = journal_path();
     // Leitura sem efeitos: nada é movido nem gravado antes da confirmação.
     let journal =
         Journal::read_only(&path).map_err(|e| anyhow::anyhow!("diário inacessível: {e}"))?;
+    // Vale o que está no diário (mesmo que tenha saído do catálogo).
+    for id in &ids {
+        if cat.get(id).is_none() && !journal.entries.iter().any(|e| e.tweak_id == *id) {
+            bail!("otimização desconhecida: {id}. Use `sentinela tweak list`.");
+        }
+    }
     let wanted: Vec<String> = if all {
         journal
             .entries
@@ -258,7 +266,7 @@ fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
     let in_journal = |id: &String| journal.entries.iter().any(|e| e.tweak_id == *id);
     if !wanted.iter().any(in_journal) {
         if json {
-            println!("{{\"results\":[],\"conflicts\":[]}}");
+            println!("{{\"results\":[],\"conflicts\":[],\"notice\":null}}");
         } else {
             println!("Nada a desfazer.");
         }
@@ -303,6 +311,7 @@ fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
         serde_json::to_writer_pretty(io::stdout().lock(), &report)?;
         println!();
     } else {
+        print_notice(&report.notice);
         print_results(&report.results);
         for c in &report.conflicts {
             eprintln!("aviso: {c}");
