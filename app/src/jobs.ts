@@ -40,7 +40,7 @@ export interface JobView<T> {
   error: string | null;
 }
 
-const KINDS: JobKind[] = ["scan", "clean", "find_large", "find_dupes", "update"];
+const KINDS: JobKind[] = ["scan", "clean", "find_large", "find_dupes", "update", "tweaks"];
 
 const IDLE: JobView<unknown> = {
   state: "idle",

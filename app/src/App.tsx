@@ -4,7 +4,9 @@ import Sidebar, { type Page } from "./components/Sidebar";
 import { JobsProvider, useJobSettled } from "./jobs";
 import Ajustes from "./pages/Ajustes";
 import Disco from "./pages/Disco";
+import Historico from "./pages/Historico";
 import Inicio from "./pages/Inicio";
+import Jogos from "./pages/Jogos";
 import Limpeza from "./pages/Limpeza";
 import Seguranca from "./pages/Seguranca";
 import "./styles/tokens.css";
@@ -52,11 +54,13 @@ function Shell() {
         {page === "inicio" && (
           <Inicio status={status} error={statusError} onNavigate={setPage} />
         )}
+        {page === "jogos" && <Jogos />}
         {page === "limpeza" && <Limpeza />}
         {page === "seguranca" && (
           <Seguranca onNavigate={setPage} onRestored={refreshStatus} />
         )}
         {page === "disco" && <Disco />}
+        {page === "historico" && <Historico />}
         {page === "ajustes" && <Ajustes />}
       </main>
     </div>

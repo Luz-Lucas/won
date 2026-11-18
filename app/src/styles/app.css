@@ -448,3 +448,49 @@ body {
 .disk-folder {
   margin: 0 0 var(--sp-3);
 }
+
+.tweak-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.tweak-profiles {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.tweak-profiles .btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tweak-badge {
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+.tweak-preview {
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+}
+
+.tweak-preview h2 {
+  margin-top: 0;
+}
+
+.tweak-results {
+  margin: 0;
+  padding-left: var(--sp-4);
+}
+
+.tweak-footnote {
+  margin-top: var(--sp-6);
+}

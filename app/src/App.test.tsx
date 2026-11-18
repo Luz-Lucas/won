@@ -162,9 +162,9 @@ describe("App", () => {
     await waitFor(() => expect(statusCalls()).toBe(before + 1));
   });
 
-  it("mostra as cinco páginas e troca de página", async () => {
+  it("mostra as sete páginas e troca de página", async () => {
     render(<App />);
-    for (const n of ["Início", "Limpeza", "Segurança", "Disco", "Ajustes"])
+    for (const n of ["Início", "Jogos", "Limpeza", "Segurança", "Disco", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(
