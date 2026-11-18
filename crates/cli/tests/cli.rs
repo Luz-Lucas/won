@@ -397,3 +397,37 @@ fn quarantine_list_empty_and_restore_unknown_id() {
         .assert()
         .code(2);
 }
+
+#[test]
+fn tweak_list_shows_catalog_ids() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["tweak", "list"])
+        .assert()
+        .success()
+        .stdout(contains("game-mode"))
+        .stdout(contains("hags"));
+}
+
+#[test]
+fn tweak_apply_unknown_id_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "apply", "nao-existe", "--yes"])
+        .assert()
+        .code(2)
+        .stderr(contains("otimização desconhecida: nao-existe"));
+}
+
+#[test]
+fn tweak_undo_requires_ids_or_all() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo"])
+        .assert()
+        .code(2);
+}

@@ -37,6 +37,7 @@ sentinela find-dupes <caminho> [--min-size <KB>] [--json]
 sentinela full [--json]
 sentinela quarantine [--json]
 sentinela restore <id>
+sentinela tweak list | apply <id>... | undo (<id>... | --all)
 sentinela info
 ```
 
@@ -169,6 +170,21 @@ Categorias e o que cada uma apaga (use `--category <nome>`, repetível; sem ela,
 | `windows-update` | `%SystemRoot%\SoftwareDistribution\Download`. Ao aplicar, para o serviço `wuauserv`, apaga e reinicia o serviço, mesmo que a exclusão falhe | sim |
 
 Com `--json`, o resultado segue o mesmo envelope: `summary` com `files`, `bytes`, `deleted` e `freed`; `items` com uma entrada por categoria (`id`, `plan`, `applied`, `skipped_reason`); e `errors` com os arquivos pulados.
+
+### `tweak`: otimizações do Windows
+
+```
+sentinela tweak list [--json]
+sentinela tweak apply <id>... [--yes] [--json]
+sentinela tweak undo (<id>... | --all) [--yes] [--json]
+```
+
+- `list` mostra uma linha por otimização: id, estado (`aplicado`, `não aplicado`, `parcial`, `indisponível`), título e `(requer administrador)` quando bloqueada. Só lê o sistema.
+- `apply` mostra a prévia de cada mudança (`descrição: atual → alvo`) e **pergunta `[s/N]` antes de aplicar**; `--yes` pula a pergunta. Com o terminal elevado, solicita um ponto de restauração antes (o Windows pode reaproveitar um ponto das últimas 24 h; se falhar, só avisa). No fim indica se é preciso reiniciar o computador ou sair e entrar de novo no Windows.
+- `undo` restaura os valores originais guardados no diário, também com confirmação (`--yes` pula); `--all` desfaz tudo, da mais recente para a mais antiga. Valores alterados depois da otimização são mantidos e reportados como conflito.
+- O diário fica em `%LOCALAPPDATA%\Sentinela\tweaks\journal.json`; a variável `SENTINELA_TWEAKS_JOURNAL` define outro caminho.
+- Códigos de saída: `0` sucesso (inclusive "nada a fazer"), `1` se algum item falhou ou houve conflito no `undo`, `2` erro global (id desconhecido, uso incorreto).
+- Com `--json`, `list` devolve uma lista de `{ id, title, status, blocked, changes }`; `apply` e `undo` devolvem o relatório.
 
 ### `find-large`: maiores arquivos
 
