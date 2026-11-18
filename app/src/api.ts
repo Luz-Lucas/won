@@ -300,3 +300,15 @@ export interface HistoryPage {
 }
 
 export const tweaksJournal = () => invoke<HistoryPage>("tweaks_journal");
+
+export interface SettingsView {
+  start_with_windows: boolean;
+  close_to_tray: boolean;
+  elevated: boolean;
+  /** Por que a inicialização com o Windows não pôde ser alterada, se for o caso. */
+  note: string | null;
+}
+
+export const settingsGet = () => invoke<SettingsView>("settings_get");
+export const settingsSet = (startWithWindows: boolean, closeToTray: boolean) =>
+  invoke<SettingsView>("settings_set", { startWithWindows, closeToTray });

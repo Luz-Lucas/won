@@ -4,10 +4,13 @@ import {
   abuseKeyClear,
   abuseKeyPresent,
   abuseKeySet,
+  settingsGet,
+  settingsSet,
   signaturesUpdate,
   systemStatus,
   type DbStatus,
   type KeySource,
+  type SettingsView,
   type UpdateSummary,
 } from "../api";
 import { humanDate } from "../format";
@@ -25,6 +28,26 @@ export default function Ajustes() {
   const [keyInput, setKeyInput] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+
+  const [prefs, setPrefs] = useState<SettingsView | null>(null);
+  const [prefsError, setPrefsError] = useState<string | null>(null);
+  const [prefsBusy, setPrefsBusy] = useState(false);
+
+  useEffect(() => {
+    settingsGet().then(setPrefs, (e) => setPrefsError(errorText(e)));
+  }, []);
+
+  const changePrefs = async (start: boolean, tray: boolean) => {
+    setPrefsBusy(true);
+    setPrefsError(null);
+    try {
+      setPrefs(await settingsSet(start, tray));
+    } catch (e) {
+      setPrefsError(errorText(e));
+    } finally {
+      setPrefsBusy(false);
+    }
+  };
 
   const running = job.state === "running";
 
@@ -91,6 +114,44 @@ export default function Ajustes() {
   return (
     <section className="page">
       <h1>Ajustes</h1>
+
+      <h2 className="section-title">Inicialização</h2>
+      {prefs && (
+        <>
+          <p>
+            <label>
+              <input
+                type="checkbox"
+                checked={prefs.start_with_windows}
+                disabled={prefsBusy}
+                onChange={(e) =>
+                  void changePrefs(e.target.checked, prefs.close_to_tray)
+                }
+              />{" "}
+              Iniciar com o Windows
+            </label>
+          </p>
+          <p>
+            <label>
+              <input
+                type="checkbox"
+                checked={prefs.close_to_tray}
+                disabled={prefsBusy}
+                onChange={(e) =>
+                  void changePrefs(prefs.start_with_windows, e.target.checked)
+                }
+              />{" "}
+              Ao fechar, manter na área de notificação
+            </label>
+          </p>
+          {prefs.note && <p className="muted">{prefs.note}</p>}
+        </>
+      )}
+      {prefsError && (
+        <p role="alert" className="form-error">
+          {prefsError}
+        </p>
+      )}
 
       <h2 className="section-title">Banco de assinaturas</h2>
       {dbError && (

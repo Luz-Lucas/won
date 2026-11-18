@@ -151,11 +151,45 @@ pub fn wait_for_previous_instance() -> bool {
     true
 }
 
-/// Fechar a janela principal cancela as operações em andamento (sem bloquear o fechamento).
-pub fn on_window_close(label: &str, jobs: &JobRegistry) {
-    if label == "main" {
-        jobs.cancel_all();
+/// Argumento do início automático: o app abre direto na bandeja, sem janela.
+pub const MINIMIZED_ARG: &str = "--minimized";
+
+/// `true` se algum argumento é `--minimized`.
+pub fn parse_minimized<I, S>(args: I) -> bool
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    args.into_iter().any(|a| a.as_ref() == MINIMIZED_ARG)
+}
+
+/// O que fazer com o pedido de fechar uma janela.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseAction {
+    /// Não é a janela principal: fecha normalmente.
+    Ignore,
+    /// Esconde a janela e mantém o app (e as operações) rodando na bandeja.
+    HideToTray,
+    /// Operações canceladas; o fechamento segue e o app encerra.
+    Exit,
+}
+
+/// Decide o fechamento. Esconder para a bandeja nunca cancela operações;
+/// sair de verdade (`close_to_tray` desligado) cancela tudo.
+pub fn on_window_close(label: &str, close_to_tray: bool, jobs: &JobRegistry) -> CloseAction {
+    if label != "main" {
+        return CloseAction::Ignore;
     }
+    if close_to_tray {
+        return CloseAction::HideToTray;
+    }
+    jobs.cancel_all();
+    CloseAction::Exit
+}
+
+/// "Sair" do menu da bandeja: única saída real com a janela escondida.
+pub fn on_tray_quit(jobs: &JobRegistry) {
+    jobs.cancel_all();
 }
 
 #[cfg(test)]
@@ -192,12 +226,43 @@ mod tests {
     }
 
     #[test]
-    fn close_cancels_only_for_main() {
+    fn parses_minimized() {
+        assert!(parse_minimized(os(&["app.exe", "--minimized"])));
+        assert!(parse_minimized(["a", "--wait-pid=1", "--minimized"]));
+        assert!(!parse_minimized(os(&["app.exe"])));
+        assert!(!parse_minimized(os(&["--minimized=1", "minimized"])));
+    }
+
+    #[test]
+    fn close_to_tray_hides_without_cancelling() {
         let reg = JobRegistry::new();
         let (_, flag) = reg.start(JobKind::Scan).unwrap();
-        on_window_close("outra", &reg);
+        assert_eq!(on_window_close("main", true, &reg), CloseAction::HideToTray);
         assert!(!flag.load(Ordering::Relaxed));
-        on_window_close("main", &reg);
+    }
+
+    #[test]
+    fn close_without_tray_cancels_and_exits() {
+        let reg = JobRegistry::new();
+        let (_, flag) = reg.start(JobKind::Scan).unwrap();
+        assert_eq!(on_window_close("main", false, &reg), CloseAction::Exit);
+        assert!(flag.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn close_of_other_windows_is_ignored() {
+        let reg = JobRegistry::new();
+        let (_, flag) = reg.start(JobKind::Scan).unwrap();
+        assert_eq!(on_window_close("outra", false, &reg), CloseAction::Ignore);
+        assert_eq!(on_window_close("outra", true, &reg), CloseAction::Ignore);
+        assert!(!flag.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn tray_quit_cancels_running_jobs() {
+        let reg = JobRegistry::new();
+        let (_, flag) = reg.start(JobKind::Scan).unwrap();
+        on_tray_quit(&reg);
         assert!(flag.load(Ordering::Relaxed));
     }
 }
