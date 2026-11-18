@@ -229,6 +229,7 @@ fn cmd_apply(ids: Vec<String>, yes: bool, json: bool) -> Result<i32> {
         match report.effect {
             Effect::Reboot => println!("Reinicie o computador para concluir."),
             Effect::Relogon => println!("Saia e entre de novo no Windows para concluir."),
+            Effect::Explorer => println!("Reinicie o Explorer para concluir."),
             Effect::Immediate => {}
         }
     }

@@ -10,6 +10,7 @@ pub enum Group {
     SegundoPlano,
     Privacidade,
     Visual,
+    Personalizacao,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,11 +21,13 @@ pub enum Evidence {
     Controverso,
 }
 
-/// Quando o efeito aparece. A ordem importa: `Immediate < Relogon < Reboot`.
+/// Quando o efeito aparece. A ordem importa: `Immediate < Explorer < Relogon < Reboot`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Effect {
     Immediate,
+    /// Basta reiniciar o Explorer.
+    Explorer,
     Relogon,
     Reboot,
 }
@@ -55,7 +58,7 @@ pub enum StartType {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Action {
-    /// `value: None` apaga o valor.
+    /// `value: None` apaga o valor. `name: ""` é o valor padrão da chave ("(Padrão)").
     Registry {
         hive: Hive,
         path: String,
@@ -94,4 +97,13 @@ pub struct Tweak {
     /// URL da documentação que justifica o valor.
     pub source: String,
     pub actions: Vec<Action>,
+    /// Id do grupo de opções: ajustes com o mesmo `choice` são mutuamente exclusivos.
+    #[serde(default)]
+    pub choice: Option<String>,
+    /// Rótulo do grupo de opções (obrigatório quando há `choice`).
+    #[serde(default)]
+    pub choice_label: Option<String>,
+    /// Área da página Personalizar: barra, iniciar, explorador, aparencia, sistema.
+    #[serde(default)]
+    pub area: Option<String>,
 }

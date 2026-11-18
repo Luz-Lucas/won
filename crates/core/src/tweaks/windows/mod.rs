@@ -390,6 +390,27 @@ mod tests {
 
     #[test]
     #[ignore = "toca no registro (só HKCU\\Software\\Sentinela-test-pid)"]
+    fn default_value_name_empty_reads_writes_and_deletes() {
+        let k = TestKey::new();
+        let be = WindowsBackend::new(true);
+        let a = reg(&k.0, "", Some(RegValue::String("padrão".into())));
+        // ausente no início
+        assert_eq!(be.read(&a).unwrap(), Snapshot::Registry { value: None });
+        let want = Snapshot::Registry {
+            value: Some(RegValue::String("padrão".into())),
+        };
+        be.write(&a, &want).unwrap();
+        assert_eq!(be.read(&a).unwrap(), want);
+        // um valor nomeado ao lado não se confunde com o padrão
+        let named = reg(&k.0, "x", Some(RegValue::Dword(1)));
+        assert_eq!(be.read(&named).unwrap(), Snapshot::Registry { value: None });
+        // apagar o padrão
+        be.write(&a, &Snapshot::Registry { value: None }).unwrap();
+        assert_eq!(be.read(&a).unwrap(), Snapshot::Registry { value: None });
+    }
+
+    #[test]
+    #[ignore = "toca no registro (só HKCU\\Software\\Sentinela-test-pid)"]
     fn wrong_type_reads_as_error_for_binary() {
         use windows_sys::Win32::System::Registry::{
             HKEY_CURRENT_USER, KEY_SET_VALUE, REG_BINARY, RegCloseKey, RegCreateKeyExW,

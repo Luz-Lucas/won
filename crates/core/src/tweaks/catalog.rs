@@ -1,11 +1,14 @@
 //! Catálogo embutido de ajustes e sua validação.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
 use super::model::{Action, Hive, Tweak};
+
+/// Áreas válidas da página Personalizar.
+pub const AREAS: &[&str] = &["barra", "iniciar", "explorador", "aparencia", "sistema"];
 
 /// Plano de energia "Alto desempenho" (GUID interno do Windows).
 /// Fonte: https://learn.microsoft.com/en-us/windows/win32/power/power-policy-settings
@@ -17,6 +20,10 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
     (Hive::Hkcu, "System\\GameConfigStore"),
     (Hive::Hkcu, "Control Panel\\Mouse"),
     (Hive::Hkcu, "Control Panel\\Desktop"),
+    (Hive::Hkcu, "Software\\Classes\\CLSID"),
+    (Hive::Hkcu, "Software\\Policies\\Microsoft\\Windows"),
+    (Hive::Hkcu, "Control Panel\\Accessibility"),
+    (Hive::Hklm, "SOFTWARE\\Policies\\Microsoft\\Dsh"),
     (Hive::Hklm, "SOFTWARE\\Policies\\Microsoft\\Windows"),
     (
         Hive::Hklm,
@@ -111,6 +118,18 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
     if t.actions.is_empty() {
         return Err(format!("{id}: sem ações"));
     }
+    if let Some(area) = &t.area
+        && !AREAS.contains(&area.as_str())
+    {
+        return Err(format!("{id}: área desconhecida: {area}"));
+    }
+    if t.choice.is_some()
+        && t.choice_label
+            .as_deref()
+            .is_none_or(|l| l.trim().is_empty())
+    {
+        return Err(format!("{id}: choice_label é obrigatório quando há choice"));
+    }
     for a in &t.actions {
         match a {
             Action::Registry {
@@ -119,7 +138,8 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
             | Action::ListEntry {
                 hive, path, name, ..
             } => {
-                if name.is_empty() {
+                // `name: ""` é o valor padrão da chave, só válido em `Registry`.
+                if name.is_empty() && !matches!(a, Action::Registry { .. }) {
                     return Err(format!("{id}: nome de valor vazio"));
                 }
                 if !path_allowed(*hive, path) {
@@ -168,6 +188,49 @@ pub fn validate(c: &Catalog) -> Result<(), String> {
         }
         validate_tweak(t)?;
     }
+    validate_choices(c)
+}
+
+/// Conjunto de chaves `(hive, caminho, nome)` que o ajuste toca no registro.
+fn key_set(t: &Tweak) -> HashSet<(Hive, String, String)> {
+    t.actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::Registry {
+                hive, path, name, ..
+            }
+            | Action::ListEntry {
+                hive, path, name, ..
+            } => Some((*hive, path.to_ascii_lowercase(), name.to_ascii_lowercase())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Opções do mesmo `choice`: mesma área e mesmas chaves, para o desfazer ser coerente.
+fn validate_choices(c: &Catalog) -> Result<(), String> {
+    let mut first: HashMap<&str, &Tweak> = HashMap::new();
+    for t in &c.tweaks {
+        let Some(ch) = t.choice.as_deref() else {
+            continue;
+        };
+        let Some(f) = first.get(ch) else {
+            first.insert(ch, t);
+            continue;
+        };
+        if f.area != t.area {
+            return Err(format!(
+                "{}: as opções de '{ch}' devem ter a mesma área ({})",
+                t.id, f.id
+            ));
+        }
+        if t.actions.len() != f.actions.len() || key_set(t) != key_set(f) {
+            return Err(format!(
+                "{}: as opções de '{ch}' devem ter as mesmas chaves ({})",
+                t.id, f.id
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -189,6 +252,9 @@ mod tests {
             recommended: true,
             source: "https://learn.microsoft.com/".into(),
             actions,
+            choice: None,
+            choice_label: None,
+            area: None,
         }
     }
 
@@ -225,6 +291,109 @@ mod tests {
         let e = validate(&cat(vec![t])).unwrap_err();
         assert!(e.contains(&id), "mensagem sem o id {id}: {e}");
         assert!(e.contains(reason), "esperava '{reason}' em: {e}");
+    }
+
+    fn choice_member(id: &str, name: &str, v: u32) -> Tweak {
+        let mut t = tweak(
+            id,
+            vec![Action::Registry {
+                hive: Hive::Hkcu,
+                path: r"Software\Microsoft\X".into(),
+                name: name.into(),
+                value: Some(RegValue::Dword(v)),
+            }],
+            false,
+        );
+        t.choice = Some("grupo".into());
+        t.choice_label = Some("Grupo".into());
+        t.area = Some("barra".into());
+        t
+    }
+
+    #[test]
+    fn choice_members_with_same_keys_are_valid() {
+        let c = cat(vec![choice_member("a", "V", 1), choice_member("b", "V", 2)]);
+        assert!(validate(&c).is_ok());
+    }
+
+    #[test]
+    fn choice_members_must_share_keys() {
+        let e = validate(&cat(vec![
+            choice_member("a", "V", 1),
+            choice_member("b", "W", 2),
+        ]))
+        .unwrap_err();
+        assert!(e.contains("b") && e.contains("mesmas chaves"), "{e}");
+    }
+
+    #[test]
+    fn choice_members_must_share_area() {
+        let mut b = choice_member("b", "V", 2);
+        b.area = Some("iniciar".into());
+        let e = validate(&cat(vec![choice_member("a", "V", 1), b])).unwrap_err();
+        assert!(e.contains("b") && e.contains("mesma área"), "{e}");
+    }
+
+    #[test]
+    fn choice_requires_label() {
+        let mut a = choice_member("a", "V", 1);
+        a.choice_label = None;
+        assert_rejected(a, "choice_label");
+    }
+
+    #[test]
+    fn unknown_area_is_rejected() {
+        let mut a = tweak("a", ok_action(), false);
+        a.area = Some("lua".into());
+        assert_rejected(a, "área desconhecida");
+    }
+
+    #[test]
+    fn default_value_name_allowed_only_for_registry() {
+        let key = r"Software\Microsoft\X";
+        let reg_default = Action::Registry {
+            hive: Hive::Hkcu,
+            path: key.into(),
+            name: String::new(),
+            value: Some(RegValue::String("".into())),
+        };
+        assert!(validate(&cat(vec![tweak("ok", vec![reg_default], false)])).is_ok());
+        let list_default = Action::ListEntry {
+            hive: Hive::Hkcu,
+            path: key.into(),
+            name: String::new(),
+            key: "k".into(),
+            value: "v".into(),
+        };
+        assert_rejected(
+            tweak("bad", vec![list_default], false),
+            "nome de valor vazio",
+        );
+    }
+
+    #[test]
+    fn explorer_effect_orders_between_immediate_and_relogon() {
+        assert!(Effect::Immediate < Effect::Explorer && Effect::Explorer < Effect::Relogon);
+    }
+
+    #[test]
+    fn classes_clsid_root_allowed() {
+        let a = reg(
+            Hive::Hkcu,
+            r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32",
+        );
+        assert!(validate(&cat(vec![tweak("clsid", vec![a], false)])).is_ok());
+        let other = reg(Hive::Hkcu, r"Software\Classes\Other");
+        assert_rejected(
+            tweak("other", vec![other], false),
+            "fora das raízes permitidas",
+        );
+        let dsh = reg(Hive::Hklm, r"SOFTWARE\Policies\Microsoft\Dsh");
+        assert!(validate(&cat(vec![tweak("dsh", vec![dsh], true)])).is_ok());
+        let acc = reg(Hive::Hkcu, r"Control Panel\Accessibility\X");
+        assert!(validate(&cat(vec![tweak("acc", vec![acc], false)])).is_ok());
+        let pol = reg(Hive::Hkcu, r"Software\Policies\Microsoft\Windows\Explorer");
+        assert!(validate(&cat(vec![tweak("pol", vec![pol], false)])).is_ok());
     }
 
     #[test]
@@ -268,13 +437,10 @@ mod tests {
 
     #[test]
     fn hive_mismatch_is_rejected() {
-        // A raiz Policies\Microsoft\Windows só é permitida em HKLM.
+        // A raiz Policies\Microsoft\Dsh só é permitida em HKLM.
         let t = tweak(
             "hive",
-            vec![reg(
-                Hive::Hkcu,
-                "SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-            )],
+            vec![reg(Hive::Hkcu, "SOFTWARE\\Policies\\Microsoft\\Dsh\\X")],
             false,
         );
         assert_rejected(t, "fora das raízes permitidas");

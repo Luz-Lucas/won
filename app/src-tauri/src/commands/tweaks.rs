@@ -379,6 +379,9 @@ mod tests {
                 recommended: false,
                 source: "https://example.com".into(),
                 actions: vec![reg()],
+                choice: None,
+                choice_label: None,
+                area: None,
             }],
         }
     }

@@ -189,27 +189,14 @@ fn apply_one(
     Ok(wrote)
 }
 
-pub fn apply(
+/// Aplica `ids` com o diário já travado e reconciliado.
+fn apply_ids(
     ids: &[String],
     cat: &Catalog,
     b: &dyn SystemBackend,
+    journal: &mut Journal,
     journal_path: &Path,
-) -> ApplyReport {
-    let Opened {
-        _lock,
-        mut journal,
-        notice,
-    } = match open(journal_path, b) {
-        Ok(o) => o,
-        Err(msg) => {
-            return ApplyReport {
-                results: ids.iter().map(|id| item(id, false, msg.clone())).collect(),
-                effect: Effect::Immediate,
-                restore_point: None,
-                notice: None,
-            };
-        }
-    };
+) -> (Vec<ItemResult>, Effect) {
     let mut results = Vec::new();
     let mut effect = Effect::Immediate;
 
@@ -234,7 +221,7 @@ pub fn apply(
             }
             TweakStatus::NotApplied | TweakStatus::Partial => {}
         }
-        match apply_one(t, b, &mut journal, journal_path) {
+        match apply_one(t, b, journal, journal_path) {
             Ok(true) => {
                 effect = effect.max(t.effect);
                 results.push(changed_item(id, true, "aplicada"));
@@ -243,13 +230,118 @@ pub fn apply(
             Err(msg) => results.push(item(id, false, format!("falhou: {msg}"))),
         }
     }
+    (results, effect)
+}
 
+fn failed_report(ids: &[String], msg: &str) -> ApplyReport {
+    ApplyReport {
+        results: ids.iter().map(|id| item(id, false, msg)).collect(),
+        effect: Effect::Immediate,
+        restore_point: None,
+        notice: None,
+    }
+}
+
+pub fn apply(
+    ids: &[String],
+    cat: &Catalog,
+    b: &dyn SystemBackend,
+    journal_path: &Path,
+) -> ApplyReport {
+    let Opened {
+        _lock,
+        mut journal,
+        notice,
+    } = match open(journal_path, b) {
+        Ok(o) => o,
+        Err(msg) => return failed_report(ids, &msg),
+    };
+    let (results, effect) = apply_ids(ids, cat, b, &mut journal, journal_path);
     ApplyReport {
         results,
         effect,
         restore_point: None,
         notice,
     }
+}
+
+/// Aplica a opção `id` de um grupo exclusivo (`choice`). Se outra opção do
+/// mesmo grupo está no diário, desfaz essa primeiro, tudo sob a mesma trava.
+/// Se o desfazer der conflito ou falhar, a escolhida não é aplicada.
+pub fn apply_choice(
+    id: &str,
+    cat: &Catalog,
+    b: &dyn SystemBackend,
+    journal_path: &Path,
+) -> ApplyReport {
+    let one = [id.to_string()];
+    let Opened {
+        _lock,
+        mut journal,
+        notice,
+    } = match open(journal_path, b) {
+        Ok(o) => o,
+        Err(msg) => return failed_report(&one, &msg),
+    };
+    let report = |results, effect| ApplyReport {
+        results,
+        effect,
+        restore_point: None,
+        notice: notice.clone(),
+    };
+
+    let others: Vec<String> = match cat
+        .get(id)
+        .and_then(|t| t.choice.as_deref().map(|c| (t, c)))
+    {
+        Some((t, choice)) => {
+            // Não desfaz a opção atual se a nova não puder ser aplicada.
+            let v = view(t, b);
+            if let Some(msg) = v.blocked {
+                return report(vec![item(id, false, msg)], Effect::Immediate);
+            }
+            if v.status == TweakStatus::Unavailable {
+                return report(
+                    vec![item(id, false, "indisponível nesta máquina")],
+                    Effect::Immediate,
+                );
+            }
+            journal
+                .entries
+                .iter()
+                .filter(|e| e.tweak_id != id)
+                .filter(|e| {
+                    cat.get(&e.tweak_id)
+                        .is_some_and(|o| o.choice.as_deref() == Some(choice))
+                })
+                .map(|e| e.tweak_id.clone())
+                .collect()
+        }
+        None => Vec::new(),
+    };
+
+    let mut effect = Effect::Immediate;
+    let mut undone_wrote = false;
+    if !others.is_empty() {
+        let (undone, _conflicts) = undo_ids(&others, b, &mut journal, journal_path);
+        for (u, other) in undone.iter().zip(&others) {
+            if let Some(o) = cat.get(other)
+                && u.changed
+            {
+                effect = effect.max(o.effect);
+            }
+            undone_wrote |= u.changed;
+        }
+        if let Some(bad) = undone.iter().find(|u| !u.ok) {
+            return report(vec![item(id, false, bad.message.clone())], effect);
+        }
+    }
+
+    let (mut results, applied_effect) = apply_ids(&one, cat, b, &mut journal, journal_path);
+    if undone_wrote && let Some(r) = results.first_mut() {
+        r.changed = true;
+    }
+    report(results, effect.max(applied_effect))
 }
 
 fn inaccessible(reason: &str) -> String {
@@ -441,6 +533,9 @@ mod tests {
             recommended: false,
             source: "https://example.com".into(),
             actions,
+            choice: None,
+            choice_label: None,
+            area: None,
         }
     }
 
@@ -1040,5 +1135,118 @@ mod tests {
             assert_eq!(&b.get(a), s, "{a:?}");
         }
         assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    // --- Opções exclusivas (`choice`) ---
+
+    fn dw(v: u32) -> Snapshot {
+        Snapshot::Registry {
+            value: Some(RegValue::Dword(v)),
+        }
+    }
+
+    fn choice_tweak(id: &str, v: u32) -> Tweak {
+        let mut t = tweak(id, Effect::Explorer, vec![reg("V", v)]);
+        t.choice = Some("grupo".into());
+        t.choice_label = Some("Grupo".into());
+        t
+    }
+
+    #[test]
+    fn switching_choice_and_undo_restores_original() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let key = reg("V", 0);
+        b.set(&key, dw(7));
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+
+        // A -> B -> desfaz B -> desfaz A volta ao original.
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        assert!(apply(&ids(&["b"]), &c, &b, &p).results[0].ok);
+        assert_eq!(b.get(&key), dw(2));
+        assert!(undo(&ids(&["b"]), &b, &p).results[0].ok);
+        assert_eq!(b.get(&key), dw(1));
+        assert!(undo(&ids(&["a"]), &b, &p).results[0].ok);
+        assert_eq!(b.get(&key), dw(7));
+        assert!(Journal::load(&p).entries.is_empty());
+
+        // A -> B via apply_choice, depois undo_all volta ao original.
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        let r = apply_choice("b", &c, &b, &p);
+        assert!(r.results.len() == 1 && r.results[0].ok, "{:?}", r.results);
+        assert_eq!(r.effect, Effect::Explorer);
+        assert_eq!(b.get(&key), dw(2));
+        let j = Journal::load(&p);
+        assert_eq!(j.entries.len(), 1);
+        assert_eq!(j.entries[0].tweak_id, "b");
+        let u = undo_all(&b, &p);
+        assert!(u.conflicts.is_empty(), "{:?}", u.conflicts);
+        assert_eq!(b.get(&key), dw(7));
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn choice_without_previous_member_just_applies() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        let r = apply_choice("a", &c, &b, &p);
+        assert!(r.results[0].ok && r.results[0].changed, "{:?}", r.results);
+        assert_eq!(b.get(&reg("V", 0)), dw(1));
+        // Reaplicar a mesma opção não muda nada.
+        let r = apply_choice("a", &c, &b, &p);
+        assert!(r.results[0].ok && !r.results[0].changed);
+        assert_eq!(r.results[0].message, "já estava aplicada");
+    }
+
+    #[test]
+    fn choice_target_equal_to_original_reports_already_applied() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let key = reg("V", 0);
+        b.set(&key, dw(2)); // o padrão do Windows já é a opção B
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        assert!(apply_choice("a", &c, &b, &p).results[0].ok);
+        let r = apply_choice("b", &c, &b, &p);
+        assert!(r.results[0].ok, "{:?}", r.results);
+        assert_eq!(r.results[0].message, "já estava aplicada");
+        assert_eq!(b.get(&key), dw(2));
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn choice_conflict_does_not_apply() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let key = reg("V", 0);
+        b.set(&key, dw(7));
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        b.set(&key, dw(9)); // alterado depois pelo usuário
+        let r = apply_choice("b", &c, &b, &p);
+        assert_eq!(r.results.len(), 1);
+        assert!(!r.results[0].ok);
+        assert_eq!(r.results[0].tweak_id, "b");
+        assert_eq!(r.results[0].message, "mantida (alterada depois)");
+        assert_eq!(b.get(&key), dw(9), "valor do usuário preservado");
+        assert!(Journal::load(&p).entries.iter().all(|e| e.tweak_id != "b"));
+    }
+
+    #[test]
+    fn choice_blocked_target_keeps_previous_option() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let key = reg("V", 0);
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        b.set_unavailable(&key, "x");
+        let r = apply_choice("b", &c, &b, &p);
+        assert!(!r.results[0].ok);
+        assert_eq!(Journal::load(&p).entries.len(), 1, "A continua no diário");
     }
 }

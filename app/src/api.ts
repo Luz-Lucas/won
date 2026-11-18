@@ -174,9 +174,10 @@ export type TweakGroup =
   | "energia"
   | "segundo_plano"
   | "privacidade"
-  | "visual";
+  | "visual"
+  | "personalizacao";
 export type TweakEvidence = "comprovado" | "situacional" | "controverso";
-export type TweakEffect = "immediate" | "relogon" | "reboot";
+export type TweakEffect = "immediate" | "explorer" | "relogon" | "reboot";
 export type TweakStatus = "applied" | "not_applied" | "partial" | "unavailable";
 
 export type RegValue =

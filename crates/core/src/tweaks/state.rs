@@ -93,7 +93,10 @@ pub fn describe(action: &Action) -> String {
     match action {
         Action::Registry {
             hive, path, name, ..
-        } => format!("{}\\{path}\\{name}", hive_name(*hive)),
+        } => {
+            let name = if name.is_empty() { "(Padrão)" } else { name };
+            format!("{}\\{path}\\{name}", hive_name(*hive))
+        }
         Action::ListEntry {
             hive,
             path,
@@ -213,6 +216,9 @@ mod tests {
             recommended: false,
             source: "https://example.com".into(),
             actions,
+            choice: None,
+            choice_label: None,
+            area: None,
         }
     }
 
