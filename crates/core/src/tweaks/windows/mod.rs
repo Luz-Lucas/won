@@ -19,7 +19,8 @@ use windows_sys::Win32::System::Restore::{
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
-use super::backend::{Snapshot, SystemBackend};
+use super::backend::{Snapshot, SystemBackend, reg_key};
+use super::catalog::removable_key_chain;
 use super::model::{Action, RegValue};
 use crate::clean::platform::is_elevated;
 
@@ -158,6 +159,26 @@ impl SystemBackend for WindowsBackend {
 
     fn scheme_name(&self, guid: &str) -> Option<String> {
         power::friendly_name(guid)
+    }
+
+    fn key_exists(&self, action: &Action) -> Result<bool, String> {
+        match reg_key(action) {
+            Some((hive, path)) => registry::key_exists(hive, path),
+            None => Ok(true),
+        }
+    }
+
+    fn delete_key_if_empty(&self, action: &Action) -> Result<(), String> {
+        let Some((hive, path)) = reg_key(action) else {
+            return Ok(());
+        };
+        // Da folha para cima, só dentro da raiz permitida; para na primeira chave não vazia.
+        for p in removable_key_chain(hive, path) {
+            if !registry::delete_key_if_empty(hive, &p)? {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -407,6 +428,51 @@ mod tests {
         // apagar o padrão
         be.write(&a, &Snapshot::Registry { value: None }).unwrap();
         assert_eq!(be.read(&a).unwrap(), Snapshot::Registry { value: None });
+    }
+
+    #[test]
+    #[ignore = "toca no registro (só HKCU\\Software\\Sentinela-test-pid)"]
+    fn key_exists_and_delete_if_empty_respect_contents() {
+        let k = TestKey::new();
+        let be = WindowsBackend::new(true);
+        let sub = format!("{}\\a\\b", k.0);
+        let leaf = reg(&sub, "v", Some(RegValue::Dword(1)));
+        assert!(!be.key_exists(&leaf).unwrap());
+        be.write(
+            &leaf,
+            &Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        )
+        .unwrap();
+        assert!(be.key_exists(&leaf).unwrap());
+        // com valor: não apaga
+        be.delete_key_if_empty(&leaf).unwrap();
+        assert!(be.key_exists(&leaf).unwrap());
+        // sem valor: apaga a folha e os pais vazios, mas nunca a raiz de teste
+        be.write(&leaf, &Snapshot::Registry { value: None })
+            .unwrap();
+        be.delete_key_if_empty(&leaf).unwrap();
+        assert!(!be.key_exists(&leaf).unwrap());
+        let a = reg(&format!("{}\\a", k.0), "v", None);
+        assert!(!be.key_exists(&a).unwrap());
+        let root = reg(&k.0, "v", None);
+        assert!(
+            be.key_exists(&root).unwrap(),
+            "a raiz permitida não é apagada"
+        );
+        // chave com subchave não é apagada
+        let child = reg(&format!("{}\\c\\d", k.0), "v", Some(RegValue::Dword(1)));
+        be.write(
+            &child,
+            &Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        )
+        .unwrap();
+        let parent = reg(&format!("{}\\c", k.0), "v", None);
+        be.delete_key_if_empty(&parent).unwrap();
+        assert!(be.key_exists(&parent).unwrap());
     }
 
     #[test]

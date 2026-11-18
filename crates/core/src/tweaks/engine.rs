@@ -99,6 +99,7 @@ fn journal_intent(
     action: &Action,
     before: &Snapshot,
     target: &Snapshot,
+    key_created: bool,
 ) {
     let pos = match journal.entries.iter().position(|e| e.tweak_id == t.id) {
         Some(p) => p,
@@ -125,6 +126,7 @@ fn journal_intent(
             before: before.clone(),
             written: target.clone(),
             done: false,
+            key_created,
         }),
     }
 }
@@ -158,8 +160,10 @@ fn apply_one(
             return Err(format!("indisponível: {reason}"));
         }
 
+        // A chave não existir antes da primeira escrita? O desfazer a remove se ficar vazia.
+        let key_created = !b.key_exists(action)?;
         let backup = journal.entries.clone();
-        journal_intent(journal, t, action, &before, &target);
+        journal_intent(journal, t, action, &before, &target, key_created);
         if let Err(e) = journal.save(path) {
             journal.entries = backup;
             return Err(format!("não foi possível gravar o diário: {e}"));
@@ -189,7 +193,22 @@ fn apply_one(
     Ok(wrote)
 }
 
-/// Aplica `ids` com o diário já travado e reconciliado.
+/// Depois de restaurar "não existia", apaga a chave que o motor criou se ficou vazia.
+fn remove_created_key(b: &dyn SystemBackend, ja: &JournalAction) {
+    let gone = matches!(
+        ja.before,
+        Snapshot::Registry { value: None } | Snapshot::ListEntry { value: None }
+    );
+    if ja.key_created && gone {
+        // Melhor esforço: uma chave vazia que sobra não impede o desfazer.
+        let _ = b.delete_key_if_empty(&ja.action);
+    }
+}
+
+const CONFLICT_MSG: &str = "mantida (alterada depois)";
+
+/// Aplica `ids` com o diário já travado e reconciliado. Ajustes com
+/// `choice` sempre substituem a outra opção do mesmo grupo.
 fn apply_ids(
     ids: &[String],
     cat: &Catalog,
@@ -210,27 +229,108 @@ fn apply_ids(
             results.push(item(id, false, msg));
             continue;
         }
-        match v.status {
-            TweakStatus::Unavailable => {
-                results.push(item(id, false, "indisponível nesta máquina"));
-                continue;
-            }
-            TweakStatus::Applied => {
-                results.push(item(id, true, "já estava aplicada"));
-                continue;
-            }
-            TweakStatus::NotApplied | TweakStatus::Partial => {}
+        if v.status == TweakStatus::Unavailable {
+            results.push(item(id, false, "indisponível nesta máquina"));
+            continue;
         }
-        match apply_one(t, b, journal, journal_path) {
-            Ok(true) => {
-                effect = effect.max(t.effect);
-                results.push(changed_item(id, true, "aplicada"));
+
+        // Opção exclusiva: primeiro desfaz as outras opções do grupo (mais nova primeiro).
+        let mut undone_wrote = false;
+        if let Some(choice) = t.choice.as_deref() {
+            let others: Vec<String> = journal
+                .entries
+                .iter()
+                .rev()
+                .filter(|e| e.tweak_id != *id)
+                .filter(|e| {
+                    cat.get(&e.tweak_id)
+                        .is_some_and(|o| o.choice.as_deref() == Some(choice))
+                })
+                .map(|e| e.tweak_id.clone())
+                .collect();
+            if !others.is_empty() {
+                // Nada é escrito se alguma opção atual foi alterada depois.
+                if let Err(msg) = undo_precheck(&others, b, journal) {
+                    results.push(item(id, false, msg));
+                    continue;
+                }
+                let (undone, _conflicts) = undo_ids(&others, b, journal, journal_path);
+                for (u, other) in undone.iter().zip(&others) {
+                    if u.changed {
+                        undone_wrote = true;
+                        if let Some(o) = cat.get(other) {
+                            effect = effect.max(o.effect);
+                        }
+                    }
+                }
+                if let Some(bad) = undone.iter().find(|u| !u.ok) {
+                    let msg = if bad.message.starts_with("mantida") {
+                        bad.message.clone()
+                    } else {
+                        format!("falhou ao desfazer a opção atual: {}", bad.message)
+                    };
+                    results.push(item(id, false, msg));
+                    continue;
+                }
             }
-            Ok(false) => results.push(item(id, true, "aplicada")),
-            Err(msg) => results.push(item(id, false, format!("falhou: {msg}"))),
         }
+
+        let v = view(t, b);
+        let mut result = match v.status {
+            TweakStatus::Unavailable => item(id, false, "indisponível nesta máquina"),
+            TweakStatus::Applied => item(id, true, "já estava aplicada"),
+            TweakStatus::NotApplied | TweakStatus::Partial => {
+                match apply_one(t, b, journal, journal_path) {
+                    Ok(true) => {
+                        effect = effect.max(t.effect);
+                        changed_item(id, true, "aplicada")
+                    }
+                    Ok(false) => item(id, true, "aplicada"),
+                    Err(msg) => {
+                        let mut m = format!("falhou: {msg}");
+                        if undone_wrote {
+                            m.push_str(" (a opção anterior foi desfeita)");
+                        }
+                        item(id, false, m)
+                    }
+                }
+            }
+        };
+        if undone_wrote && result.ok {
+            result.changed = true;
+        }
+        results.push(result);
     }
     (results, effect)
+}
+
+/// Simula desfazer `ids` (na ordem dada) sem escrever nada. `Err` com a
+/// mensagem final se algum valor atual não for nem o escrito nem o original.
+fn undo_precheck(ids: &[String], b: &dyn SystemBackend, journal: &Journal) -> Result<(), String> {
+    let hkcu_ok = b.hkcu_allowed();
+    let mut sim: std::collections::HashMap<String, Snapshot> = std::collections::HashMap::new();
+    for id in ids {
+        let Some(entry) = journal.entries.iter().find(|e| e.tweak_id == *id) else {
+            continue;
+        };
+        for ja in entry.actions.iter().rev() {
+            if !ja.done || (!hkcu_ok && is_hkcu(&ja.action)) {
+                continue; // o desfazer reporta esses casos por conta própria
+            }
+            let key = describe(&ja.action);
+            let cur = match sim.get(&key) {
+                Some(c) => c.clone(),
+                None => b
+                    .read(&ja.action)
+                    .map_err(|e| format!("falhou ao desfazer a opção atual: {e}"))?,
+            };
+            if cur != ja.before && cur != ja.written {
+                return Err(CONFLICT_MSG.to_string());
+            }
+            sim.insert(key, ja.before.clone());
+        }
+    }
+    Ok(())
 }
 
 fn failed_report(ids: &[String], msg: &str) -> ApplyReport {
@@ -265,83 +365,17 @@ pub fn apply(
     }
 }
 
-/// Aplica a opção `id` de um grupo exclusivo (`choice`). Se outra opção do
-/// mesmo grupo está no diário, desfaz essa primeiro, tudo sob a mesma trava.
-/// Se o desfazer der conflito ou falhar, a escolhida não é aplicada.
+/// Aplica a opção `id` de um grupo exclusivo (`choice`): desfaz a outra opção
+/// do grupo que estiver no diário (mais nova primeiro) e aplica a escolhida, tudo sob
+/// a mesma trava. Se o desfazer der conflito ou falhar, nada é escrito. `apply` já roteia
+/// ajustes com `choice` por aqui; esta função existe para chamadas explícitas.
 pub fn apply_choice(
     id: &str,
     cat: &Catalog,
     b: &dyn SystemBackend,
     journal_path: &Path,
 ) -> ApplyReport {
-    let one = [id.to_string()];
-    let Opened {
-        _lock,
-        mut journal,
-        notice,
-    } = match open(journal_path, b) {
-        Ok(o) => o,
-        Err(msg) => return failed_report(&one, &msg),
-    };
-    let report = |results, effect| ApplyReport {
-        results,
-        effect,
-        restore_point: None,
-        notice: notice.clone(),
-    };
-
-    let others: Vec<String> = match cat
-        .get(id)
-        .and_then(|t| t.choice.as_deref().map(|c| (t, c)))
-    {
-        Some((t, choice)) => {
-            // Não desfaz a opção atual se a nova não puder ser aplicada.
-            let v = view(t, b);
-            if let Some(msg) = v.blocked {
-                return report(vec![item(id, false, msg)], Effect::Immediate);
-            }
-            if v.status == TweakStatus::Unavailable {
-                return report(
-                    vec![item(id, false, "indisponível nesta máquina")],
-                    Effect::Immediate,
-                );
-            }
-            journal
-                .entries
-                .iter()
-                .filter(|e| e.tweak_id != id)
-                .filter(|e| {
-                    cat.get(&e.tweak_id)
-                        .is_some_and(|o| o.choice.as_deref() == Some(choice))
-                })
-                .map(|e| e.tweak_id.clone())
-                .collect()
-        }
-        None => Vec::new(),
-    };
-
-    let mut effect = Effect::Immediate;
-    let mut undone_wrote = false;
-    if !others.is_empty() {
-        let (undone, _conflicts) = undo_ids(&others, b, &mut journal, journal_path);
-        for (u, other) in undone.iter().zip(&others) {
-            if let Some(o) = cat.get(other)
-                && u.changed
-            {
-                effect = effect.max(o.effect);
-            }
-            undone_wrote |= u.changed;
-        }
-        if let Some(bad) = undone.iter().find(|u| !u.ok) {
-            return report(vec![item(id, false, bad.message.clone())], effect);
-        }
-    }
-
-    let (mut results, applied_effect) = apply_ids(&one, cat, b, &mut journal, journal_path);
-    if undone_wrote && let Some(r) = results.first_mut() {
-        r.changed = true;
-    }
-    report(results, effect.max(applied_effect))
+    apply(&[id.to_string()], cat, b, journal_path)
 }
 
 fn inaccessible(reason: &str) -> String {
@@ -395,11 +429,13 @@ fn undo_ids(
             if cur == ja.before {
                 // Já restaurado (ex.: queda depois de escrever, antes de limpar o diário).
                 restored += 1;
+                remove_created_key(b, ja);
             } else if cur == ja.written {
                 match b.write(&ja.action, &ja.before) {
                     Ok(()) => {
                         restored += 1;
                         wrote = true;
+                        remove_created_key(b, ja);
                     }
                     Err(e) => {
                         errors.push(e);
@@ -810,6 +846,7 @@ mod tests {
                     before: absent(),
                     written: target_of(&a),
                     done: false,
+                    key_created: false,
                 }],
             }],
         };
@@ -1161,13 +1198,11 @@ mod tests {
         b.set(&key, dw(7));
         let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
 
-        // A -> B -> desfaz B -> desfaz A volta ao original.
+        // Aplicar A e depois B (apply roteia pela escolha): só B fica no diário.
         assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
         assert!(apply(&ids(&["b"]), &c, &b, &p).results[0].ok);
         assert_eq!(b.get(&key), dw(2));
         assert!(undo(&ids(&["b"]), &b, &p).results[0].ok);
-        assert_eq!(b.get(&key), dw(1));
-        assert!(undo(&ids(&["a"]), &b, &p).results[0].ok);
         assert_eq!(b.get(&key), dw(7));
         assert!(Journal::load(&p).entries.is_empty());
 
@@ -1248,5 +1283,217 @@ mod tests {
         let r = apply_choice("b", &c, &b, &p);
         assert!(!r.results[0].ok);
         assert_eq!(Journal::load(&p).entries.len(), 1, "A continua no diário");
+    }
+
+    fn two_key_choice(id: &str, v: u32) -> Tweak {
+        let mut t = tweak(id, Effect::Explorer, vec![reg("V", v), reg("W", v)]);
+        t.choice = Some("grupo".into());
+        t.choice_label = Some("Grupo".into());
+        t
+    }
+
+    fn journal_state(p: &Path) -> String {
+        serde_json::to_string(&Journal::load(p).entries).unwrap()
+    }
+
+    #[test]
+    fn plain_apply_routes_choice_members_so_only_one_is_journaled() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let key = reg("V", 0);
+        b.set(&key, dw(7));
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        assert!(apply(&ids(&["b"]), &c, &b, &p).results[0].ok);
+        assert_eq!(b.get(&key), dw(2));
+        let j = Journal::load(&p);
+        assert_eq!(j.entries.len(), 1);
+        assert_eq!(j.entries[0].tweak_id, "b");
+        let u = undo_all(&b, &p);
+        assert!(u.conflicts.is_empty(), "{:?}", u.conflicts);
+        assert_eq!(b.get(&key), dw(7));
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn apply_choice_undoes_several_journaled_members_newest_first() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let key = reg("V", 0);
+        b.set(&key, dw(2));
+        // Diário legado/inconsistente: a (7 -> 1) e depois b (1 -> 2).
+        let ja = |v: u32, before: u32| crate::tweaks::journal::JournalAction {
+            action: reg("V", v),
+            before: dw(before),
+            written: dw(v),
+            done: true,
+            key_created: false,
+        };
+        let entry = |id: &str, a| crate::tweaks::journal::JournalEntry {
+            tweak_id: id.into(),
+            title: id.into(),
+            applied_at: "x".into(),
+            actions: vec![a],
+        };
+        Journal {
+            entries: vec![entry("a", ja(1, 7)), entry("b", ja(2, 1))],
+        }
+        .save(&p)
+        .unwrap();
+        let c = cat(vec![
+            choice_tweak("a", 1),
+            choice_tweak("b", 2),
+            choice_tweak("c", 3),
+        ]);
+        let r = apply_choice("c", &c, &b, &p);
+        assert!(r.results[0].ok, "{:?}", r.results);
+        assert_eq!(b.get(&key), dw(3));
+        let u = undo_all(&b, &p);
+        assert!(u.conflicts.is_empty(), "{:?}", u.conflicts);
+        assert_eq!(b.get(&key), dw(7));
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn partial_conflict_in_replaced_member_writes_nothing() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        b.set(&reg("V", 0), dw(7));
+        b.set(&reg("W", 0), dw(8));
+        let c = cat(vec![two_key_choice("a", 1), two_key_choice("b", 2)]);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        b.set(&reg("W", 0), dw(99)); // só uma das chaves mudou por fora
+        let before = journal_state(&p);
+        let r = apply_choice("b", &c, &b, &p);
+        assert!(!r.results[0].ok);
+        assert_eq!(r.results[0].message, "mantida (alterada depois)");
+        assert_eq!(b.get(&reg("V", 0)), dw(1), "nada foi escrito");
+        assert_eq!(b.get(&reg("W", 0)), dw(99));
+        assert_eq!(journal_state(&p), before, "diário intacto");
+    }
+
+    #[test]
+    fn switching_from_absent_original_restores_absence() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let key = reg("V", 0);
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        assert!(apply_choice("a", &c, &b, &p).results[0].ok);
+        assert!(apply_choice("b", &c, &b, &p).results[0].ok);
+        assert_eq!(b.get(&key), dw(2));
+        let u = undo_all(&b, &p);
+        assert!(u.results.iter().all(|r| r.ok), "{:?}", u.results);
+        assert_eq!(b.get(&key), absent());
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn failed_apply_after_undo_mentions_previous_option_was_undone() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        b.set(&reg("V", 0), dw(7));
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        let b = FailOnTarget {
+            inner: b,
+            target: dw(2),
+        };
+        let r = apply_choice("b", &c, &b, &p);
+        assert!(!r.results[0].ok);
+        assert!(
+            r.results[0]
+                .message
+                .ends_with("(a opção anterior foi desfeita)"),
+            "{}",
+            r.results[0].message
+        );
+        assert_eq!(b.inner.get(&reg("V", 0)), dw(7));
+    }
+
+    /// Falha só as escritas que gravam `target`.
+    struct FailOnTarget {
+        inner: MemoryBackend,
+        target: Snapshot,
+    }
+
+    impl crate::tweaks::backend::SystemBackend for FailOnTarget {
+        fn read(&self, a: &Action) -> Result<Snapshot, String> {
+            self.inner.read(a)
+        }
+        fn write(&self, a: &Action, t: &Snapshot) -> Result<(), String> {
+            if *t == self.target {
+                return Err("negado".into());
+            }
+            self.inner.write(a, t)
+        }
+        fn elevated(&self) -> bool {
+            true
+        }
+        fn hkcu_allowed(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn undo_removes_registry_key_the_engine_created() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let a = reg("V", 1);
+        let c = cat(vec![tweak("t", Effect::Immediate, vec![a.clone()])]);
+        assert!(!b.key_exists(&a).unwrap());
+        assert!(apply(&ids(&["t"]), &c, &b, &p).results[0].ok);
+        assert!(b.key_exists(&a).unwrap());
+        assert!(Journal::load(&p).entries[0].actions[0].key_created);
+        assert!(undo(&ids(&["t"]), &b, &p).results[0].ok);
+        assert!(!b.key_exists(&a).unwrap(), "chave criada pelo motor sumiu");
+    }
+
+    #[test]
+    fn undo_keeps_pre_existing_key_and_non_empty_key() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let a = reg("V", 1);
+        // a chave já existia (com outro valor): key_created = false
+        b.set(&reg("Outro", 0), dw(5));
+        let c = cat(vec![tweak("t", Effect::Immediate, vec![a.clone()])]);
+        assert!(apply(&ids(&["t"]), &c, &b, &p).results[0].ok);
+        assert!(!Journal::load(&p).entries[0].actions[0].key_created);
+        assert!(undo(&ids(&["t"]), &b, &p).results[0].ok);
+        assert!(b.key_exists(&a).unwrap());
+        // criada pelo motor, mas alguém pôs outro valor ali: não apaga
+        let b2 = MemoryBackend::new();
+        let d2 = tempfile::tempdir().unwrap();
+        let p2 = jpath(&d2);
+        assert!(apply(&ids(&["t"]), &c, &b2, &p2).results[0].ok);
+        b2.set(&reg("Outro", 0), dw(5));
+        assert!(undo(&ids(&["t"]), &b2, &p2).results[0].ok);
+        assert!(b2.key_exists(&a).unwrap());
+    }
+
+    #[test]
+    fn old_journal_without_key_created_still_loads() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let c = cat(vec![tweak("t", Effect::Immediate, vec![reg("V", 1)])]);
+        assert!(apply(&ids(&["t"]), &c, &b, &p).results[0].ok);
+        let mut v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap();
+        for e in v["entries"].as_array_mut().unwrap() {
+            for a in e["actions"].as_array_mut().unwrap() {
+                a.as_object_mut().unwrap().remove("key_created");
+            }
+        }
+        std::fs::write(&p, serde_json::to_string(&v).unwrap()).unwrap();
+        let j = Journal::load(&p);
+        assert_eq!(j.entries.len(), 1);
+        assert!(!j.entries[0].actions[0].key_created);
     }
 }

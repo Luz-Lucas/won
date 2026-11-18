@@ -20,7 +20,19 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
     (Hive::Hkcu, "System\\GameConfigStore"),
     (Hive::Hkcu, "Control Panel\\Mouse"),
     (Hive::Hkcu, "Control Panel\\Desktop"),
-    (Hive::Hkcu, "Software\\Classes\\CLSID"),
+    // Só os três CLSIDs que a página Personalizar mexe (menu clássico, etc.).
+    (
+        Hive::Hkcu,
+        "Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}",
+    ),
+    (
+        Hive::Hkcu,
+        "Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
+    ),
+    (
+        Hive::Hkcu,
+        "Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+    ),
     (Hive::Hkcu, "Software\\Policies\\Microsoft\\Windows"),
     (Hive::Hkcu, "Control Panel\\Accessibility"),
     (Hive::Hklm, "SOFTWARE\\Policies\\Microsoft\\Dsh"),
@@ -30,6 +42,37 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
         "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
     ),
 ];
+
+/// Caminhos (da folha para cima) que o desfazer pode apagar se estiverem vazios:
+/// só abaixo da raiz permitida; a própria raiz só quando é uma chave `{GUID}`.
+pub fn removable_key_chain(hive: Hive, path: &str) -> Vec<String> {
+    let Some(root_len) = allowed_root_segments(hive, path) else {
+        return Vec::new();
+    };
+    let segs: Vec<&str> = path.split('\\').collect();
+    let root_is_guid = segs[root_len - 1].starts_with('{');
+    let min = if root_is_guid { root_len } else { root_len + 1 };
+    (min..=segs.len())
+        .rev()
+        .map(|n| segs[..n].join("\\"))
+        .collect()
+}
+
+fn allowed_root_segments(hive: Hive, path: &str) -> Option<usize> {
+    let lower = path.to_ascii_lowercase();
+    // Chave de teste dos testes `#[ignore]` do backend real.
+    #[cfg(test)]
+    if hive == Hive::Hkcu && lower.starts_with("software\\sentinela-test-") {
+        return Some(2);
+    }
+    ALLOWED_ROOTS.iter().find_map(|(h, root)| {
+        let root = root.to_ascii_lowercase();
+        (*h == hive
+            && (lower == root
+                || (lower.starts_with(&root) && lower.as_bytes().get(root.len()) == Some(&b'\\'))))
+        .then(|| root.split('\\').count())
+    })
+}
 
 /// Serviços que nenhum ajuste pode alterar (segurança, atualização, log).
 pub const FORBIDDEN_SERVICES: &[&str] = &[
@@ -374,6 +417,52 @@ mod tests {
     #[test]
     fn explorer_effect_orders_between_immediate_and_relogon() {
         assert!(Effect::Immediate < Effect::Explorer && Effect::Explorer < Effect::Relogon);
+    }
+
+    #[test]
+    fn only_the_three_known_clsids_are_allowed() {
+        for g in [
+            "{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}",
+            "{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
+            "{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+        ] {
+            let a = reg(
+                Hive::Hkcu,
+                &format!(r"Software\Classes\CLSID\{g}\InprocServer32"),
+            );
+            assert!(
+                validate(&cat(vec![tweak("ok", vec![a], false)])).is_ok(),
+                "{g}"
+            );
+        }
+        let other = reg(
+            Hive::Hkcu,
+            r"Software\Classes\CLSID\{00000000-0000-0000-0000-000000000000}\InprocServer32",
+        );
+        assert_rejected(
+            tweak("other", vec![other], false),
+            "fora das raízes permitidas",
+        );
+        let all = reg(Hive::Hkcu, r"Software\Classes\CLSID");
+        assert_rejected(tweak("all", vec![all], false), "fora das raízes permitidas");
+    }
+
+    #[test]
+    fn removable_chain_stays_inside_the_allowed_root() {
+        // Raiz ampla: nunca a própria raiz.
+        assert_eq!(
+            removable_key_chain(Hive::Hkcu, r"Software\Microsoft\X\Y"),
+            vec![r"Software\Microsoft\X\Y", r"Software\Microsoft\X"]
+        );
+        assert!(removable_key_chain(Hive::Hkcu, r"Software\Microsoft").is_empty());
+        // Raiz {GUID}: a chave do CLSID pode ser apagada, o que está acima nunca.
+        let g = r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+        assert_eq!(
+            removable_key_chain(Hive::Hkcu, &format!(r"{g}\InprocServer32")),
+            vec![format!(r"{g}\InprocServer32"), g.to_string()]
+        );
+        // Fora da raiz: nada.
+        assert!(removable_key_chain(Hive::Hkcu, r"Software\Classes\CLSID").is_empty());
     }
 
     #[test]

@@ -1,10 +1,11 @@
 //! Acesso ao sistema abstraído: o motor só fala com `SystemBackend`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use super::catalog::removable_key_chain;
 use super::model::{Action, Hive, RegValue, StartType};
 
 /// Plano de energia "Equilibrado" (padrão do Windows).
@@ -44,6 +45,33 @@ pub trait SystemBackend: Send + Sync {
     fn scheme_name(&self, _guid: &str) -> Option<String> {
         None
     }
+    /// A chave do registro da ação existe? (`true` para ações sem chave.)
+    fn key_exists(&self, _action: &Action) -> Result<bool, String> {
+        Ok(true)
+    }
+    /// Apaga a chave da ação (e os pais que o motor criou) se estiver vazia:
+    /// sem valores nem subchaves, e nunca acima da raiz permitida.
+    fn delete_key_if_empty(&self, _action: &Action) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// Hive e caminho da chave de uma ação de registro.
+pub fn reg_key(action: &Action) -> Option<(Hive, &str)> {
+    match action {
+        Action::Registry { hive, path, .. } | Action::ListEntry { hive, path, .. } => {
+            Some((*hive, path.as_str()))
+        }
+        _ => None,
+    }
+}
+
+/// O snapshot guarda um valor (logo a chave precisa existir)?
+fn has_value(s: &Snapshot) -> bool {
+    matches!(
+        s,
+        Snapshot::Registry { value: Some(_) } | Snapshot::ListEntry { value: Some(_) }
+    )
 }
 
 /// O estado que a ação quer.
@@ -102,6 +130,10 @@ fn default_snapshot(action: &Action) -> Snapshot {
 struct MemoryState {
     values: HashMap<String, Snapshot>,
     failing: HashMap<String, String>,
+    /// Chaves existentes (hive, caminho em minúsculas).
+    keys: HashSet<(Hive, String)>,
+    /// Chave de cada entrada de `values`.
+    paths: HashMap<String, (Hive, String)>,
     elevated: bool,
     hkcu_allowed: bool,
 }
@@ -109,6 +141,48 @@ struct MemoryState {
 /// Backend em memória, para testes.
 pub struct MemoryBackend {
     state: Mutex<MemoryState>,
+}
+
+impl MemoryState {
+    fn add_key(&mut self, hive: Hive, path: &str) {
+        let lower = path.to_ascii_lowercase();
+        let mut acc = String::new();
+        for seg in lower.split('\\') {
+            if !acc.is_empty() {
+                acc.push('\\');
+            }
+            acc.push_str(seg);
+            self.keys.insert((hive, acc.clone()));
+        }
+    }
+
+    /// Grava o snapshot; valor presente cria a chave.
+    fn put(&mut self, action: &Action, s: Snapshot) {
+        let k = action_key(action);
+        if let Some((h, p)) = reg_key(action) {
+            if has_value(&s) {
+                self.add_key(h, p);
+            }
+            self.paths.insert(k.clone(), (h, p.to_ascii_lowercase()));
+        }
+        self.values.insert(k, s);
+    }
+
+    fn is_empty_key(&self, hive: Hive, lower: &str) -> bool {
+        let prefix = format!("{lower}\\");
+        let has_sub = self
+            .keys
+            .iter()
+            .any(|(h, p)| *h == hive && p.starts_with(&prefix));
+        let has_val = self.values.iter().any(|(k, s)| {
+            has_value(s)
+                && self
+                    .paths
+                    .get(k)
+                    .is_some_and(|(h, p)| *h == hive && p == lower)
+        });
+        !has_sub && !has_val
+    }
 }
 
 impl Default for MemoryBackend {
@@ -123,6 +197,8 @@ impl MemoryBackend {
             state: Mutex::new(MemoryState {
                 values: HashMap::new(),
                 failing: HashMap::new(),
+                keys: HashSet::new(),
+                paths: HashMap::new(),
                 elevated: true,
                 hkcu_allowed: true,
             }),
@@ -134,7 +210,12 @@ impl MemoryBackend {
     }
 
     pub fn set(&self, action: &Action, s: Snapshot) {
-        self.lock().values.insert(action_key(action), s);
+        self.lock().put(action, s);
+    }
+
+    /// Cria a chave (e os pais) sem valor algum.
+    pub fn create_key(&self, hive: Hive, path: &str) {
+        self.lock().add_key(hive, path);
     }
 
     pub fn set_unavailable(&self, action: &Action, reason: &str) {
@@ -181,7 +262,29 @@ impl SystemBackend for MemoryBackend {
         if let Some(msg) = st.failing.get(&key) {
             return Err(msg.clone());
         }
-        st.values.insert(key, target.clone());
+        st.put(action, target.clone());
+        Ok(())
+    }
+
+    fn key_exists(&self, action: &Action) -> Result<bool, String> {
+        Ok(match reg_key(action) {
+            Some((h, p)) => self.lock().keys.contains(&(h, p.to_ascii_lowercase())),
+            None => true,
+        })
+    }
+
+    fn delete_key_if_empty(&self, action: &Action) -> Result<(), String> {
+        let Some((hive, path)) = reg_key(action) else {
+            return Ok(());
+        };
+        let mut st = self.lock();
+        for p in removable_key_chain(hive, path) {
+            let lp = p.to_ascii_lowercase();
+            if !st.is_empty_key(hive, &lp) {
+                break;
+            }
+            st.keys.remove(&(hive, lp));
+        }
         Ok(())
     }
 

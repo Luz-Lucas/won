@@ -24,6 +24,9 @@ pub struct JournalAction {
     pub written: Snapshot,
     /// `false` = intenção gravada, escrita ainda não confirmada.
     pub done: bool,
+    /// A chave do registro não existia antes da primeira escrita (o desfazer a remove se ficar vazia).
+    #[serde(default)]
+    pub key_created: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,6 +269,7 @@ mod tests {
                     before: Snapshot::Registry { value: None },
                     written: target_of(a),
                     done: false,
+                    key_created: false,
                 }],
             }],
         }
