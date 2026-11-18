@@ -83,6 +83,17 @@ impl Journal {
         }
     }
 
+    /// Leitura sem efeitos colaterais (nada é movido nem gravado), para prévias.
+    /// Ausente → vazio; ilegível ou inválido → Err.
+    pub fn read_only(path: &Path) -> Result<Journal, String> {
+        match std::fs::read(path) {
+            Ok(bytes) => serde_json::from_slice::<Journal>(&bytes)
+                .map_err(|e| format!("{} está corrompido: {e}", path.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Journal::default()),
+            Err(e) => Err(format!("não foi possível ler {}: {e}", path.display())),
+        }
+    }
+
     /// Leitura tolerante, só para exibição: qualquer falha vale como vazio.
     pub fn load(path: &Path) -> Journal {
         Self::load_checked(path).unwrap_or_default()

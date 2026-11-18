@@ -14,6 +14,6 @@ pub use catalog::{ALLOWED_ROOTS, Catalog, FORBIDDEN_SERVICES, HIGH_PERFORMANCE_S
 pub use engine::{ApplyReport, ItemResult, UndoReport, apply, undo, undo_all};
 pub use journal::{Journal, JournalAction, JournalEntry, default_journal_path};
 pub use model::{Action, Effect, Evidence, Group, Hive, RegValue, StartType, Tweak};
-pub use state::{Change, TweakStatus, TweakView, view};
+pub use state::{Change, TweakStatus, TweakView, describe, snapshot_text, view};
 #[cfg(windows)]
 pub use windows::{WindowsBackend, create_restore_point, current_user_sid, is_laptop};

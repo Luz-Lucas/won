@@ -67,7 +67,7 @@ fn reg_value_text(v: &Option<RegValue>) -> String {
     }
 }
 
-fn snapshot_text(s: &Snapshot) -> String {
+pub fn snapshot_text(s: &Snapshot) -> String {
     match s {
         Snapshot::Registry { value } => reg_value_text(value),
         Snapshot::ListEntry { value: None } => "não existe".to_string(),
@@ -78,7 +78,7 @@ fn snapshot_text(s: &Snapshot) -> String {
     }
 }
 
-pub(crate) fn describe(action: &Action) -> String {
+pub fn describe(action: &Action) -> String {
     match action {
         Action::Registry {
             hive, path, name, ..

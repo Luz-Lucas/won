@@ -184,7 +184,7 @@ sentinela tweak undo (<id>... | --all) [--yes] [--json]
 - `undo` restaura os valores originais guardados no diário, também com confirmação (`--yes` pula); `--all` desfaz tudo, da mais recente para a mais antiga. Valores alterados depois da otimização são mantidos e reportados como conflito.
 - O diário fica em `%LOCALAPPDATA%\Sentinela\tweaks\journal.json`; a variável `SENTINELA_TWEAKS_JOURNAL` define outro caminho.
 - Códigos de saída: `0` sucesso (inclusive "nada a fazer"), `1` se algum item falhou ou houve conflito no `undo`, `2` erro global (id desconhecido, uso incorreto).
-- Com `--json`, `list` devolve uma lista de `{ id, title, status, blocked, changes }`; `apply` e `undo` devolvem o relatório.
+- Com `--json`, `list` devolve uma lista de `{ id, title, status, blocked, changes }`, em que `status` é `applied`, `not_applied`, `partial` ou `unavailable`; `apply` e `undo` devolvem o relatório.
 
 ### `find-large`: maiores arquivos
 

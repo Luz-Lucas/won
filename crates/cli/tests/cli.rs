@@ -431,3 +431,53 @@ fn tweak_undo_requires_ids_or_all() {
         .assert()
         .code(2);
 }
+
+#[test]
+fn tweak_undo_all_with_empty_journal_does_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo", "--all"])
+        .assert()
+        .success()
+        .stdout(contains("Nada a desfazer."));
+}
+
+#[test]
+fn tweak_undo_unknown_id_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo", "nao-existe"])
+        .assert()
+        .code(2)
+        .stderr(contains("otimização desconhecida: nao-existe"));
+}
+
+#[test]
+fn tweak_undo_all_with_ids_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["tweak", "undo", "--all", "game-mode"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn tweak_undo_corrupt_journal_is_not_moved() {
+    let dir = tempfile::tempdir().unwrap();
+    let j = dir.path().join("journal.json");
+    fs::write(&j, "{ nao e json").unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", &j)
+        .args(["tweak", "undo", "game-mode"])
+        .assert()
+        .code(2)
+        .stderr(contains("diário inacessível"));
+    assert_eq!(fs::read_to_string(&j).unwrap(), "{ nao e json");
+}

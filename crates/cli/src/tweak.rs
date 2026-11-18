@@ -9,8 +9,9 @@ use serde::Serialize;
 
 use sentinela_core::clean::platform;
 use sentinela_core::tweaks::{
-    Catalog, Change, Effect, ItemResult, Journal, TweakStatus, TweakView, WindowsBackend, apply,
-    create_restore_point, default_journal_path, undo, undo_all, view,
+    Catalog, Change, Effect, ItemResult, Journal, SystemBackend, TweakStatus, TweakView,
+    WindowsBackend, apply, create_restore_point, default_journal_path, describe, snapshot_text,
+    undo, undo_all, view,
 };
 
 #[derive(Subcommand)]
@@ -163,6 +164,7 @@ fn print_results(results: &[ItemResult]) {
 }
 
 fn cmd_apply(ids: Vec<String>, yes: bool, json: bool) -> Result<i32> {
+    let ids = dedupe(ids);
     let cat = Catalog::embedded();
     for id in &ids {
         if cat.get(id).is_none() {
@@ -226,9 +228,23 @@ fn cmd_apply(ids: Vec<String>, yes: bool, json: bool) -> Result<i32> {
     Ok(i32::from(report.results.iter().any(|r| !r.ok)))
 }
 
+fn dedupe(ids: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    ids.into_iter().filter(|i| seen.insert(i.clone())).collect()
+}
+
 fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
+    let ids = dedupe(ids);
+    let cat = Catalog::embedded();
+    for id in &ids {
+        if cat.get(id).is_none() {
+            bail!("otimização desconhecida: {id}. Use `sentinela tweak list`.");
+        }
+    }
     let path = journal_path();
-    let journal = Journal::load(&path);
+    // Leitura sem efeitos: nada é movido nem gravado antes da confirmação.
+    let journal =
+        Journal::read_only(&path).map_err(|e| anyhow::anyhow!("diário inacessível: {e}"))?;
     let wanted: Vec<String> = if all {
         journal
             .entries
@@ -237,9 +253,10 @@ fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
             .map(|e| e.tweak_id.clone())
             .collect()
     } else {
-        ids.clone()
+        ids
     };
-    if all && wanted.is_empty() {
+    let in_journal = |id: &String| journal.entries.iter().any(|e| e.tweak_id == *id);
+    if !wanted.iter().any(in_journal) {
         if json {
             println!("{{\"results\":[],\"conflicts\":[]}}");
         } else {
@@ -248,29 +265,39 @@ fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
         return Ok(0);
     }
 
+    let backend = WindowsBackend::new(true);
     if !yes {
+        let mut count = 0usize;
         for id in &wanted {
-            match journal.entries.iter().find(|e| e.tweak_id == *id) {
-                Some(e) => eprintln!(
-                    "  {} ({}): restaurar {} valor(es) anterior(es)",
-                    e.title,
-                    e.tweak_id,
-                    e.actions.len()
-                ),
-                None => eprintln!("  {id}: não foi aplicada pelo Sentinela"),
+            let Some(e) = journal.entries.iter().find(|e| e.tweak_id == *id) else {
+                eprintln!("{id}: não foi aplicada pelo Sentinela");
+                continue;
+            };
+            count += 1;
+            eprintln!("{} ({}):", e.title, e.tweak_id);
+            for ja in &e.actions {
+                let current = match backend.read(&ja.action) {
+                    Ok(s) => snapshot_text(&s),
+                    Err(m) => format!("erro: {m}"),
+                };
+                eprintln!(
+                    "  {}: {} → {}",
+                    describe(&ja.action),
+                    current,
+                    snapshot_text(&ja.before)
+                );
             }
         }
-        if !ask(&format!("Desfazer {} otimização(ões)?", wanted.len())) {
+        if !ask(&format!("Desfazer {count} otimização(ões)?")) {
             eprintln!("Cancelado: nada foi alterado.");
             return Ok(0);
         }
     }
 
-    let backend = WindowsBackend::new(true);
     let report = if all {
         undo_all(&backend, &path)
     } else {
-        undo(&ids, &backend, &path)
+        undo(&wanted, &backend, &path)
     };
     if json {
         serde_json::to_writer_pretty(io::stdout().lock(), &report)?;
