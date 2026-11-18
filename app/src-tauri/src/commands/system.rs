@@ -2,7 +2,7 @@
 //!
 //! Camada fina: a lógica de negócio vive em `sentinela_core`.
 
-use crate::commands::tweaks::{FOR_SID_ARG, TweaksState, applied_count};
+use crate::commands::tweaks::{FOR_SID_ARG, SID_UNKNOWN, TweaksState, applied_count};
 use crate::jobs::{JobId, JobKind, JobRegistry};
 use sentinela_core::activity::{self, ActivityEntry};
 use sentinela_core::status::{self, DbStatus};
@@ -115,11 +115,11 @@ fn shell_execute_runas() -> Result<(), String> {
 
 /// Parâmetros da instância elevada: espera o PID antigo e leva o SID de quem a
 /// pediu (para a trava de HKCU quando o UAC usa outra conta).
+/// Sempre leva `--for-sid=`: com SID ilegível vai `desconhecido`, que nunca
+/// confere (a trava falha fechada).
 fn runas_params(pid: u32, sid: Option<&str>) -> String {
-    match sid {
-        Some(sid) => format!("{WAIT_PID_ARG}{pid} {FOR_SID_ARG}{sid}"),
-        None => format!("{WAIT_PID_ARG}{pid}"),
-    }
+    let sid = sid.filter(|s| !s.is_empty()).unwrap_or(SID_UNKNOWN);
+    format!("{WAIT_PID_ARG}{pid} {FOR_SID_ARG}{sid}")
 }
 
 /// Extrai o PID de `--wait-pid=<n>` dos argumentos, se presente.
@@ -184,7 +184,11 @@ mod tests {
             runas_params(7, Some("S-1-5-21-1")),
             "--wait-pid=7 --for-sid=S-1-5-21-1"
         );
-        assert_eq!(runas_params(7, None), "--wait-pid=7");
+        assert_eq!(runas_params(7, None), "--wait-pid=7 --for-sid=desconhecido");
+        assert_eq!(
+            runas_params(7, Some("")),
+            "--wait-pid=7 --for-sid=desconhecido"
+        );
     }
 
     #[test]

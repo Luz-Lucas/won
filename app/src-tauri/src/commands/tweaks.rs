@@ -20,6 +20,9 @@ use tauri::{AppHandle, State};
 /// Argumento que a instância elevada recebe com o SID de quem a abriu.
 pub const FOR_SID_ARG: &str = "--for-sid=";
 
+/// SID enviado quando o processo de origem não conseguiu ler o próprio.
+pub const SID_UNKNOWN: &str = "desconhecido";
+
 const RESTORE_POINT_DESCRIPTION: &str = "Sentinela: otimizações";
 const RESTORE_POINT_REQUESTED: &str =
     "solicitado (o Windows pode reaproveitar um ponto das últimas 24 h)";
@@ -57,20 +60,19 @@ pub fn startup_hkcu_allowed() -> bool {
     )
 }
 
-/// Extrai o SID de `--for-sid=<SID>` dos argumentos, se presente e não vazio.
+/// Extrai o valor de `--for-sid=<valor>`: `None` só se o argumento não existe;
+/// presente (mesmo vazio) vira `Some`, e `hkcu_allowed` decide.
 pub fn parse_for_sid<I: IntoIterator<Item = OsString>>(args: I) -> Option<String> {
-    args.into_iter().find_map(|a| {
-        let sid = a.to_str()?.strip_prefix(FOR_SID_ARG)?;
-        (!sid.is_empty()).then(|| sid.to_string())
-    })
+    args.into_iter()
+        .find_map(|a| Some(a.to_str()?.strip_prefix(FOR_SID_ARG)?.to_string()))
 }
 
 /// Sem argumento: janela aberta normalmente (HKCU é o do usuário). Com
-/// argumento: só vale se o SID atual for o mesmo de quem pediu a elevação.
+/// argumento: só vale se não vazio e igual ao SID atual (falha fechada).
 pub fn hkcu_allowed(arg_sid: Option<&str>, own_sid: Option<&str>) -> bool {
     match arg_sid {
         None => true,
-        Some(arg) => own_sid == Some(arg),
+        Some(arg) => !arg.is_empty() && own_sid == Some(arg),
     }
 }
 
@@ -178,8 +180,27 @@ fn run_apply(
     report
 }
 
-fn ok_count(results: &[ItemResult]) -> usize {
-    results.iter().filter(|r| r.ok).count()
+/// Conta só o que de fato mudou ("aplicada" / "desfeita..."), não os ok sem efeito.
+fn changed_count(results: &[ItemResult], word: &str) -> usize {
+    results
+        .iter()
+        .filter(|r| r.ok && r.message.starts_with(word))
+        .count()
+}
+
+/// Remove ids repetidos, mantendo a ordem.
+fn dedupe(ids: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    ids.into_iter()
+        .filter(|id| seen.insert(id.clone()))
+        .collect()
+}
+
+fn validate_undo(ids: &[String]) -> Result<(), String> {
+    if ids.is_empty() {
+        return Err("Nenhuma otimização selecionada.".into());
+    }
+    Ok(())
 }
 
 fn log_activity(text: &str) {
@@ -191,14 +212,14 @@ fn log_activity(text: &str) {
 }
 
 fn log_applied(report: &ApplyReport) {
-    let n = ok_count(&report.results);
+    let n = changed_count(&report.results, "aplicada");
     if n > 0 {
         log_activity(&format!("Otimizações aplicadas: {n}"));
     }
 }
 
 fn log_undone(report: &UndoReport) {
-    let n = ok_count(&report.results);
+    let n = changed_count(&report.results, "desfeita");
     if n > 0 {
         log_activity(&format!("Otimizações desfeitas: {n}"));
     }
@@ -228,6 +249,7 @@ pub fn tweaks_apply(
     state: State<'_, TweaksState>,
 ) -> Result<JobId, String> {
     validate_apply(&ids, Catalog::embedded())?;
+    let ids = dedupe(ids);
     let state = state.inner().clone();
     spawn_job(
         jobs.inner().clone(),
@@ -256,9 +278,8 @@ pub fn tweaks_undo(
     jobs: State<'_, Arc<JobRegistry>>,
     state: State<'_, TweaksState>,
 ) -> Result<JobId, String> {
-    if ids.is_empty() {
-        return Err("Nenhuma otimização selecionada.".into());
-    }
+    validate_undo(&ids)?;
+    let ids = dedupe(ids);
     let state = state.inner().clone();
     spawn_job(
         jobs.inner().clone(),
@@ -357,6 +378,40 @@ mod tests {
     }
 
     #[test]
+    fn undo_rejects_empty_selection() {
+        assert_eq!(
+            validate_undo(&[]).unwrap_err(),
+            "Nenhuma otimização selecionada."
+        );
+        assert!(validate_undo(&["t1".into()]).is_ok());
+    }
+
+    #[test]
+    fn dedupe_keeps_order() {
+        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(dedupe(v(&["b", "a", "b", "a", "c"])), v(&["b", "a", "c"]));
+    }
+
+    #[test]
+    fn activity_counts_only_real_changes() {
+        let r = |ok: bool, m: &str| ItemResult {
+            tweak_id: "x".into(),
+            ok,
+            message: m.into(),
+        };
+        let rs = [
+            r(true, "aplicada"),
+            r(true, "já estava aplicada"),
+            r(false, "falhou: x"),
+            r(true, "desfeita"),
+            r(true, "desfeita (histórico não atualizado: e)"),
+            r(false, "mantida (alterada depois)"),
+        ];
+        assert_eq!(changed_count(&rs, "aplicada"), 1);
+        assert_eq!(changed_count(&rs, "desfeita"), 2);
+    }
+
+    #[test]
     fn restore_point_only_once_per_session() {
         let dir = tempfile::tempdir().unwrap();
         let jp = dir.path().join("tweaks").join("journal.json");
@@ -426,6 +481,10 @@ mod tests {
         assert!(hkcu_allowed(Some("S-1-5-21-1"), Some("S-1-5-21-1")));
         assert!(!hkcu_allowed(Some("S-1-5-21-1"), Some("S-1-5-21-2")));
         assert!(!hkcu_allowed(Some("S-1-5-21-1"), None));
+        assert!(!hkcu_allowed(Some(SID_UNKNOWN), Some("S-1-5-21-1")));
+        assert!(!hkcu_allowed(Some(SID_UNKNOWN), None));
+        assert!(!hkcu_allowed(Some(""), Some("")));
+        assert!(!hkcu_allowed(Some(""), None));
     }
 
     #[test]
@@ -435,7 +494,12 @@ mod tests {
             Some("S-1-5-21-9".to_string())
         );
         assert_eq!(parse_for_sid(os(&["app.exe"])), None);
-        assert_eq!(parse_for_sid(os(&["--for-sid="])), None);
+        // Presente, mesmo vazio, é Some: a ausência é o único caso aberto.
+        assert_eq!(parse_for_sid(os(&["--for-sid="])), Some(String::new()));
+        assert_eq!(
+            parse_for_sid(os(&["--for-sid=desconhecido"])),
+            Some(SID_UNKNOWN.to_string())
+        );
     }
 
     #[test]
