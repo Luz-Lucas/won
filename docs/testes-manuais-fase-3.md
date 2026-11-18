@@ -26,10 +26,10 @@ Execute em uma **VM Windows 11 com snapshot** (restaure o snapshot antes de cada
 | 5.1 | Rodar `sentinela apps list` | Uma linha por aplicativo: id, nome, categoria e estado (`instalado`, `atualização disponível`, `não instalado`) | | |
 | 5.2 | Rodar `sentinela apps list --category navegadores --json` | Lista JSON só com a categoria; `state` em `installed`, `update_available` ou `not_installed` | | |
 | 5.3 | Rodar `sentinela apps install 7zip` e responder `n` | Mostra o aplicativo e o texto de licença; cancela com "Cancelado: nada foi alterado."; nada é instalado | | |
-| 5.4 | Rodar `sentinela apps install 7zip everything --yes` | Linhas `[1/2] 7-Zip… instalado.` e `[2/2] Everything… instalado.` (ou "já instalado"); código de saída 0 | | |
+| 5.4 | Rodar `sentinela apps install 7zip everything --yes` | Linhas `[1/2] 7-Zip… instalado.` e `[2/2] Everything… instalado.` (se já estiver instalado: `já está instalado.`); código de saída 0 | | |
 | 5.5 | Rodar `sentinela apps upgrade --all` quando nada estiver desatualizado | `Nada para atualizar.` e código 0 | | |
 | 5.6 | Rodar `sentinela apps install nao-existe` | Erro `aplicativo desconhecido: nao-existe. Use `sentinela apps list`.`, código 2, sem pergunta | | |
-| 5.7 | Durante uma fila no terminal, pressionar Ctrl+C | O item atual termina; imprime "Interrompido: N aplicativo(s) não processado(s)."; código 1 | | |
+| 5.7 | Durante uma fila no terminal, pressionar Ctrl+C | O item atual termina; imprime no stderr "Interrompido: N aplicativo(s) não processado(s)."; código 1 | | |
 | 6 | **Desinstalar pelo Windows e conferir o selo** | | | |
 | 6.1 | Desinstalar o 7-Zip em Configurações > Aplicativos | Desinstalação normal | | |
 | 6.2 | Na página Aplicativos, clicar em "Tentar de novo" (ou fechar e reabrir o Sentinela) | O selo "Instalado" do 7-Zip some | | |

@@ -249,11 +249,33 @@ fn cmd_change(op: Op, ids: Vec<String>, all: bool, yes: bool) -> Result<i32> {
             eprintln!("aviso: não foi possível registrar o Ctrl+C: {e}");
         }
     }
-    let results = run_items(&*pm, op, &chosen, &stop, &mut io::stdout().lock())?;
+    run_queue(
+        &*pm,
+        op,
+        &chosen,
+        &stop,
+        &mut io::stdout().lock(),
+        &mut io::stderr().lock(),
+    )
+}
+
+/// Roda a fila e devolve o código de saída (1 se algum item falhou ou a fila foi interrompida).
+fn run_queue(
+    pm: &dyn PackageManager,
+    op: Op,
+    apps: &[&App],
+    stop: &AtomicBool,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<i32> {
+    let results = run_items(pm, op, apps, stop, out)?;
     let failed = results.iter().any(|r| !r.ok);
-    let skipped = chosen.len() - results.len();
+    let skipped = apps.len() - results.len();
     if skipped > 0 {
-        println!("Interrompido: {skipped} aplicativo(s) não processado(s).");
+        writeln!(
+            err,
+            "Interrompido: {skipped} aplicativo(s) não processado(s)."
+        )?;
     }
     Ok(i32::from(failed || skipped > 0))
 }
@@ -295,6 +317,108 @@ fn run_items(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sentinela_core::apps::Availability;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    /// Falha nos ids de `fail`; opcionalmente liga o `stop` após a primeira chamada.
+    struct Fake {
+        calls: Mutex<Vec<String>>,
+        fail: Vec<&'static str>,
+        stop_after_first: Option<Arc<AtomicBool>>,
+    }
+
+    impl Fake {
+        fn new(fail: Vec<&'static str>, stop: Option<Arc<AtomicBool>>) -> Self {
+            Fake {
+                calls: Mutex::new(vec![]),
+                fail,
+                stop_after_first: stop,
+            }
+        }
+        fn outcome(&self, id: &str, done: &str) -> ItemOutcome {
+            self.calls.lock().unwrap().push(id.to_string());
+            if let Some(s) = &self.stop_after_first {
+                s.store(true, Ordering::Relaxed);
+            }
+            let ok = !self.fail.contains(&id);
+            ItemOutcome {
+                id: id.into(),
+                ok,
+                changed: ok,
+                message: if ok { done.into() } else { "Falhou.".into() },
+            }
+        }
+    }
+
+    impl PackageManager for Fake {
+        fn availability(&self) -> Availability {
+            Availability {
+                available: true,
+                version: None,
+                reason: None,
+            }
+        }
+        fn states(&self, _: &[&str]) -> Result<HashMap<String, AppState>, String> {
+            Ok(HashMap::new())
+        }
+        fn install(&self, id: &str) -> ItemOutcome {
+            self.outcome(id, "Instalado.")
+        }
+        fn upgrade(&self, id: &str) -> ItemOutcome {
+            self.outcome(id, "Atualizado.")
+        }
+    }
+
+    fn two() -> Vec<&'static App> {
+        let c = AppCatalog::embedded();
+        vec![c.get("7zip").unwrap(), c.get("everything").unwrap()]
+    }
+
+    fn queue(fake: &Fake, stop: &AtomicBool) -> (i32, String, String) {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = run_queue(fake, Op::Install, &two(), stop, &mut out, &mut err).unwrap();
+        (
+            code,
+            String::from_utf8(out).unwrap(),
+            String::from_utf8(err).unwrap(),
+        )
+    }
+
+    #[test]
+    fn queue_happy_path() {
+        let f = Fake::new(vec![], None);
+        let (code, out, err) = queue(&f, &AtomicBool::new(false));
+        assert_eq!(code, 0);
+        assert_eq!(
+            out,
+            "[1/2] 7-Zip… instalado.\n[2/2] Everything… instalado.\n"
+        );
+        assert!(err.is_empty());
+    }
+
+    #[test]
+    fn queue_failure_exits_1_and_continues() {
+        let f = Fake::new(vec!["7zip.7zip"], None);
+        let (code, out, _) = queue(&f, &AtomicBool::new(false));
+        assert_eq!(code, 1);
+        assert_eq!(
+            out,
+            "[1/2] 7-Zip… falhou: Falhou.\n[2/2] Everything… instalado.\n"
+        );
+        assert_eq!(f.calls.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn queue_stops_between_items() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let f = Fake::new(vec![], Some(stop.clone()));
+        let (code, out, err) = queue(&f, &stop);
+        assert_eq!(code, 1);
+        assert_eq!(out, "[1/2] 7-Zip… instalado.\n");
+        assert_eq!(err, "Interrompido: 1 aplicativo(s) não processado(s).\n");
+        assert_eq!(f.calls.lock().unwrap().len(), 1);
+    }
 
     #[test]
     fn category_ids_round_trip() {
