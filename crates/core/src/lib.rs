@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod apps;
 pub mod clean;
 pub mod finder;
 pub mod format;
