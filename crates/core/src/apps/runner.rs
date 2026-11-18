@@ -263,7 +263,7 @@ mod tests {
 
     #[cfg(windows)]
     fn wait_gone(marker: &str) {
-        for _ in 0..20 {
+        for _ in 0..30 {
             if ping_count(marker) == 0 {
                 break;
             }
@@ -279,7 +279,7 @@ mod tests {
         let mut child = std::process::Command::new("cmd")
             .args([
                 "/c",
-                "ping -n 2 127.0.0.1 >nul & start /b ping -n 6 -l 1239 127.0.0.1 >nul & exit 0",
+                "ping -n 2 127.0.0.1 >nul & start /b ping -n 20 -l 1239 127.0.0.1 >nul & exit 0",
             ])
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -288,9 +288,18 @@ mod tests {
             .unwrap();
         let job = job::Job::assign(&child).expect("job");
         assert!(child.wait().unwrap().success());
+        // Sob carga o neto pode demorar a aparecer: espera até ~10 s.
+        let appear = Instant::now() + Duration::from_secs(10);
+        while ping_count(marker) == 0 && Instant::now() < appear {
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        assert_eq!(ping_count(marker), 1, "o neto não chegou a iniciar");
         drop(job);
-        std::thread::sleep(Duration::from_millis(1000));
-        assert_eq!(ping_count(marker), 1, "fechar o job matou o neto");
+        // Kill-on-close agiria na hora; confere que segue vivo por ~1,5 s.
+        for _ in 0..3 {
+            std::thread::sleep(Duration::from_millis(500));
+            assert_eq!(ping_count(marker), 1, "fechar o job matou o neto");
+        }
         wait_gone(marker);
     }
 
