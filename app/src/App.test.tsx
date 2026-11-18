@@ -193,7 +193,7 @@ describe("App", () => {
     render(<App />);
     expect(await screen.findByText(/Banco atualizado em/)).toBeInTheDocument();
     expect(screen.getByText("2 na quarentena")).toBeInTheDocument();
-    expect(screen.getByText("Versão 0.3.0")).toBeInTheDocument();
+    expect(screen.getByText("Sentinela 0.3.0")).toBeInTheDocument();
     expect(screen.getByText("Limpeza concluída")).toBeInTheDocument();
     expect(
       screen.getByText(

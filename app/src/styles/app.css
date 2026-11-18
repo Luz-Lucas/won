@@ -494,3 +494,8 @@ body {
 .tweak-footnote {
   margin-top: var(--sp-6);
 }
+
+.page-footer {
+  margin-top: 24px;
+  font-size: 12px;
+}
