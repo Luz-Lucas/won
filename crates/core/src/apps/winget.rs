@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use super::parse::{MIN_WINGET, describe_exit, parse_export, parse_upgrade_table};
-use super::runner::{CommandRunner, SystemRunner};
+use super::runner::{CommandRunner, SystemRunner, TIMEOUT_CHANGE, TIMEOUT_QUICK};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -98,7 +98,7 @@ impl<R: CommandRunner> Winget<R> {
             "--accept-source-agreements",
             "--disable-interactivity",
         ];
-        let (ok, message) = match self.runner.run(&self.program, &args) {
+        let (ok, message) = match self.runner.run(&self.program, &args, TIMEOUT_CHANGE) {
             Ok(out) => {
                 let (ok, msg) = describe_exit(out.code);
                 // Código 0 = concluiu: a mensagem depende da operação.
@@ -126,11 +126,12 @@ impl<R: CommandRunner> Winget<R> {
             .run(
                 &self.program,
                 &["export", "-o", &path_str, "--accept-source-agreements"],
+                TIMEOUT_QUICK,
             )
             .map_err(|e| format!("Não foi possível executar o winget: {e}"))?;
         if out.code != 0 {
             return Err(format!(
-                "Não foi possível listar os aplicativos instalados ({}).",
+                "Não foi possível listar os aplicativos instalados. {}",
                 describe_exit(out.code).1
             ));
         }
@@ -145,12 +146,13 @@ impl<R: CommandRunner> Winget<R> {
             .run(
                 &self.program,
                 &["upgrade", "--include-unknown", "--accept-source-agreements"],
+                TIMEOUT_QUICK,
             )
             .map_err(|e| format!("Não foi possível executar o winget: {e}"))?;
         // "Nenhum pacote encontrado" não é erro: simplesmente não há atualizações.
         if !matches!(out.code as u32, 0 | 0x8A15_0014 | 0x8A15_002B) {
             return Err(format!(
-                "Não foi possível verificar atualizações ({}).",
+                "Não foi possível verificar atualizações. {}",
                 describe_exit(out.code).1
             ));
         }
@@ -160,7 +162,10 @@ impl<R: CommandRunner> Winget<R> {
 
 impl<R: CommandRunner> PackageManager for Winget<R> {
     fn availability(&self) -> Availability {
-        let out = match self.runner.run(&self.program, &["--version"]) {
+        let out = match self
+            .runner
+            .run(&self.program, &["--version"], TIMEOUT_QUICK)
+        {
             Ok(o) if o.code == 0 => o,
             _ => {
                 return Availability {
@@ -217,6 +222,7 @@ mod tests {
     use super::super::runner::Output;
     use super::*;
     use std::sync::Mutex;
+    use std::time::Duration;
 
     const PT: &str = include_str!("../../tests/fixtures/winget/upgrade.pt-BR.txt");
     const EXPORT: &str = include_str!("../../tests/fixtures/winget/export.json");
@@ -238,7 +244,7 @@ mod tests {
     }
 
     impl CommandRunner for &Fake {
-        fn run(&self, program: &str, args: &[&str]) -> Result<Output, String> {
+        fn run(&self, program: &str, args: &[&str], _t: Duration) -> Result<Output, String> {
             let mut v = vec![program.to_string()];
             v.extend(args.iter().map(|s| s.to_string()));
             self.calls.lock().unwrap().push(v.clone());
@@ -320,6 +326,48 @@ mod tests {
         let out = wg(&f).upgrade("X.Y");
         assert!(!out.ok);
         assert!(out.message.contains("boom"));
+    }
+
+    #[test]
+    fn timeouts_are_long_for_changes_and_short_for_queries() {
+        type Seen = std::sync::Arc<Mutex<Vec<(String, Duration)>>>;
+        let seen: Seen = Default::default();
+        struct T(Seen);
+        impl CommandRunner for T {
+            fn run(&self, _p: &str, a: &[&str], t: Duration) -> Result<Output, String> {
+                self.0.lock().unwrap().push((a[0].to_string(), t));
+                Ok(Output {
+                    code: 0,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            }
+        }
+        let w = Winget {
+            runner: T(seen.clone()),
+            program: "w".into(),
+        };
+        w.install("A.B");
+        w.availability();
+        let v = seen.lock().unwrap();
+        assert_eq!(v[0], ("install".to_string(), Duration::from_secs(30 * 60)));
+        assert_eq!(v[1], ("--version".to_string(), Duration::from_secs(120)));
+    }
+
+    #[test]
+    fn query_errors_compose_cleanly() {
+        let f = Fake::new(|_| {
+            Ok(Output {
+                code: 7,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        });
+        let e = wg(&f).states(&["A.B"]).unwrap_err();
+        assert_eq!(
+            e,
+            "Não foi possível listar os aplicativos instalados. Falhou (código 0x00000007)."
+        );
     }
 
     #[test]
