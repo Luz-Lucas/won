@@ -134,9 +134,10 @@ pub fn describe_exit(code: i32) -> (bool, String) {
         0 => (true, "Instalado."),
         // UPDATE_NOT_APPLICABLE
         0x8A15_002B => (true, "Já está na versão mais recente."),
-        // PACKAGE_ALREADY_INSTALLED, INSTALL_ALREADY_INSTALLED, INSTALL_DOWNGRADE
-        // (versão maior já instalada)
-        0x8A15_0061 | 0x8A15_010D | 0x8A15_010E => (true, "Já está instalado."),
+        // PACKAGE_ALREADY_INSTALLED, INSTALL_ALREADY_INSTALLED
+        // INSTALL_DOWNGRADE: versão maior já instalada (falha)
+        0x8A15_010E => (false, "Uma versão mais nova já está instalada."),
+        0x8A15_0061 | 0x8A15_010D => (true, "Já está instalado."),
         // UPGRADE_VERSION_NOT_NEWER
         0x8A15_004F => (true, "Já está na versão mais recente."),
         // INSTALL_REBOOT_REQUIRED_TO_FINISH, INSTALL_REBOOT_INITIATED
@@ -308,9 +309,14 @@ mod tests {
                 "Requer administrador: abra o Sentinela como administrador e tente de novo.".into()
             )
         );
-        for c in [0x8A15010Du32, 0x8A15010E] {
-            assert_eq!(describe_exit(c as i32), (true, "Já está instalado.".into()));
-        }
+        assert_eq!(
+            describe_exit(0x8A15010Du32 as i32),
+            (true, "Já está instalado.".into())
+        );
+        assert_eq!(
+            describe_exit(0x8A15010Eu32 as i32),
+            (false, "Uma versão mais nova já está instalada.".into())
+        );
         assert_eq!(
             describe_exit(0x8A15004Fu32 as i32),
             (true, "Já está na versão mais recente.".into())

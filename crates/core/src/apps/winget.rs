@@ -8,7 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use super::parse::{MIN_WINGET, describe_exit, parse_export, parse_upgrade_table};
-use super::runner::{CommandRunner, SystemRunner, TIMEOUT_CHANGE, TIMEOUT_QUICK};
+use super::runner::{
+    CommandRunner, SystemRunner, TIMEOUT_CHANGE, TIMEOUT_LISTING, TIMEOUT_MSG, TIMEOUT_QUICK,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -86,6 +88,15 @@ fn parse_version(text: &str) -> Option<(String, (u32, u32))> {
     Some((v.to_string(), (major, minor)))
 }
 
+/// Mensagem para falha do runner, sem repetir "winget" no caso do tempo limite.
+fn run_err(e: &str) -> String {
+    if e == TIMEOUT_MSG {
+        e.to_string()
+    } else {
+        format!("Não foi possível executar o winget: {e}")
+    }
+}
+
 impl<R: CommandRunner> Winget<R> {
     fn change(&self, verb: &str, winget_id: &str, done: &str) -> ItemOutcome {
         let args = [
@@ -108,7 +119,7 @@ impl<R: CommandRunner> Winget<R> {
                     (ok, msg)
                 }
             }
-            Err(e) => (false, format!("Não foi possível executar o winget: {e}")),
+            Err(e) => (false, run_err(&e)),
         };
         ItemOutcome {
             id: winget_id.to_string(),
@@ -128,7 +139,7 @@ impl<R: CommandRunner> Winget<R> {
                 &["export", "-o", &path_str, "--accept-source-agreements"],
                 TIMEOUT_QUICK,
             )
-            .map_err(|e| format!("Não foi possível executar o winget: {e}"))?;
+            .map_err(|e| run_err(&e))?;
         if out.code != 0 {
             return Err(format!(
                 "Não foi possível listar os aplicativos instalados. {}",
@@ -146,9 +157,9 @@ impl<R: CommandRunner> Winget<R> {
             .run(
                 &self.program,
                 &["upgrade", "--include-unknown", "--accept-source-agreements"],
-                TIMEOUT_QUICK,
+                TIMEOUT_LISTING,
             )
-            .map_err(|e| format!("Não foi possível executar o winget: {e}"))?;
+            .map_err(|e| run_err(&e))?;
         // "Nenhum pacote encontrado" não é erro: simplesmente não há atualizações.
         if !matches!(out.code as u32, 0 | 0x8A15_0014 | 0x8A15_002B) {
             return Err(format!(
@@ -167,6 +178,13 @@ impl<R: CommandRunner> PackageManager for Winget<R> {
             .run(&self.program, &["--version"], TIMEOUT_QUICK)
         {
             Ok(o) if o.code == 0 => o,
+            Err(e) if e == TIMEOUT_MSG => {
+                return Availability {
+                    available: false,
+                    version: None,
+                    reason: Some(TIMEOUT_MSG.into()),
+                };
+            }
             _ => {
                 return Availability {
                     available: false,
@@ -368,6 +386,34 @@ mod tests {
             e,
             "Não foi possível listar os aplicativos instalados. Falhou (código 0x00000007)."
         );
+    }
+
+    #[test]
+    fn upgrade_listing_errors_and_timeouts_compose_cleanly() {
+        let f = Fake::new(|args| {
+            if args[0] == "export" {
+                std::fs::write(output_path(args), EXPORT).unwrap();
+                ok("")
+            } else {
+                Ok(Output {
+                    code: 7,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            }
+        });
+        assert_eq!(
+            wg(&f).states(&["A.B"]).unwrap_err(),
+            "Não foi possível verificar atualizações. Falhou (código 0x00000007)."
+        );
+        let f = Fake::new(|_| Err(TIMEOUT_MSG.into()));
+        assert_eq!(wg(&f).states(&["A.B"]).unwrap_err(), TIMEOUT_MSG);
+        let a = wg(&f).availability();
+        assert!(!a.available);
+        assert_eq!(a.reason.as_deref(), Some(TIMEOUT_MSG));
+        let out = wg(&f).install("A.B");
+        assert!(!out.ok);
+        assert_eq!(out.message, TIMEOUT_MSG);
     }
 
     #[test]
