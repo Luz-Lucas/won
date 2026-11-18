@@ -24,7 +24,8 @@ export type JobProgress =
       bytes_done: number;
       total_bytes: number;
       current: string;
-    };
+    }
+  | { job: number; phase: "apps"; index: number; total: number; current: string };
 
 type JobEvent =
   | { type: "progress"; payload: JobProgress }
@@ -40,7 +41,7 @@ export interface JobView<T> {
   error: string | null;
 }
 
-const KINDS: JobKind[] = ["scan", "clean", "find_large", "find_dupes", "update", "tweaks"];
+const KINDS: JobKind[] = ["scan", "clean", "find_large", "find_dupes", "update", "tweaks", "apps"];
 
 const IDLE: JobView<unknown> = {
   state: "idle",

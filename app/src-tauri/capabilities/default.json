@@ -2,11 +2,248 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissões da janela principal",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "dialog:allow-open",
     "opener:allow-reveal-item-in-dir",
-    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://auth.abuse.ch/" }] }
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://auth.abuse.ch/"
+        },
+        {
+          "url": "ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1"
+        },
+        {
+          "url": "https://www.mozilla.org/firefox/"
+        },
+        {
+          "url": "https://www.google.com/chrome/"
+        },
+        {
+          "url": "https://brave.com/"
+        },
+        {
+          "url": "https://vivaldi.com/"
+        },
+        {
+          "url": "https://librewolf.net/"
+        },
+        {
+          "url": "https://www.torproject.org/"
+        },
+        {
+          "url": "https://www.opera.com/"
+        },
+        {
+          "url": "https://www.thunderbird.net/"
+        },
+        {
+          "url": "https://desktop.telegram.org/"
+        },
+        {
+          "url": "https://signal.org/"
+        },
+        {
+          "url": "https://zoom.us/"
+        },
+        {
+          "url": "https://www.microsoft.com/microsoft-teams/"
+        },
+        {
+          "url": "https://slack.com/"
+        },
+        {
+          "url": "https://store.steampowered.com/"
+        },
+        {
+          "url": "https://store.epicgames.com/"
+        },
+        {
+          "url": "https://www.gog.com/galaxy"
+        },
+        {
+          "url": "https://www.blizzard.com/apps/battle.net/desktop"
+        },
+        {
+          "url": "https://www.ea.com/ea-app"
+        },
+        {
+          "url": "https://www.ubisoft.com/pt-br/ubisoft-connect"
+        },
+        {
+          "url": "https://discord.com/"
+        },
+        {
+          "url": "https://playnite.link/"
+        },
+        {
+          "url": "https://www.retroarch.com/"
+        },
+        {
+          "url": "https://www.nvidia.com/geforce-now/"
+        },
+        {
+          "url": "https://www.msi.com/Landing/afterburner/graphics-cards"
+        },
+        {
+          "url": "https://www.hwinfo.com/"
+        },
+        {
+          "url": "https://www.capframex.com/"
+        },
+        {
+          "url": "https://www.wagnardsoft.com/"
+        },
+        {
+          "url": "https://www.cpuid.com/softwares/cpu-z.html"
+        },
+        {
+          "url": "https://www.techpowerup.com/gpuz/"
+        },
+        {
+          "url": "https://www.cpuid.com/softwares/hwmonitor.html"
+        },
+        {
+          "url": "https://crystalmark.info/en/software/crystaldiskinfo/"
+        },
+        {
+          "url": "https://openrgb.org/"
+        },
+        {
+          "url": "https://www.videolan.org/vlc/"
+        },
+        {
+          "url": "https://github.com/clsid2/mpc-hc"
+        },
+        {
+          "url": "https://www.spotify.com/"
+        },
+        {
+          "url": "https://obsproject.com/"
+        },
+        {
+          "url": "https://www.audacityteam.org/"
+        },
+        {
+          "url": "https://www.gimp.org/"
+        },
+        {
+          "url": "https://handbrake.fr/"
+        },
+        {
+          "url": "https://inkscape.org/"
+        },
+        {
+          "url": "https://krita.org/"
+        },
+        {
+          "url": "https://kdenlive.org/"
+        },
+        {
+          "url": "https://www.blender.org/"
+        },
+        {
+          "url": "https://github.com/yt-dlp/yt-dlp"
+        },
+        {
+          "url": "https://www.7-zip.org/"
+        },
+        {
+          "url": "https://www.voidtools.com/"
+        },
+        {
+          "url": "https://learn.microsoft.com/windows/powertoys/"
+        },
+        {
+          "url": "https://notepad-plus-plus.org/"
+        },
+        {
+          "url": "https://getsharex.com/"
+        },
+        {
+          "url": "https://www.qbittorrent.org/"
+        },
+        {
+          "url": "https://bitwarden.com/"
+        },
+        {
+          "url": "https://keepassxc.org/"
+        },
+        {
+          "url": "https://one.one.one.one/"
+        },
+        {
+          "url": "https://www.wireguard.com/"
+        },
+        {
+          "url": "https://ohmyposh.dev/"
+        },
+        {
+          "url": "https://learn.microsoft.com/windows/terminal/"
+        },
+        {
+          "url": "https://rufus.ie/"
+        },
+        {
+          "url": "https://windirstat.net/"
+        },
+        {
+          "url": "https://www.bcuninstaller.com/"
+        },
+        {
+          "url": "https://www.sumatrapdfreader.org/"
+        },
+        {
+          "url": "https://www.libreoffice.org/"
+        },
+        {
+          "url": "https://www.autohotkey.com/"
+        },
+        {
+          "url": "https://git-scm.com/"
+        },
+        {
+          "url": "https://code.visualstudio.com/"
+        },
+        {
+          "url": "https://nodejs.org/"
+        },
+        {
+          "url": "https://www.python.org/"
+        },
+        {
+          "url": "https://rustup.rs/"
+        },
+        {
+          "url": "https://cli.github.com/"
+        },
+        {
+          "url": "https://desktop.github.com/"
+        },
+        {
+          "url": "https://learn.microsoft.com/powershell/"
+        },
+        {
+          "url": "https://www.docker.com/products/docker-desktop/"
+        },
+        {
+          "url": "https://go.dev/"
+        },
+        {
+          "url": "https://dotnet.microsoft.com/"
+        },
+        {
+          "url": "https://adoptium.net/"
+        },
+        {
+          "url": "https://www.postman.com/"
+        }
+      ]
+    }
   ]
 }

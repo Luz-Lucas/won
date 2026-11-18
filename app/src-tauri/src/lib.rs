@@ -44,6 +44,7 @@ pub fn run() {
         )
         .setup(|app| {
             app.manage(Arc::new(JobRegistry::new()));
+            app.manage(commands::apps::AppsState::system());
             app.manage(commands::tweaks::TweaksState::new(
                 commands::tweaks::startup_hkcu_allowed(),
             ));
@@ -102,6 +103,10 @@ pub fn run() {
             tray::window_ready,
             commands::settings::settings_get,
             commands::settings::settings_set,
+            commands::apps::apps_page,
+            commands::apps::apps_page_refresh,
+            commands::apps::apps_install,
+            commands::apps::apps_upgrade,
             commands::tweaks::tweaks_list,
             commands::tweaks::tweaks_apply,
             commands::tweaks::tweaks_undo,

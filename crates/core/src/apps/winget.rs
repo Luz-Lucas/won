@@ -31,6 +31,8 @@ pub struct Availability {
 pub struct ItemOutcome {
     pub id: String,
     pub ok: bool,
+    /// Algo mudou de fato no sistema (false para "já instalado"/"já atualizado").
+    pub changed: bool,
     pub message: String,
 }
 
@@ -109,21 +111,29 @@ impl<R: CommandRunner> Winget<R> {
             "--accept-source-agreements",
             "--disable-interactivity",
         ];
-        let (ok, message) = match self.runner.run(&self.program, &args, TIMEOUT_CHANGE) {
+        let (ok, changed, message) = match self.runner.run(&self.program, &args, TIMEOUT_CHANGE) {
             Ok(out) => {
                 let (ok, msg) = describe_exit(out.code);
+                // UPDATE_NOT_APPLICABLE, ALREADY_INSTALLED (x2), UPGRADE_VERSION_NOT_NEWER:
+                // sucesso sem mudança no sistema.
+                let changed = ok
+                    && !matches!(
+                        out.code as u32,
+                        0x8A15_002B | 0x8A15_0061 | 0x8A15_010D | 0x8A15_004F
+                    );
                 // Código 0 = concluiu: a mensagem depende da operação.
                 if out.code == 0 {
-                    (ok, done.to_string())
+                    (ok, changed, done.to_string())
                 } else {
-                    (ok, msg)
+                    (ok, changed, msg)
                 }
             }
-            Err(e) => (false, run_err(&e)),
+            Err(e) => (false, false, run_err(&e)),
         };
         ItemOutcome {
             id: winget_id.to_string(),
             ok,
+            changed,
             message,
         }
     }
@@ -344,6 +354,22 @@ mod tests {
         let out = wg(&f).upgrade("X.Y");
         assert!(!out.ok);
         assert!(out.message.contains("boom"));
+    }
+
+    #[test]
+    fn already_installed_is_ok_but_not_changed() {
+        let f = Fake::new(|_| {
+            Ok(Output {
+                code: 0x8A150061u32 as i32,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        });
+        let out = wg(&f).install("7zip.7zip");
+        assert!(out.ok && !out.changed);
+        let f = Fake::new(|_| ok(""));
+        let out = wg(&f).install("7zip.7zip");
+        assert!(out.ok && out.changed);
     }
 
     #[test]
