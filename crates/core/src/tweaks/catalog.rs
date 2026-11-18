@@ -761,4 +761,84 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn personalization_catalog_is_valid() {
+        use crate::tweaks::model::{Effect, Group};
+        // (id, área, choice)
+        let table: &[(&str, &str, Option<&str>)] = &[
+            ("taskbar-align-left", "barra", Some("taskbar-align")),
+            ("taskbar-align-center", "barra", Some("taskbar-align")),
+            ("taskbar-search-hidden", "barra", Some("taskbar-search")),
+            ("taskbar-search-icon", "barra", Some("taskbar-search")),
+            ("taskbar-search-box", "barra", Some("taskbar-search")),
+            ("taskbar-taskview-off", "barra", None),
+            ("taskbar-widgets-off", "barra", None),
+            ("taskbar-end-task", "barra", None),
+            ("taskbar-clock-seconds", "barra", None),
+            ("taskbar-combine-always", "barra", Some("taskbar-combine")),
+            (
+                "taskbar-combine-when-full",
+                "barra",
+                Some("taskbar-combine"),
+            ),
+            ("taskbar-combine-never", "barra", Some("taskbar-combine")),
+            ("start-recommendations-off", "iniciar", None),
+            ("start-bing-off", "iniciar", None),
+            ("start-layout-default", "iniciar", Some("start-layout")),
+            ("start-layout-more-pins", "iniciar", Some("start-layout")),
+            (
+                "start-layout-more-recommendations",
+                "iniciar",
+                Some("start-layout"),
+            ),
+            ("explorer-classic-menu", "explorador", None),
+            ("explorer-show-extensions", "explorador", None),
+            ("explorer-show-hidden", "explorador", None),
+            ("explorer-open-this-pc", "explorador", None),
+            ("explorer-hide-home", "explorador", None),
+            ("explorer-hide-gallery", "explorador", None),
+            ("explorer-compact", "explorador", None),
+            ("theme-apps-dark", "aparencia", Some("theme-apps")),
+            ("theme-apps-light", "aparencia", Some("theme-apps")),
+            ("theme-system-dark", "aparencia", Some("theme-system")),
+            ("theme-system-light", "aparencia", Some("theme-system")),
+            ("lockscreen-off", "sistema", None),
+            ("logon-blur-off", "sistema", None),
+            ("sticky-keys-shortcut-off", "sistema", None),
+            ("snap-off", "sistema", None),
+        ];
+        let c = Catalog::embedded();
+        for (id, area, choice) in table {
+            let t = c.get(id).unwrap_or_else(|| panic!("{id} ausente"));
+            assert_eq!(t.group, Group::Personalizacao, "{id}");
+            assert_eq!(t.area.as_deref(), Some(*area), "{id}");
+            assert_eq!(t.choice.as_deref(), *choice, "{id}");
+            assert!(!t.recommended, "{id} não pode ser recomendado");
+        }
+        let mut by_choice: HashMap<&str, Vec<&Tweak>> = HashMap::new();
+        for t in c.tweaks.iter().filter(|t| t.group == Group::Personalizacao) {
+            assert!(t.area.is_some(), "{}", t.id);
+            if let Some(ch) = t.choice.as_deref() {
+                by_choice.entry(ch).or_default().push(t);
+            }
+        }
+        assert_eq!(by_choice.len(), 6);
+        for (ch, opts) in &by_choice {
+            assert!(opts.len() >= 2, "{ch}");
+            for o in opts {
+                assert_eq!(o.actions.len(), opts[0].actions.len(), "{ch}");
+            }
+        }
+        for id in [
+            "explorer-classic-menu",
+            "taskbar-align-left",
+            "taskbar-combine-always",
+        ] {
+            assert_eq!(c.get(id).unwrap().effect, Effect::Explorer, "{id}");
+        }
+        for id in ["taskbar-widgets-off", "lockscreen-off", "logon-blur-off"] {
+            assert!(c.get(id).unwrap().needs_admin, "{id}");
+        }
+    }
 }

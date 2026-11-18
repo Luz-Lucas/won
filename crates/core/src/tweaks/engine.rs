@@ -1138,7 +1138,14 @@ mod tests {
         let c = Catalog::embedded();
         let mut initial: Vec<(Action, Snapshot)> = Vec::new();
         let mut n = 0usize;
-        for t in &c.tweaks {
+        // Opções exclusivas dividem as mesmas chaves: só a primeira de cada grupo entra.
+        let mut seen_choice: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        let members: Vec<&Tweak> = c
+            .tweaks
+            .iter()
+            .filter(|t| t.choice.as_deref().is_none_or(|ch| seen_choice.insert(ch)))
+            .collect();
+        for t in &members {
             for a in &t.actions {
                 n += 1;
                 let target = target_of(a);
@@ -1204,12 +1211,12 @@ mod tests {
             .count();
         assert!(absent_starts >= 1, "nenhum estado inicial ausente");
         assert!(string_for_dword >= 1, "nenhum String onde o alvo é DWORD");
-        let all: Vec<String> = c.tweaks.iter().map(|t| t.id.clone()).collect();
+        let all: Vec<String> = members.iter().map(|t| t.id.clone()).collect();
         let r = apply(&all, c, &b, &p);
         for x in &r.results {
             assert!(x.ok, "{x:?}");
         }
-        for t in &c.tweaks {
+        for t in &members {
             assert_eq!(view(t, &b).status, TweakStatus::Applied, "{}", t.id);
         }
         let u = undo_all(&b, &p);
