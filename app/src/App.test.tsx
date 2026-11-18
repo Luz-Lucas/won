@@ -171,9 +171,17 @@ describe("App", () => {
     await waitFor(() => expect(statusCalls()).toBe(before + 1));
   });
 
-  it("mostra as sete páginas e troca de página", async () => {
+  it("sidebar_has_aplicativos_after_limpeza", async () => {
     render(<App />);
-    for (const n of ["Início", "Jogos", "Limpeza", "Segurança", "Disco", "Histórico", "Ajustes"])
+    const nav = within(screen.getByRole("navigation", { name: "Principal" }));
+    expect(
+      nav.getAllByRole("button").slice(0, 8).map((b) => b.textContent),
+    ).toEqual(["Início", "Jogos", "Limpeza", "Aplicativos", "Segurança", "Disco", "Histórico", "Ajustes"]);
+  });
+
+  it("mostra as oito páginas e troca de página", async () => {
+    render(<App />);
+    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Segurança", "Disco", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(

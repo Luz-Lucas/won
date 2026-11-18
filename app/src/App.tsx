@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { systemStatus, windowReady, type SystemStatus } from "./api";
 import Sidebar, { type Page } from "./components/Sidebar";
 import { JobsProvider, useJobSettled } from "./jobs";
+import Aplicativos from "./pages/Aplicativos";
 import Ajustes from "./pages/Ajustes";
 import Disco from "./pages/Disco";
 import Historico from "./pages/Historico";
@@ -64,6 +65,7 @@ function Shell() {
         )}
         {page === "jogos" && <Jogos />}
         {page === "limpeza" && <Limpeza />}
+        {page === "aplicativos" && <Aplicativos />}
         {page === "seguranca" && (
           <Seguranca onNavigate={setPage} onRestored={refreshStatus} />
         )}
