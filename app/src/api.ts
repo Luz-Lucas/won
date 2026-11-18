@@ -315,6 +315,8 @@ export const settingsSet = (startWithWindows: boolean, closeToTray: boolean) =>
 
 /** Avisa o backend que a interface carregou (ele mostra a janela). */
 export const windowReady = () => invoke<void>("window_ready");
+/** Sai do app depois que o usuário confirmou (fila de aplicativos rodando). */
+export const quitApp = () => invoke<void>("quit_app");
 
 export type AppCategory =
   | "navegadores"

@@ -241,6 +241,27 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("Sair durante uma fila de aplicativos pede confirmação", async () => {
+    render(<App />);
+    await screen.findByRole("heading", { level: 1, name: "Início" });
+    const quitCalls = () =>
+      invokeMock.mock.calls.filter(([cmd]) => cmd === "quit_app").length;
+    await emit("app:quit-confirm", null);
+    let dlg = screen.getByRole("dialog");
+    expect(
+      within(dlg).getByText(
+        "Um aplicativo está sendo instalado. Ele vai terminar em segundo plano e os próximos da fila não serão instalados. Sair mesmo assim?",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(within(dlg).getByRole("button", { name: "Continuar" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(quitCalls()).toBe(0);
+    await emit("app:quit-confirm", null);
+    dlg = screen.getByRole("dialog");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Sair" }));
+    expect(quitCalls()).toBe(1);
+  });
+
   it("falha em system_status mostra mensagem, não página em branco", async () => {
     invokeMock.mockRejectedValue("falhou");
     render(<App />);

@@ -181,7 +181,7 @@ describe("Aplicativos", () => {
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Instalar" }));
     await act(async () => {
       listeners.get("job:progress")!({
-        payload: { job: 9, phase: "apps", index: 1, total: 2, current: "VLC" },
+        payload: { job: 9, phase: "apps", verb: "install", index: 1, total: 2, current: "VLC" },
       });
     });
     expect(screen.getByText("Instalando 2 de 2: VLC…")).toBeInTheDocument();
@@ -265,6 +265,113 @@ describe("Aplicativos", () => {
     expect(openUrl).toHaveBeenCalledWith("ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1");
   });
 
+  it("finish_after_remount_shows_results_and_refreshes_once", async () => {
+    const view = render(<Aplicativos />);
+    await screen.findByText("Firefox");
+    await userEvent.click(screen.getByRole("checkbox", { name: /Firefox/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Instalar" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Instalar" }));
+    await act(async () => {
+      listeners.get("job:progress")!({
+        payload: { job: 9, phase: "apps", verb: "install", index: 0, total: 1, current: "Firefox" },
+      });
+    });
+    // Sai da página no meio da fila e volta.
+    view.rerender(<JobsProvider>{null}</JobsProvider>);
+    view.rerender(
+      <JobsProvider>
+        <Aplicativos />
+      </JobsProvider>,
+    );
+    await screen.findByText("Firefox");
+    expect(screen.getByText("Instalando 1 de 1: Firefox…")).toBeInTheDocument();
+    await finish([{ id: "firefox", ok: true, changed: true, message: "Instalado." }]);
+    expect(await screen.findByText("✓ Firefox: Instalado.")).toBeInTheDocument();
+    expect(api.appsPageRefresh).toHaveBeenCalledTimes(1);
+    // Voltar de novo não reprocessa a mesma fila.
+    view.rerender(<JobsProvider>{null}</JobsProvider>);
+    view.rerender(
+      <JobsProvider>
+        <Aplicativos />
+      </JobsProvider>,
+    );
+    await screen.findByText("Firefox");
+    expect(api.appsPageRefresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("✓ Firefox: Instalado.")).not.toBeInTheDocument();
+  });
+
+  it("progress_text_follows_the_verb", async () => {
+    const view = render(<Aplicativos />);
+    await screen.findByText("Firefox");
+    await userEvent.click(screen.getByRole("button", { name: "Atualizar tudo" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Atualizar" }));
+    await act(async () => {
+      listeners.get("job:progress")!({
+        payload: { job: 9, phase: "apps", verb: "upgrade", index: 0, total: 1, current: "7-Zip" },
+      });
+    });
+    expect(screen.getByText("Atualizando 1 de 1: 7-Zip…")).toBeInTheDocument();
+    // Ao voltar para a página, o texto vem do evento, não da tela que iniciou.
+    view.rerender(<JobsProvider>{null}</JobsProvider>);
+    view.rerender(
+      <JobsProvider>
+        <Aplicativos />
+      </JobsProvider>,
+    );
+    expect(await screen.findByText("Atualizando 1 de 1: 7-Zip…")).toBeInTheDocument();
+  });
+
+  it("stopped_queue_shows_not_processed_count", async () => {
+    render(<Aplicativos />);
+    await screen.findByText("Firefox");
+    await userEvent.click(screen.getByRole("checkbox", { name: /Firefox/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /VLC/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Instalar" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Instalar" }));
+    await act(async () => {
+      listeners.get("job:progress")!({
+        payload: { job: 9, phase: "apps", verb: "install", index: 0, total: 2, current: "Firefox" },
+      });
+    });
+    await finish([{ id: "firefox", ok: true, changed: true, message: "Instalado." }]);
+    expect(await screen.findByText("1 não processado(s).")).toBeInTheDocument();
+  });
+
+  it("check_again_button_refreshes_and_is_disabled_while_running", async () => {
+    render(<Aplicativos />);
+    await screen.findByText("Firefox");
+    const btn = screen.getByRole("button", { name: "Verificar de novo" });
+    await userEvent.click(btn);
+    expect(api.appsPageRefresh).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(btn).toBeEnabled());
+    await userEvent.click(screen.getByRole("checkbox", { name: /Firefox/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Instalar" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Instalar" }));
+    expect(screen.getByRole("button", { name: "Verificar de novo" })).toBeDisabled();
+  });
+
+  it("check_again_is_visible_without_winget", async () => {
+    vi.mocked(api.appsPage).mockResolvedValue(
+      page([item("a", "A", null)], {
+        availability: { available: false, version: null, reason: "sem winget" },
+      }),
+    );
+    render(<Aplicativos />);
+    await screen.findByText("sem winget");
+    await userEvent.click(screen.getByRole("button", { name: "Verificar de novo" }));
+    expect(api.appsPageRefresh).toHaveBeenCalled();
+  });
+
+  it("window_shown_reloads_states", async () => {
+    render(<Aplicativos />);
+    await screen.findByText("Firefox");
+    expect(api.appsPage).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      listeners.get("app:shown")!({ payload: null });
+    });
+    expect(api.appsPage).toHaveBeenCalledTimes(2);
+  });
+
   it("unknown_state_shows_retry", async () => {
     vi.mocked(api.appsPage).mockResolvedValue(page([item("a", "A", null), item("b", "B", null)]));
     render(<Aplicativos />);
@@ -274,7 +381,7 @@ describe("Aplicativos", () => {
     expect(screen.getByText("A")).toBeInTheDocument();
     expect(screen.queryByText("Instalado")).not.toBeInTheDocument();
     vi.mocked(api.appsPageRefresh).mockResolvedValue(sample());
-    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    await userEvent.click(screen.getByRole("button", { name: "Verificar de novo" }));
     expect(await screen.findByText("Firefox")).toBeInTheDocument();
     expect(
       screen.queryByText("Não foi possível verificar o que já está instalado."),

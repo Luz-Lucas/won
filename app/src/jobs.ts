@@ -25,7 +25,14 @@ export type JobProgress =
       total_bytes: number;
       current: string;
     }
-  | { job: number; phase: "apps"; index: number; total: number; current: string };
+  | {
+      job: number;
+      phase: "apps";
+      verb: "install" | "upgrade";
+      index: number;
+      total: number;
+      current: string;
+    };
 
 type JobEvent =
   | { type: "progress"; payload: JobProgress }
@@ -36,6 +43,8 @@ export type JobState = "idle" | "running" | "done" | "error";
 
 export interface JobView<T> {
   state: JobState;
+  // Id do job a que os eventos aplicados pertencem (null antes do primeiro).
+  job: number | null;
   progress: JobProgress | null;
   result: T | null;
   error: string | null;
@@ -45,6 +54,7 @@ const KINDS: JobKind[] = ["scan", "clean", "find_large", "find_dupes", "update",
 
 const IDLE: JobView<unknown> = {
   state: "idle",
+  job: null,
   progress: null,
   result: null,
   error: null,
@@ -58,6 +68,8 @@ interface Entry {
   // True enquanto há um job vivo (inclusive aguardando o id).
   live: boolean;
   cancelRequested: boolean;
+  // Último job cujo resultado uma página já tratou (ver `claim`).
+  claimed: number | null;
 }
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
@@ -70,7 +82,7 @@ export class JobStore {
   private entries = new Map<JobKind, Entry>(
     KINDS.map((k) => [
       k,
-      { view: IDLE, id: null, pending: null, live: false, cancelRequested: false },
+      { view: IDLE, id: null, pending: null, live: false, cancelRequested: false, claimed: null },
     ]),
   );
   private listeners = new Set<() => void>();
@@ -129,7 +141,7 @@ export class JobStore {
     e.cancelRequested = false;
     e.id = null;
     e.pending = [];
-    this.set(kind, { state: "running", progress: null, result: null, error: null });
+    this.set(kind, { state: "running", job: null, progress: null, result: null, error: null });
     let id: number;
     try {
       id = await invokeFn();
@@ -148,6 +160,17 @@ export class JobStore {
         /* o job segue em andamento */
       }
     }
+  }
+
+  /**
+   * Marca o resultado do job `job` como tratado. Devolve true só na primeira
+   * vez: a página que volta a montar não trata a mesma fila de novo.
+   */
+  claim(kind: JobKind, job: number): boolean {
+    const e = this.entry(kind);
+    if (e.claimed === job) return false;
+    e.claimed = job;
+    return true;
   }
 
   async cancel(kind: JobKind) {
@@ -192,7 +215,7 @@ export class JobStore {
       e.live = false;
       return;
     }
-    this.set(kind, { state: "running", progress: null, result: null, error: null });
+    this.set(kind, { state: "running", job: null, progress: null, result: null, error: null });
     this.adopt(kind, id);
   }
 
@@ -208,15 +231,15 @@ export class JobStore {
   private apply(kind: JobKind, ev: JobEvent) {
     const e = this.entry(kind);
     if (ev.type === "progress") {
-      this.set(kind, { ...e.view, progress: ev.payload });
+      this.set(kind, { ...e.view, job: ev.payload.job, progress: ev.payload });
     } else if (ev.type === "done") {
       e.live = false;
       e.id = null;
-      this.set(kind, { ...e.view, state: "done", result: ev.payload.result });
+      this.set(kind, { ...e.view, job: ev.payload.job, state: "done", result: ev.payload.result });
     } else {
       e.live = false;
       e.id = null;
-      this.set(kind, { ...e.view, state: "error", error: ev.payload.message });
+      this.set(kind, { ...e.view, job: ev.payload.job, state: "error", error: ev.payload.message });
     }
   }
 }
@@ -246,7 +269,8 @@ export function useJob<T>(kind: JobKind) {
     [store, kind],
   );
   const cancel = useCallback(() => store.cancel(kind), [store, kind]);
-  return { ...view, start, cancel };
+  const claim = useCallback((job: number) => store.claim(kind, job), [store, kind]);
+  return { ...view, start, cancel, claim };
 }
 
 /** Chama `fn` sempre que qualquer operação termina. */

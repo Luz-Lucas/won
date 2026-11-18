@@ -14,6 +14,7 @@ use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, State};
 
 type States = HashMap<String, AppState>;
@@ -29,18 +30,37 @@ const CATEGORIES: [AppCategory; 7] = [
     AppCategory::Desenvolvimento,
 ];
 
+/// Validade dos estados em cache: o app pode ficar dias na bandeja.
+const CACHE_TTL: Duration = Duration::from_secs(10 * 60);
+
+type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
+
+#[derive(Default)]
+struct Cache {
+    /// Estados e o instante em que foram lidos.
+    states: Option<(States, Instant)>,
+    /// Sobe a cada invalidação: uma consulta iniciada antes não grava.
+    generation: u64,
+}
+
 /// Estado gerenciado: o gerenciador de pacotes e o cache dos estados da sessão.
 #[derive(Clone)]
 pub struct AppsState {
     pm: Arc<dyn PackageManager>,
-    cache: Arc<Mutex<Option<States>>>,
+    cache: Arc<Mutex<Cache>>,
+    clock: Clock,
 }
 
 impl AppsState {
     pub fn new(pm: Arc<dyn PackageManager>) -> Self {
+        Self::with_clock(pm, Arc::new(Instant::now))
+    }
+
+    fn with_clock(pm: Arc<dyn PackageManager>, clock: Clock) -> Self {
         Self {
             pm,
-            cache: Arc::new(Mutex::new(None)),
+            cache: Arc::new(Mutex::new(Cache::default())),
+            clock,
         }
     }
 
@@ -48,12 +68,46 @@ impl AppsState {
         Self::new(Arc::new(Winget::system()))
     }
 
-    fn cache(&self) -> MutexGuard<'_, Option<States>> {
+    fn lock(&self) -> MutexGuard<'_, Cache> {
         self.cache.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    fn invalidate(&self) {
-        *self.cache() = None;
+    /// Estados em cache ainda dentro da validade.
+    fn cached(&self) -> Option<States> {
+        let now = (self.clock)();
+        match &self.lock().states {
+            Some((s, at)) if now.saturating_duration_since(*at) < CACHE_TTL => Some(s.clone()),
+            _ => None,
+        }
+    }
+
+    fn generation(&self) -> u64 {
+        self.lock().generation
+    }
+
+    /// Grava só se ninguém invalidou o cache desde `generation`.
+    fn store(&self, generation: u64, states: &States) {
+        let now = (self.clock)();
+        let mut c = self.lock();
+        if c.generation == generation {
+            c.states = Some((states.clone(), now));
+        }
+    }
+
+    /// Descarta os estados (fim de fila, janela reaberta da bandeja).
+    pub fn invalidate(&self) {
+        let mut c = self.lock();
+        c.states = None;
+        c.generation += 1;
+    }
+}
+
+/// Invalida o cache ao sair de escopo, inclusive se a fila entrar em pânico.
+struct InvalidateOnDrop<'a>(&'a AppsState);
+
+impl Drop for InvalidateOnDrop<'_> {
+    fn drop(&mut self) {
+        self.0.invalidate();
     }
 }
 
@@ -90,14 +144,15 @@ fn build_page(state: &AppsState, cat: &AppCatalog, force: bool) -> AppsPage {
     let states: Option<States> = if !availability.available {
         None
     } else {
-        let cached = if force { None } else { state.cache().clone() };
+        let cached = if force { None } else { state.cached() };
         match cached {
             Some(s) => Some(s),
             None => {
+                let generation = state.generation();
                 let ids: Vec<&str> = cat.apps.iter().map(|a| a.winget.as_str()).collect();
                 match state.pm.states(&ids) {
                     Ok(s) => {
-                        *state.cache() = Some(s.clone());
+                        state.store(generation, &s);
                         Some(s)
                     }
                     Err(_) => None,
@@ -184,7 +239,8 @@ fn run_queue(
     outcomes
 }
 
-/// Corpo do job: roda a fila, emitindo `job:progress`, e invalida o cache.
+/// Corpo do job: roda a fila, emitindo `job:progress`, e invalida o cache
+/// ao terminar (mesmo em pânico).
 fn run_job(
     state: &AppsState,
     apps: &[App],
@@ -193,20 +249,30 @@ fn run_job(
     cancel: &AtomicBool,
     sink: &dyn Sink,
 ) -> Vec<ItemOutcome> {
-    let outcomes = run_queue(
+    let _invalidate = InvalidateOnDrop(state);
+    let verb_id = match verb {
+        Verb::Install => "install",
+        Verb::Upgrade => "upgrade",
+    };
+    run_queue(
         state.pm.as_ref(),
         apps,
         verb,
         cancel,
         &|index, total, current| {
             sink.emit(
-            "job:progress",
-            json!({ "job": job, "phase": "apps", "index": index, "total": total, "current": current }),
-        );
+                "job:progress",
+                json!({
+                    "job": job,
+                    "phase": "apps",
+                    "verb": verb_id,
+                    "index": index,
+                    "total": total,
+                    "current": current,
+                }),
+            );
         },
-    );
-    state.invalidate();
-    outcomes
+    )
 }
 
 /// Só conta o que foi bem-sucedido e de fato mudou algo.
@@ -322,6 +388,8 @@ mod tests {
         fail: Vec<String>,
         state_calls: Mutex<usize>,
         on_change: Option<Hook>,
+        on_states: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+        panic_on_change: bool,
     }
 
     impl Fake {
@@ -332,6 +400,8 @@ mod tests {
                 fail: vec![],
                 state_calls: Mutex::new(0),
                 on_change: None,
+                on_states: Mutex::new(None),
+                panic_on_change: false,
             }
         }
         fn calls(&self) -> Vec<String> {
@@ -339,6 +409,7 @@ mod tests {
         }
         fn change(&self, verb: &str, id: &str) -> ItemOutcome {
             self.calls.lock().unwrap().push(format!("{verb} {id}"));
+            assert!(!self.panic_on_change, "instalador explodiu");
             if let Some(h) = &self.on_change {
                 h(id);
             }
@@ -362,6 +433,9 @@ mod tests {
         }
         fn states(&self, ids: &[&str]) -> Result<HashMap<String, AppState>, String> {
             *self.state_calls.lock().unwrap() += 1;
+            if let Some(h) = &*self.on_states.lock().unwrap() {
+                h();
+            }
             Ok(ids
                 .iter()
                 .map(|i| (i.to_lowercase(), AppState::Installed))
@@ -494,7 +568,7 @@ mod tests {
         assert_eq!(ev[0].0, "job:progress");
         assert_eq!(
             ev[1].1,
-            json!({ "job": 7, "phase": "apps", "index": 1, "total": 2, "current": apps[1].name })
+            json!({ "job": 7, "phase": "apps", "verb": "install", "index": 1, "total": 2, "current": apps[1].name })
         );
     }
 
@@ -524,7 +598,7 @@ mod tests {
             &AtomicBool::new(false),
             &Rec::default(),
         );
-        assert!(state.cache().is_none());
+        assert!(state.cached().is_none());
         build_page(&state, &c, false);
         assert_eq!(*pm.state_calls.lock().unwrap(), 3);
     }
@@ -587,5 +661,80 @@ mod tests {
             Some("Aplicativos atualizados: 1")
         );
         assert_eq!(activity_text(Verb::Install, &outs[1..3]), None);
+    }
+
+    #[test]
+    fn progress_carries_the_verb() {
+        let rec = Rec::default();
+        run_job(
+            &AppsState::new(Arc::new(Fake::new())),
+            &some_apps(1),
+            Verb::Upgrade,
+            3,
+            &AtomicBool::new(false),
+            &rec,
+        );
+        assert_eq!(rec.0.lock().unwrap()[0].1["verb"], "upgrade");
+    }
+
+    #[test]
+    fn cache_expires_after_ttl() {
+        let pm = Arc::new(Fake::new());
+        let now = Arc::new(Mutex::new(Instant::now()));
+        let n = now.clone();
+        let state = AppsState::with_clock(pm.clone(), Arc::new(move || *n.lock().unwrap()));
+        let c = cat();
+        build_page(&state, &c, false);
+        *now.lock().unwrap() += Duration::from_secs(9 * 60);
+        build_page(&state, &c, false);
+        assert_eq!(*pm.state_calls.lock().unwrap(), 1, "ainda no prazo");
+        *now.lock().unwrap() += Duration::from_secs(2 * 60);
+        build_page(&state, &c, false);
+        assert_eq!(
+            *pm.state_calls.lock().unwrap(),
+            2,
+            "cache vencido consulta de novo"
+        );
+    }
+
+    #[test]
+    fn query_older_than_invalidate_is_not_cached() {
+        let pm = Arc::new(Fake::new());
+        let state = AppsState::new(pm.clone());
+        let s2 = state.clone();
+        // Um job termina (invalida) enquanto a consulta ainda está em andamento.
+        *pm.on_states.lock().unwrap() = Some(Box::new(move || s2.invalidate()));
+        let page = build_page(&state, &cat(), false);
+        assert!(page.apps.iter().all(|a| a.state.is_some()));
+        assert!(
+            state.cached().is_none(),
+            "resultado antigo não entra no cache"
+        );
+        *pm.on_states.lock().unwrap() = None;
+        build_page(&state, &cat(), false);
+        build_page(&state, &cat(), false);
+        assert_eq!(*pm.state_calls.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn cache_invalidated_even_if_queue_panics() {
+        let mut fake = Fake::new();
+        fake.panic_on_change = true;
+        let pm = Arc::new(fake);
+        let state = AppsState::new(pm);
+        build_page(&state, &cat(), false);
+        assert!(state.cached().is_some());
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run_job(
+                &state,
+                &some_apps(1),
+                Verb::Install,
+                1,
+                &AtomicBool::new(false),
+                &Rec::default(),
+            )
+        }));
+        assert!(r.is_err());
+        assert!(state.cached().is_none());
     }
 }

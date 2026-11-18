@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -27,44 +28,75 @@ const norm = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").to
 export default function Aplicativos() {
   const [data, setData] = useState<AppsPage | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState<{ action: Action; ids: string[] } | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
-  // O job "apps" é global: só mostra resultados de uma fila iniciada aqui.
-  const [started, setStarted] = useState<Action | null>(null);
   const [results, setResults] = useState<AppOutcome[] | null>(null);
+  const [skipped, setSkipped] = useState(0);
   const [cancelling, setCancelling] = useState(false);
-  const handled = useRef<unknown>(null);
+  // Só a resposta do pedido mais recente vale (e nenhuma depois de desmontar).
+  const request = useRef(0);
   const job = useJob<AppOutcome[]>("apps");
 
   const load = useCallback((refresh: boolean) => {
+    const n = ++request.current;
     setLoadError(null);
+    setChecking(true);
     (refresh ? appsPageRefresh : appsPage)().then(
       (p) => {
+        if (n !== request.current) return;
+        setChecking(false);
         setData(p);
         // Quem já está instalado (sem atualização) sai da seleção.
         const done = new Set(p.apps.filter((a) => a.state === "installed").map((a) => a.app.id));
         setSelected((s) => (done.size === 0 ? s : new Set([...s].filter((id) => !done.has(id)))));
       },
-      (e) => setLoadError(errorText(e)),
+      (e) => {
+        if (n !== request.current) return;
+        setChecking(false);
+        setLoadError(errorText(e));
+      },
     );
   }, []);
 
-  useEffect(() => load(false), [load]);
-
-  // Terminada a fila: recarrega o estado e tira da seleção o que deu certo.
   useEffect(() => {
-    if (!started || job.state !== "done" || !Array.isArray(job.result)) return;
-    if (handled.current === job.result) return;
-    handled.current = job.result;
-    setResults(job.result);
-    setStarted(null);
-    const ok = new Set(job.result.filter((r) => r.ok).map((r) => r.id));
+    load(false);
+    return () => {
+      request.current++;
+    };
+  }, [load]);
+
+  // A janela voltou da bandeja: o backend descartou o cache; relê os estados.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void listen("app:shown", () => load(false)).then((un) => {
+      if (disposed) un();
+      else unlisten = un;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [load]);
+
+  // Terminada a fila (mesmo se a página foi aberta depois de iniciá-la; só esta
+  // página inicia filas de aplicativos): mostra o resultado, recarrega o estado
+  // e tira da seleção o que deu certo. Cada fila é tratada uma única vez.
+  const { state: jobState, result: jobResult, job: jobId, progress: jobProgress, claim } = job;
+  useEffect(() => {
+    if (jobState !== "done" || !Array.isArray(jobResult) || jobId === null) return;
+    if (!claim(jobId)) return;
+    const total = jobProgress?.phase === "apps" ? jobProgress.total : jobResult.length;
+    setResults(jobResult);
+    setSkipped(Math.max(0, total - jobResult.length));
+    const ok = new Set(jobResult.filter((r) => r.ok).map((r) => r.id));
     setSelected((s) => new Set([...s].filter((id) => !ok.has(id))));
     load(true);
-  }, [job.state, job.result, started, load]);
+  }, [jobState, jobResult, jobId, jobProgress, claim, load]);
 
   const running = job.state === "running";
 
@@ -112,8 +144,8 @@ export default function Aplicativos() {
     if (!pending) return;
     const { action, ids } = pending;
     setPending(null);
-    setStarted(action);
     setResults(null);
+    setSkipped(0);
     void job.start(() => (action === "install" ? appsInstall(ids) : appsUpgrade(ids)));
   };
 
@@ -123,11 +155,18 @@ export default function Aplicativos() {
   };
 
   const progress = job.progress && job.progress.phase === "apps" ? job.progress : null;
-  const verb = started === "upgrade" ? "Atualizando" : "Instalando";
+  const verb = progress?.verb === "upgrade" ? "Atualizando" : "Instalando";
 
   return (
     <section className="page">
       <h1>Aplicativos</h1>
+      {data && (
+        <div className="apps-recheck">
+          <button type="button" className="btn" disabled={running || checking} onClick={() => load(true)}>
+            Verificar de novo
+          </button>
+        </div>
+      )}
       {loadError && (
         <div>
           <p role="alert" className="form-error">
@@ -165,9 +204,6 @@ export default function Aplicativos() {
           {unknown && (
             <div className="notice">
               <p>{UNKNOWN}</p>
-              <button type="button" className="btn" disabled={running} onClick={() => load(true)}>
-                Tentar de novo
-              </button>
             </div>
           )}
           <div className="apps-toolbar">
@@ -223,6 +259,7 @@ export default function Aplicativos() {
                   </li>
                 ))}
               </ul>
+              {skipped > 0 && <p className="muted">{`${skipped} não processado(s).`}</p>}
             </div>
           )}
 

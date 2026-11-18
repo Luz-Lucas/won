@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { systemStatus, windowReady, type SystemStatus } from "./api";
+import { listen } from "@tauri-apps/api/event";
+import { quitApp, systemStatus, windowReady, type SystemStatus } from "./api";
+import ConfirmDialog from "./components/ConfirmDialog";
 import Sidebar, { type Page } from "./components/Sidebar";
 import { JobsProvider, useJobSettled } from "./jobs";
 import Aplicativos from "./pages/Aplicativos";
@@ -50,6 +52,21 @@ function Shell() {
     [],
   );
 
+  // "Sair" com uma fila de aplicativos rodando: o backend pede confirmação.
+  const [askQuit, setAskQuit] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void listen("app:quit-confirm", () => setAskQuit(true)).then((un) => {
+      if (disposed) un();
+      else unlisten = un;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   // O Início sempre mostra dados atuais: ao abrir e depois de cada operação.
   useEffect(() => {
     if (page === "inicio") refreshStatus();
@@ -73,6 +90,25 @@ function Shell() {
         {page === "historico" && <Historico />}
         {page === "ajustes" && <Ajustes />}
       </main>
+      {askQuit && (
+        <ConfirmDialog
+          title="Sair do Sentinela?"
+          confirmLabel="Sair"
+          cancelLabel="Continuar"
+          onConfirm={() => {
+            setAskQuit(false);
+            quitApp().catch(() => {
+              /* sem backend: nada a fazer */
+            });
+          }}
+          onCancel={() => setAskQuit(false)}
+        >
+          <p>
+            Um aplicativo está sendo instalado. Ele vai terminar em segundo plano e os próximos da
+            fila não serão instalados. Sair mesmo assim?
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

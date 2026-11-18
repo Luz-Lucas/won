@@ -509,6 +509,10 @@ body {
   margin-bottom: var(--sp-1);
 }
 
+.apps-recheck {
+  margin-bottom: var(--sp-3);
+}
+
 .apps-toolbar {
   display: flex;
   flex-wrap: wrap;

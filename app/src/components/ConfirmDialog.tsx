@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 interface ConfirmDialogProps {
   title: string;
   confirmLabel: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
   children: React.ReactNode;
@@ -12,6 +13,7 @@ interface ConfirmDialogProps {
 export default function ConfirmDialog({
   title,
   confirmLabel,
+  cancelLabel = "Cancelar",
   onConfirm,
   onCancel,
   children,
@@ -45,7 +47,7 @@ export default function ConfirmDialog({
             ref={cancelRef}
             onClick={onCancel}
           >
-            Cancelar
+            {cancelLabel}
           </button>
           <button type="button" className="btn btn-danger" onClick={onConfirm}>
             {confirmLabel}
