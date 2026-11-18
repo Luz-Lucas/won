@@ -6,6 +6,7 @@ use std::sync::atomic::AtomicBool;
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
+use crate::apps::{self, AppsCommand};
 use crate::progress::{self, TerminalProgress};
 use crate::report::{self, human_bytes};
 use crate::tweak::{self, TweakCommand};
@@ -112,6 +113,11 @@ enum Command {
         #[command(subcommand)]
         action: TweakCommand,
     },
+    /// Lista, instala e atualiza aplicativos (via winget)
+    Apps {
+        #[command(subcommand)]
+        action: AppsCommand,
+    },
     /// Mostra versão, banco de assinaturas e privilégios
     Info,
 }
@@ -187,6 +193,7 @@ fn dispatch(command: Command) -> Result<i32> {
             Ok(0)
         }
         Command::Tweak { action } => tweak::run(action),
+        Command::Apps { action } => apps::run(action),
         Command::Info => cmd_info(),
     }
 }

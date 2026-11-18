@@ -507,3 +507,73 @@ fn tweak_undo_accepts_an_id_that_is_only_in_the_journal() {
         .stderr(contains("Antiga (removida-do-catalogo):"))
         .stderr(contains("Cancelado: nada foi alterado."));
 }
+
+fn apps_cmd() -> Command {
+    let mut cmd = Command::cargo_bin("sentinela").unwrap();
+    cmd.env("SENTINELA_WINGET", r"Z:\nao-existe\winget-fake.exe");
+    cmd
+}
+
+#[test]
+fn apps_list_shows_catalog() {
+    apps_cmd()
+        .args(["apps", "list"])
+        .assert()
+        .success()
+        .stdout(contains("firefox"))
+        .stdout(contains("?"));
+    let out = apps_cmd()
+        .args(["apps", "list", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let v = json_of(&out);
+    let first = &v.as_array().unwrap()[0];
+    for k in ["id", "name", "category", "winget"] {
+        assert!(first.get(k).is_some(), "missing {k}");
+    }
+    assert!(first["state"].is_null());
+}
+
+#[test]
+fn apps_list_filters_by_category_and_rejects_unknown() {
+    let out = apps_cmd()
+        .args(["apps", "list", "--json", "--category", "navegadores"])
+        .output()
+        .unwrap();
+    let v = json_of(&out);
+    let arr = v.as_array().unwrap();
+    assert!(!arr.is_empty());
+    assert!(arr.iter().all(|a| a["category"] == "navegadores"));
+    apps_cmd()
+        .args(["apps", "list", "--category", "nada"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn apps_install_unknown_id_exits_2() {
+    apps_cmd()
+        .args(["apps", "install", "nao-existe", "--yes"])
+        .assert()
+        .code(2)
+        .stderr(contains("aplicativo desconhecido: nao-existe"));
+}
+
+#[test]
+fn apps_install_without_winget_exits_2() {
+    apps_cmd()
+        .args(["apps", "install", "firefox", "--yes"])
+        .assert()
+        .code(2)
+        .stderr(contains("winget"));
+}
+
+#[test]
+fn apps_upgrade_requires_ids_or_all() {
+    apps_cmd().args(["apps", "upgrade"]).assert().code(2);
+    apps_cmd()
+        .args(["apps", "upgrade", "--all", "firefox"])
+        .assert()
+        .code(2);
+}
