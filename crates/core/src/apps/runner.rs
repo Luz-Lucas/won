@@ -3,6 +3,7 @@
 use std::io::Read;
 use std::process::Child;
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::parse::clean_output;
@@ -13,6 +14,8 @@ pub const TIMEOUT_QUICK: Duration = Duration::from_secs(2 * 60);
 pub const TIMEOUT_LISTING: Duration = Duration::from_secs(5 * 60);
 /// Instalar/atualizar.
 pub const TIMEOUT_CHANGE: Duration = Duration::from_secs(30 * 60);
+/// Espera máxima pelos pipes depois que o winget já terminou.
+const PIPE_GRACE: Duration = Duration::from_secs(5);
 /// Mensagem devolvida quando o tempo limite estoura.
 pub const TIMEOUT_MSG: &str = "O winget não respondeu a tempo.";
 
@@ -93,8 +96,8 @@ mod job {
         }
 
         /// Após término normal: não mata processos que o instalador deixou rodando.
-        pub fn disarm(&self) {
-            set_flags(self.0, 0);
+        pub fn disarm(&self) -> bool {
+            set_flags(self.0, 0)
         }
     }
 
@@ -119,7 +122,9 @@ mod job {
             None
         }
         pub fn terminate(&self) {}
-        pub fn disarm(&self) {}
+        pub fn disarm(&self) -> bool {
+            true
+        }
     }
 }
 
@@ -146,16 +151,31 @@ fn kill_tree(child: &mut Child, job: Option<&job::Job>) {
     let _ = child.wait();
 }
 
-fn drain<T: Read + Send + 'static>(pipe: Option<T>) -> Receiver<Vec<u8>> {
-    let (tx, rx) = mpsc::channel();
+/// Leitor de pipe: acumula o que já chegou e sinaliza quando o pipe fecha.
+struct Pipe {
+    buf: Arc<Mutex<Vec<u8>>>,
+    done: Receiver<()>,
+}
+
+fn drain<T: Read + Send + 'static>(pipe: Option<T>) -> Pipe {
+    let (tx, done) = mpsc::channel();
+    let buf = Arc::new(Mutex::new(Vec::new()));
+    let shared = buf.clone();
     std::thread::spawn(move || {
-        let mut buf = Vec::new();
         if let Some(mut p) = pipe {
-            let _ = p.read_to_end(&mut buf);
+            let mut chunk = [0u8; 4096];
+            while let Ok(n) = p.read(&mut chunk) {
+                if n == 0 {
+                    break;
+                }
+                if let Ok(mut b) = shared.lock() {
+                    b.extend_from_slice(&chunk[..n]);
+                }
+            }
         }
-        let _ = tx.send(buf);
+        let _ = tx.send(());
     });
-    rx
+    Pipe { buf, done }
 }
 
 impl CommandRunner for SystemRunner {
@@ -172,8 +192,8 @@ impl CommandRunner for SystemRunner {
         }
         let mut child = cmd.spawn().map_err(|e| e.to_string())?;
         let job = job::Job::assign(&child);
-        let out_rx = drain(child.stdout.take());
-        let err_rx = drain(child.stderr.take());
+        let out = drain(child.stdout.take());
+        let err = drain(child.stderr.take());
         let deadline = Instant::now() + timeout;
         let status = loop {
             match child.try_wait() {
@@ -189,27 +209,27 @@ impl CommandRunner for SystemRunner {
                 }
             }
         };
-        if let Some(j) = &job {
-            j.disarm();
-        }
-        // Um descendente que herdou os pipes pode segurá-los abertos: respeita o prazo.
-        let mut bufs = Vec::with_capacity(2);
-        for rx in [&out_rx, &err_rx] {
-            let left = deadline.saturating_duration_since(Instant::now());
-            match rx.recv_timeout(left) {
-                Ok(b) => bufs.push(b),
-                Err(_) => {
-                    if let Some(j) = &job {
-                        j.terminate();
-                    }
-                    return Err(TIMEOUT_MSG.into());
-                }
+        // Término normal: o job não pode mais matar o que o instalador deixou rodando.
+        if let Some(j) = job {
+            if j.disarm() {
+                drop(j);
+            } else {
+                // Sem conseguir desarmar, fechar o handle mataria os apps do usuário.
+                std::mem::forget(j);
             }
         }
+        // Um descendente (app aberto pelo instalador) pode herdar os pipes e
+        // segurá-los abertos: espera só um curto período e segue com o que veio.
+        let grace_end = Instant::now() + PIPE_GRACE;
+        for p in [&out, &err] {
+            let left = grace_end.saturating_duration_since(Instant::now());
+            let _ = p.done.recv_timeout(left);
+        }
+        let take = |p: &Pipe| p.buf.lock().map(|b| b.clone()).unwrap_or_default();
         Ok(Output {
             code: status.code().unwrap_or(-1),
-            stdout: clean_output(&String::from_utf8_lossy(&bufs[0])),
-            stderr: clean_output(&String::from_utf8_lossy(&bufs[1])),
+            stdout: clean_output(&String::from_utf8_lossy(&take(&out))),
+            stderr: clean_output(&String::from_utf8_lossy(&take(&err))),
         })
     }
 }
@@ -245,6 +265,31 @@ mod tests {
         assert!(t.elapsed() < Duration::from_secs(6), "{:?}", t.elapsed());
         std::thread::sleep(Duration::from_millis(500));
         assert_eq!(ping_count(marker), 0, "o neto ainda está rodando");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn exited_parent_with_pipe_holding_grandchild_returns_ok_and_leaves_it_alive() {
+        // O pai sai na hora (código 0); o neto (ping) segura o stdout por ~9 s.
+        let marker = "-l 1238";
+        let t = Instant::now();
+        let r = SystemRunner
+            .run(
+                "cmd",
+                &["/c", "start /b ping -n 10 -l 1238 127.0.0.1 & exit 0"],
+                TIMEOUT_QUICK,
+            )
+            .expect("deve retornar Ok");
+        assert_eq!(r.code, 0);
+        assert!(t.elapsed() < Duration::from_secs(8), "{:?}", t.elapsed());
+        assert_eq!(ping_count(marker), 1, "o neto deveria continuar vivo");
+        // Deixa o neto terminar sozinho.
+        for _ in 0..20 {
+            if ping_count(marker) == 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
     }
 
     #[cfg(windows)]
