@@ -9,8 +9,9 @@ use std::time::Duration;
 
 use serde::Serialize;
 
-use super::backend::{Snapshot, SystemBackend, target_of};
+use super::backend::{Snapshot, SystemBackend, reg_key, target_of};
 use super::catalog::Catalog;
+use super::catalog::removable_key_chain;
 use super::journal::{Journal, JournalAction, JournalEntry, JournalLock, LOCK_BUSY, LockError};
 use super::model::{Action, Effect, Tweak};
 use super::state::{TweakStatus, describe, is_hkcu, view};
@@ -99,7 +100,7 @@ fn journal_intent(
     action: &Action,
     before: &Snapshot,
     target: &Snapshot,
-    key_created: bool,
+    created_from: Option<String>,
 ) {
     let pos = match journal.entries.iter().position(|e| e.tweak_id == t.id) {
         Some(p) => p,
@@ -126,7 +127,8 @@ fn journal_intent(
             before: before.clone(),
             written: target.clone(),
             done: false,
-            key_created,
+            key_created: created_from.is_some(),
+            created_from,
         }),
     }
 }
@@ -160,10 +162,10 @@ fn apply_one(
             return Err(format!("indisponível: {reason}"));
         }
 
-        // A chave não existir antes da primeira escrita? O desfazer a remove se ficar vazia.
-        let key_created = !b.key_exists(action)?;
+        // Chave mais alta que esta escrita vai criar; o desfazer a remove se ficar vazia.
+        let created_from = created_from_of(b, action)?;
         let backup = journal.entries.clone();
-        journal_intent(journal, t, action, &before, &target, key_created);
+        journal_intent(journal, t, action, &before, &target, created_from);
         if let Err(e) = journal.save(path) {
             journal.entries = backup;
             return Err(format!("não foi possível gravar o diário: {e}"));
@@ -199,9 +201,50 @@ fn remove_created_key(b: &dyn SystemBackend, ja: &JournalAction) {
         ja.before,
         Snapshot::Registry { value: None } | Snapshot::ListEntry { value: None }
     );
-    if ja.key_created && gone {
+    if (ja.key_created || ja.created_from.is_some()) && gone {
         // Melhor esforço: uma chave vazia que sobra não impede o desfazer.
-        let _ = b.delete_key_if_empty(&ja.action);
+        let _ = b.delete_key_if_empty(&ja.action, ja.created_from.as_deref());
+    }
+}
+
+/// A chave mais alta (dentro da raiz permitida) que ainda não existe, da raiz para a folha.
+fn created_from_of(b: &dyn SystemBackend, action: &Action) -> Result<Option<String>, String> {
+    let Some((hive, path)) = reg_key(action) else {
+        return Ok(None);
+    };
+    for p in removable_key_chain(hive, path).into_iter().rev() {
+        let probe = Action::Registry {
+            hive,
+            path: p.clone(),
+            name: String::new(),
+            value: None,
+        };
+        if !b.key_exists(&probe)? {
+            return Ok(Some(p));
+        }
+    }
+    Ok(None)
+}
+
+/// Chave compartilhada: ao desfazer `ja`, quem ainda escreve na mesma chave herda o
+/// `created_from` mais alto, para o último desfazer poder remover a chave.
+fn hand_over_created_from(journal: &mut Journal, pos: usize, ja: &JournalAction) {
+    let (Some(cf), Some((hive, path))) = (&ja.created_from, reg_key(&ja.action)) else {
+        return;
+    };
+    for (i, e) in journal.entries.iter_mut().enumerate() {
+        if i == pos {
+            continue;
+        }
+        for oa in &mut e.actions {
+            let same =
+                reg_key(&oa.action).is_some_and(|(h, p)| h == hive && p.eq_ignore_ascii_case(path));
+            let higher = oa.created_from.as_ref().is_none_or(|o| cf.len() < o.len());
+            if same && higher {
+                oa.created_from = Some(cf.clone());
+                oa.key_created = true;
+            }
+        }
     }
 }
 
@@ -314,10 +357,13 @@ fn undo_precheck(ids: &[String], b: &dyn SystemBackend, journal: &Journal) -> Re
             continue;
         };
         for ja in entry.actions.iter().rev() {
-            if !ja.done || (!hkcu_ok && is_hkcu(&ja.action)) {
-                continue; // o desfazer reporta esses casos por conta própria
+            if !hkcu_ok && is_hkcu(&ja.action) {
+                continue; // o desfazer reporta esse caso por conta própria
             }
-            let key = describe(&ja.action);
+            if !ja.done {
+                return Err("falhou ao desfazer a opção atual: estado não verificado".to_string());
+            }
+            let key = describe(&ja.action).to_ascii_lowercase();
             let cur = match sim.get(&key) {
                 Some(c) => c.clone(),
                 None => b
@@ -429,12 +475,14 @@ fn undo_ids(
             if cur == ja.before {
                 // Já restaurado (ex.: queda depois de escrever, antes de limpar o diário).
                 restored += 1;
+                hand_over_created_from(journal, pos, ja);
                 remove_created_key(b, ja);
             } else if cur == ja.written {
                 match b.write(&ja.action, &ja.before) {
                     Ok(()) => {
                         restored += 1;
                         wrote = true;
+                        hand_over_created_from(journal, pos, ja);
                         remove_created_key(b, ja);
                     }
                     Err(e) => {
@@ -847,6 +895,7 @@ mod tests {
                     written: target_of(&a),
                     done: false,
                     key_created: false,
+                    created_from: None,
                 }],
             }],
         };
@@ -1330,6 +1379,7 @@ mod tests {
             written: dw(v),
             done: true,
             key_created: false,
+            created_from: None,
         };
         let entry = |id: &str, a| crate::tweaks::journal::JournalEntry {
             tweak_id: id.into(),
@@ -1495,5 +1545,175 @@ mod tests {
         let j = Journal::load(&p);
         assert_eq!(j.entries.len(), 1);
         assert!(!j.entries[0].actions[0].key_created);
+    }
+
+    fn reg_at(path: &str, name: &str, v: u32) -> Action {
+        Action::Registry {
+            hive: Hive::Hkcu,
+            path: path.into(),
+            name: name.into(),
+            value: Some(RegValue::Dword(v)),
+        }
+    }
+
+    #[test]
+    fn undo_stops_at_topmost_created_key_and_keeps_preexisting_parent() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let parent = "Software\\Microsoft\\P";
+        let child = "Software\\Microsoft\\P\\Q";
+        b.create_key(Hive::Hkcu, parent); // o pai já existia, vazio
+        let a = reg_at(child, "V", 1);
+        let c = cat(vec![tweak("t", Effect::Immediate, vec![a.clone()])]);
+        assert!(apply(&ids(&["t"]), &c, &b, &p).results[0].ok);
+        let ja = &Journal::load(&p).entries[0].actions[0];
+        assert_eq!(ja.created_from.as_deref(), Some(child));
+        assert!(undo(&ids(&["t"]), &b, &p).results[0].ok);
+        assert!(!b.key_exists(&a).unwrap(), "o filho criado sumiu");
+        assert!(
+            b.key_exists(&reg_at(parent, "V", 1)).unwrap(),
+            "o pai que já existia fica"
+        );
+    }
+
+    #[test]
+    fn undo_removes_every_key_the_engine_created() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let a = reg_at("Software\\Microsoft\\P\\Q", "V", 1);
+        let c = cat(vec![tweak("t", Effect::Immediate, vec![a.clone()])]);
+        assert!(apply(&ids(&["t"]), &c, &b, &p).results[0].ok);
+        let ja = &Journal::load(&p).entries[0].actions[0];
+        assert_eq!(ja.created_from.as_deref(), Some("Software\\Microsoft\\P"));
+        assert!(undo(&ids(&["t"]), &b, &p).results[0].ok);
+        assert!(!b.key_exists(&a).unwrap());
+        assert!(
+            !b.key_exists(&reg_at("Software\\Microsoft\\P", "V", 1))
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn legacy_journal_with_key_created_removes_only_the_leaf() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let a = reg_at("Software\\Microsoft\\P\\Q", "V", 1);
+        let c = cat(vec![tweak("t", Effect::Immediate, vec![a.clone()])]);
+        assert!(apply(&ids(&["t"]), &c, &b, &p).results[0].ok);
+        let mut v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap();
+        for e in v["entries"].as_array_mut().unwrap() {
+            for x in e["actions"].as_array_mut().unwrap() {
+                x.as_object_mut().unwrap().remove("created_from");
+            }
+        }
+        std::fs::write(&p, serde_json::to_string(&v).unwrap()).unwrap();
+        assert!(undo(&ids(&["t"]), &b, &p).results[0].ok);
+        assert!(!b.key_exists(&a).unwrap());
+        assert!(
+            b.key_exists(&reg_at("Software\\Microsoft\\P", "V", 1))
+                .unwrap(),
+            "só a folha"
+        );
+    }
+
+    #[test]
+    fn shared_key_is_removed_when_the_last_action_is_undone() {
+        for undo_order in [["a", "b"], ["b", "a"]] {
+            let d = tempfile::tempdir().unwrap();
+            let p = jpath(&d);
+            let b = MemoryBackend::new();
+            let k = "Software\\Microsoft\\K";
+            let c = cat(vec![
+                tweak("a", Effect::Immediate, vec![reg_at(k, "V", 1)]),
+                tweak("b", Effect::Immediate, vec![reg_at(k, "W", 2)]),
+            ]);
+            assert!(
+                apply(&ids(&["a", "b"]), &c, &b, &p)
+                    .results
+                    .iter()
+                    .all(|r| r.ok)
+            );
+            assert!(b.key_exists(&reg_at(k, "V", 1)).unwrap());
+            for id in undo_order {
+                assert!(undo(&ids(&[id]), &b, &p).results[0].ok);
+            }
+            assert!(
+                !b.key_exists(&reg_at(k, "V", 1)).unwrap(),
+                "ordem {undo_order:?}: a chave compartilhada some"
+            );
+        }
+    }
+
+    #[test]
+    fn precheck_refuses_unverified_action_and_compares_case_insensitively() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        b.set(&reg("V", 0), dw(7));
+        let c = cat(vec![choice_tweak("a", 1), choice_tweak("b", 2)]);
+        assert!(apply(&ids(&["a"]), &c, &b, &p).results[0].ok);
+        // ação pendente (done: false) no membro atual: recusa sem escrever nada
+        let mut j = Journal::load(&p);
+        j.entries[0].actions[0].done = false;
+        j.save(&p).unwrap();
+        let before = journal_state(&p);
+        let r = apply_choice("b", &c, &b, &p);
+        // reconcile pode concluir a ação pendente; aí a troca é válida
+        if r.results[0].ok {
+            assert_eq!(b.get(&reg("V", 0)), dw(2));
+        } else {
+            assert_eq!(b.get(&reg("V", 0)), dw(1), "nada escrito");
+            assert_eq!(journal_state(&p), before);
+        }
+        // o precheck direto: pendente => Err
+        let mut j = Journal::default();
+        j.entries.push(crate::tweaks::journal::JournalEntry {
+            tweak_id: "a".into(),
+            title: "a".into(),
+            applied_at: "x".into(),
+            actions: vec![crate::tweaks::journal::JournalAction {
+                action: reg("V", 1),
+                before: dw(7),
+                written: dw(1),
+                done: false,
+                key_created: false,
+                created_from: None,
+            }],
+        });
+        let e = undo_precheck(&ids(&["a"]), &b, &j).unwrap_err();
+        assert!(e.contains("estado não verificado"), "{e}");
+        // mesmas chaves com caixa diferente: a simulação as trata como a mesma
+        let upper = |p: &str| Action::Registry {
+            hive: Hive::Hkcu,
+            path: p.into(),
+            name: "V".into(),
+            value: Some(RegValue::Dword(1)),
+        };
+        let mk =
+            |id: &str, a: Action, before: u32, written: u32| crate::tweaks::journal::JournalEntry {
+                tweak_id: id.into(),
+                title: id.into(),
+                applied_at: "x".into(),
+                actions: vec![crate::tweaks::journal::JournalAction {
+                    action: a,
+                    before: dw(before),
+                    written: dw(written),
+                    done: true,
+                    key_created: false,
+                    created_from: None,
+                }],
+            };
+        let j = Journal {
+            entries: vec![
+                mk("a", upper("Software\\Microsoft\\X"), 7, 1),
+                mk("b", upper("SOFTWARE\\MICROSOFT\\X"), 1, 2),
+            ],
+        };
+        b.set(&upper("SOFTWARE\\MICROSOFT\\X"), dw(2));
+        assert!(undo_precheck(&ids(&["b", "a"]), &b, &j).is_ok());
     }
 }

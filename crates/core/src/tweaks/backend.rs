@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
-use super::catalog::removable_key_chain;
+use super::catalog::keys_to_remove;
 use super::model::{Action, Hive, RegValue, StartType};
 
 /// Plano de energia "Equilibrado" (padrão do Windows).
@@ -49,9 +49,14 @@ pub trait SystemBackend: Send + Sync {
     fn key_exists(&self, _action: &Action) -> Result<bool, String> {
         Ok(true)
     }
-    /// Apaga a chave da ação (e os pais que o motor criou) se estiver vazia:
-    /// sem valores nem subchaves, e nunca acima da raiz permitida.
-    fn delete_key_if_empty(&self, _action: &Action) -> Result<(), String> {
+    /// Apaga a chave da ação se estiver vazia (sem valores nem subchaves) e sobe pelos
+    /// pais vazios até `created_from` inclusive (`None`: só a chave da ação). Nunca
+    /// apaga acima da raiz permitida nem uma chave que não esteja vazia.
+    fn delete_key_if_empty(
+        &self,
+        _action: &Action,
+        _created_from: Option<&str>,
+    ) -> Result<(), String> {
         Ok(())
     }
 }
@@ -273,12 +278,16 @@ impl SystemBackend for MemoryBackend {
         })
     }
 
-    fn delete_key_if_empty(&self, action: &Action) -> Result<(), String> {
+    fn delete_key_if_empty(
+        &self,
+        action: &Action,
+        created_from: Option<&str>,
+    ) -> Result<(), String> {
         let Some((hive, path)) = reg_key(action) else {
             return Ok(());
         };
         let mut st = self.lock();
-        for p in removable_key_chain(hive, path) {
+        for p in keys_to_remove(hive, path, created_from) {
             let lp = p.to_ascii_lowercase();
             if !st.is_empty_key(hive, &lp) {
                 break;

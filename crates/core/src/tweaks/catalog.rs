@@ -58,6 +58,20 @@ pub fn removable_key_chain(hive: Hive, path: &str) -> Vec<String> {
         .collect()
 }
 
+/// Chaves que o desfazer pode apagar (folha para cima): só a folha se `created_from` é
+/// `None`; senão até `created_from` inclusive (nunca uma chave que já existia antes).
+pub fn keys_to_remove(hive: Hive, path: &str, created_from: Option<&str>) -> Vec<String> {
+    let chain = removable_key_chain(hive, path);
+    let n = match created_from {
+        None => 1,
+        Some(c) => chain
+            .iter()
+            .position(|k| k.eq_ignore_ascii_case(c))
+            .map_or(1, |i| i + 1),
+    };
+    chain.into_iter().take(n).collect()
+}
+
 fn allowed_root_segments(hive: Hive, path: &str) -> Option<usize> {
     let lower = path.to_ascii_lowercase();
     // Chave de teste dos testes `#[ignore]` do backend real.
@@ -445,6 +459,29 @@ mod tests {
         );
         let all = reg(Hive::Hkcu, r"Software\Classes\CLSID");
         assert_rejected(tweak("all", vec![all], false), "fora das raízes permitidas");
+    }
+
+    #[test]
+    fn keys_to_remove_stops_after_created_from() {
+        let g = r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+        let leaf = format!(r"{g}\InprocServer32");
+        // Diário antigo (sem created_from): só a folha.
+        assert_eq!(keys_to_remove(Hive::Hkcu, &leaf, None), vec![leaf.clone()]);
+        // O motor criou só a folha: o {GUID} que já existia não entra.
+        assert_eq!(
+            keys_to_remove(Hive::Hkcu, &leaf, Some(&leaf)),
+            vec![leaf.clone()]
+        );
+        // O motor criou também o {GUID}: sobe até ele.
+        assert_eq!(
+            keys_to_remove(Hive::Hkcu, &leaf, Some(&g.to_ascii_uppercase())),
+            vec![leaf.clone(), g.to_string()]
+        );
+        // created_from desconhecido: só a folha.
+        assert_eq!(
+            keys_to_remove(Hive::Hkcu, &leaf, Some(r"Software\Classes")),
+            vec![leaf]
+        );
     }
 
     #[test]
