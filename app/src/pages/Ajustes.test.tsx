@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
-import type { SystemStatus, UpdateSummary } from "../api";
+import type { SettingsView, SystemStatus, UpdateSummary } from "../api";
 import Ajustes from "./Ajustes";
 import { JobsProvider } from "../jobs";
 
@@ -16,6 +16,8 @@ vi.mock("../api", () => ({
   abuseKeySet: vi.fn(),
   abuseKeyClear: vi.fn(),
   abuseKeyPresent: vi.fn(),
+  settingsGet: vi.fn(),
+  settingsSet: vi.fn(),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),
 }));
@@ -72,6 +74,14 @@ const finish = async (result: UpdateSummary, job = 9) => {
   });
 };
 
+const prefsView = (over: Partial<SettingsView> = {}): SettingsView => ({
+  start_with_windows: true,
+  close_to_tray: true,
+  elevated: false,
+  note: null,
+  ...over,
+});
+
 const SECRET = "chave-super-secreta-123";
 
 describe("Ajustes", () => {
@@ -82,6 +92,72 @@ describe("Ajustes", () => {
     vi.mocked(api.abuseKeySet).mockReset().mockResolvedValue(undefined);
     vi.mocked(api.abuseKeyClear).mockReset().mockResolvedValue(undefined);
     vi.mocked(api.abuseKeyPresent).mockReset().mockResolvedValue("none");
+    vi.mocked(api.settingsGet).mockReset().mockResolvedValue(prefsView());
+    vi.mocked(api.settingsSet).mockReset().mockResolvedValue(prefsView());
+  });
+
+  it("Inicialização: mostra os dois ajustes ligados por padrão", async () => {
+    render(<Ajustes />);
+    expect(
+      await screen.findByRole("checkbox", { name: "Iniciar com o Windows" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "Ao fechar, manter na área de notificação",
+      }),
+    ).toBeChecked();
+  });
+
+  it("desligar Iniciar com o Windows chama settings_set mantendo o outro ajuste", async () => {
+    vi.mocked(api.settingsSet).mockResolvedValue(
+      prefsView({ start_with_windows: false }),
+    );
+    render(<Ajustes />);
+    const box = await screen.findByRole("checkbox", {
+      name: "Iniciar com o Windows",
+    });
+    await userEvent.click(box);
+    expect(api.settingsSet).toHaveBeenCalledWith(false, true);
+    expect(box).not.toBeChecked();
+  });
+
+  it("desligar manter na área de notificação chama settings_set mantendo o outro ajuste", async () => {
+    vi.mocked(api.settingsSet).mockResolvedValue(
+      prefsView({ close_to_tray: false }),
+    );
+    render(<Ajustes />);
+    const box = await screen.findByRole("checkbox", {
+      name: "Ao fechar, manter na área de notificação",
+    });
+    await userEvent.click(box);
+    expect(api.settingsSet).toHaveBeenCalledWith(true, false);
+    expect(box).not.toBeChecked();
+  });
+
+  it("elevado: mostra o aviso devolvido pelo backend", async () => {
+    vi.mocked(api.settingsGet).mockResolvedValue(
+      prefsView({
+        elevated: true,
+        note: "Abra o Sentinela sem administrador para mudar a inicialização com o Windows.",
+      }),
+    );
+    render(<Ajustes />);
+    expect(
+      await screen.findByText(/Abra o Sentinela sem administrador/),
+    ).toBeInTheDocument();
+  });
+
+  it("erro ao salvar mostra a mensagem", async () => {
+    vi.mocked(api.settingsSet).mockRejectedValue(
+      "Não foi possível alterar a inicialização com o Windows.",
+    );
+    render(<Ajustes />);
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: "Iniciar com o Windows" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível alterar a inicialização",
+    );
   });
 
   it("mostra pasta, fontes com data e contagem", async () => {

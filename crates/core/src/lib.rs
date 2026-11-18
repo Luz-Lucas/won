@@ -8,6 +8,7 @@ pub mod quarantine;
 pub mod scan;
 pub mod secrets;
 pub mod serde_path;
+pub mod settings;
 pub mod signatures;
 pub mod status;
 pub mod tweaks;

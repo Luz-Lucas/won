@@ -10,7 +10,7 @@ use serde::Serialize;
 use sentinela_core::clean::platform;
 use sentinela_core::tweaks::{
     Catalog, Change, Effect, ItemResult, Journal, SystemBackend, TweakStatus, TweakView,
-    WindowsBackend, apply, create_restore_point, default_journal_path, describe, snapshot_text,
+    WindowsBackend, apply, create_restore_point, default_journal_path, describe, snapshot_label,
     undo, undo_all, view,
 };
 
@@ -285,14 +285,14 @@ fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
             eprintln!("{} ({}):", e.title, e.tweak_id);
             for ja in &e.actions {
                 let current = match backend.read(&ja.action) {
-                    Ok(s) => snapshot_text(&s),
+                    Ok(s) => snapshot_label(&s, &backend),
                     Err(m) => format!("erro: {m}"),
                 };
                 eprintln!(
                     "  {}: {} → {}",
                     describe(&ja.action),
                     current,
-                    snapshot_text(&ja.before)
+                    snapshot_label(&ja.before, &backend)
                 );
             }
         }

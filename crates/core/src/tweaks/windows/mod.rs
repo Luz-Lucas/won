@@ -155,6 +155,10 @@ impl SystemBackend for WindowsBackend {
     fn hkcu_allowed(&self) -> bool {
         self.hkcu_allowed
     }
+
+    fn scheme_name(&self, guid: &str) -> Option<String> {
+        power::friendly_name(guid)
+    }
 }
 
 /// Cria um ponto de restauração (BEGIN + END). Exige administrador.

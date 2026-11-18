@@ -112,6 +112,15 @@ describe("App", () => {
     ).toHaveLength(1);
   });
 
+  it("avisa o backend (window_ready) ao montar", async () => {
+    render(<App />);
+    await waitFor(() =>
+      expect(
+        invokeMock.mock.calls.filter(([cmd]) => cmd === "window_ready"),
+      ).toHaveLength(1),
+    );
+  });
+
   it("Início recarrega o estado ao voltar e quando um job termina", async () => {
     render(<App />);
     expect(await screen.findByText("2 na quarentena")).toBeInTheDocument();

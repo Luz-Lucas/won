@@ -281,7 +281,8 @@ export default function Jogos() {
                               </span>
                             )}
                           </div>
-                          {i.view.blocked && (
+                          {i.view.blocked &&
+                            !(t.needs_admin && i.view.blocked === "requer administrador") && (
                             <p className="muted clean-warning">{i.view.blocked}</p>
                           )}
                           {data.laptop && t.laptop_warning && (
