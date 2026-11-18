@@ -1,0 +1,168 @@
+import { invoke } from "@tauri-apps/api/core";
+
+export interface SourceInfo {
+  name: string;
+  url: string;
+  fetched_at: string;
+  count: number;
+}
+
+export interface DbStatus {
+  dir: string;
+  initialized: boolean;
+  sources: SourceInfo[];
+  warnings: string[];
+}
+
+export type ActivityKind = "clean" | "scan" | "quarantine" | "restore" | "update";
+
+export interface ActivityEntry {
+  at: string;
+  kind: ActivityKind;
+  summary: string;
+}
+
+export interface SystemStatus {
+  version: string;
+  elevated: boolean;
+  db: DbStatus;
+  quarantine_count: number;
+  activity: ActivityEntry[];
+}
+
+export const systemStatus = () => invoke<SystemStatus>("system_status");
+export const relaunchElevated = () => invoke<void>("relaunch_elevated");
+export const jobCancel = (id: number) => invoke<boolean>("job_cancel", { id });
+
+export type JobKind = "scan" | "clean" | "find_large" | "find_dupes" | "update";
+
+/** Id do job deste tipo que segue rodando no backend, se houver. */
+export const jobRunning = (kind: JobKind) =>
+  invoke<number | null>("job_running", { kind });
+
+export interface Candidate {
+  path: string;
+  size: number;
+}
+
+export interface CategorySummary {
+  id: string;
+  needs_admin: boolean;
+  files: number;
+  bytes: number;
+  warnings: string[];
+  skipped_reason: string | null;
+  sample: Candidate[];
+  deleted: number | null;
+  freed: number | null;
+  skipped_files: number;
+}
+
+export interface CleanSummary {
+  categories: CategorySummary[];
+  total_files: number;
+  total_bytes: number;
+  deleted: number;
+  freed: number;
+  elevated: boolean;
+}
+
+export const cleanPlan = (selected: string[]) =>
+  invoke<CleanSummary>("clean_plan", { selected });
+export const cleanApply = (selected: string[]) =>
+  invoke<number>("clean_apply", { selected });
+
+export type ScanTarget =
+  | { kind: "quick" }
+  | { kind: "full" }
+  | { kind: "custom"; paths: string[] };
+
+export type Severity = "info" | "suspicious" | "malicious";
+
+export interface Finding {
+  detector: string;
+  rule: string;
+  severity: Severity;
+  detail: string;
+}
+
+export interface ScanItem {
+  path: string;
+  verdict: Severity;
+  findings: Finding[];
+}
+
+export interface WalkError {
+  path: string;
+  reason: string;
+}
+
+export interface ScanSummary {
+  scanned: number;
+  interrupted: boolean;
+  malicious: number;
+  suspicious: number;
+  items: ScanItem[];
+  items_total: number;
+  errors: WalkError[];
+  errors_total: number;
+  missing: string[];
+  db_initialized: boolean;
+  warnings: string[];
+}
+
+export interface QuarantineEntry {
+  id: string;
+  original_path: string;
+  sha256: string;
+  size: number;
+  rule: string;
+  quarantined_at: string;
+}
+
+export const scanStart = (target: ScanTarget) =>
+  invoke<number>("scan_start", { target });
+export const quarantineList = () =>
+  invoke<QuarantineEntry[]>("quarantine_list");
+export const quarantineRestore = (id: string) =>
+  invoke<string>("quarantine_restore", { id });
+
+export interface UpdateSummary {
+  hashes: number;
+  rules_ok: number;
+  rules_rejected: number;
+  rules_count: number;
+  warnings: string[];
+}
+
+export const signaturesUpdate = () => invoke<number>("signatures_update");
+export const abuseKeySet = (key: string) =>
+  invoke<void>("abuse_key_set", { key });
+export const abuseKeyClear = () => invoke<void>("abuse_key_clear");
+/** De onde viria a chave: salva, variável de ambiente ou nenhuma. Nunca a chave. */
+export type KeySource = "stored" | "env" | "none";
+
+export const abuseKeyPresent = () => invoke<KeySource>("abuse_key_present");
+
+export interface LargeFile {
+  path: string;
+  size: number;
+}
+
+export interface DupGroup {
+  size: number;
+  sha256: string;
+  paths: string[];
+}
+
+export interface FindResult<T> {
+  items: T[];
+  errors: WalkError[];
+  errors_total: number;
+  interrupted: boolean;
+}
+
+export const diskFindLarge = (path: string, top: number, minMb: number) =>
+  invoke<number>("disk_find_large", { path, top, minMb });
+export const diskFindDupes = (path: string, minKb: number) =>
+  invoke<number>("disk_find_dupes", { path, minKb });

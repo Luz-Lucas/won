@@ -1,6 +1,6 @@
 # Sentinela
 
-Antivírus e limpador de arquivos para Windows, escrito em Rust (linha de comando). Varre arquivos com assinaturas de hash (SHA-256), regras YARA e heurísticas de executáveis PE, além de limpar lixo do sistema e encontrar arquivos grandes e duplicados. Distribuído como um único `sentinela.exe`, sem dependências externas.
+Antivírus e limpador de arquivos para Windows, escrito em Rust, com janela (Tauri) e linha de comando. Varre arquivos com assinaturas de hash (SHA-256), regras YARA e heurísticas de executáveis PE, além de limpar lixo do sistema e encontrar arquivos grandes e duplicados. Distribuído por um instalador do Windows que traz a janela e o `sentinela.exe` (linha de comando).
 
 > **Aviso importante:** o Sentinela é um projeto complementar e **não substitui** um antivírus completo. **Mantenha o Windows Defender (Segurança do Windows) sempre ativo.**
 
@@ -8,7 +8,23 @@ Antivírus e limpador de arquivos para Windows, escrito em Rust (linha de comand
 
 ## Download
 
-Baixe o `sentinela.exe` mais recente na página de [releases](https://github.com/Luz-Lucas/sentinela/releases).
+Baixe o instalador `Sentinela_<versão>_x64-setup.exe` mais recente na página de [releases](https://github.com/Luz-Lucas/sentinela/releases). Ele instala para todos os usuários (em `C:\Program Files\Sentinela`, pede permissão de administrador) e coloca lado a lado a janela (`sentinela-gui.exe`) e o `sentinela.exe`. Não há versão portátil. A release também anexa o `sentinela.exe` solto, para quem só quer a linha de comando.
+
+### Interface gráfica
+
+A janela do Sentinela tem cinco páginas, na barra lateral:
+
+- **Início**: situação da proteção, atalhos para verificar e liberar espaço, e a atividade recente.
+- **Limpeza**: simula a limpeza e mostra, por categoria, o que seria apagado e o espaço liberado. Nada é apagado antes de você confirmar; categorias desmarcadas são mantidas.
+- **Segurança**: verifica pastas ou o computador inteiro (com cancelamento) e lista o que encontrou, sem mover nem apagar nada; também lista os itens que o `sentinela full` colocou em quarentena e permite restaurá-los, sempre depois de confirmar.
+- **Disco**: lista os maiores arquivos e os duplicados de uma pasta. Só lista; nunca apaga.
+- **Ajustes**: atualiza o banco de assinaturas e guarda a chave gratuita da abuse.ch.
+
+O rodapé da barra lateral mostra se o programa está como administrador e oferece "Reiniciar como administrador". As regras de segurança são as mesmas do `sentinela.exe` descrito abaixo.
+
+### Linha de comando
+
+Depois de instalar, o `sentinela.exe` fica na pasta de instalação (`C:\Program Files\Sentinela`); adicione-a ao `PATH` ou use o caminho completo.
 
 ## Comandos
 
@@ -193,16 +209,31 @@ Sem banco local: `banco não inicializado — rode `sentinela update``.
 
 ## Como compilar
 
-Requer o [Rust](https://rustup.rs) estável.
+Requer o [Rust](https://rustup.rs) estável e, para a janela, o [Node.js](https://nodejs.org) 22.
+
+Linha de comando e núcleo:
 
 ```bash
-cargo build --release
-cargo test
+cargo build --release -p sentinela
+cargo test --workspace
 cargo fmt --check
-cargo clippy --all-targets -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-O binário fica em `target/release/sentinela` (`sentinela.exe` no Windows). Ao publicar uma tag `v*`, o GitHub Actions compila no Windows e cria a release automaticamente com o `sentinela.exe`.
+Janela e instalador (em `app/`; o `dist` do frontend precisa existir para compilar o `sentinela-gui` com `cargo`):
+
+```bash
+cd app
+npm ci
+npm test                # testes do frontend
+npm run build           # compila o frontend
+npm run tauri dev       # janela em modo de desenvolvimento
+npm run tauri build     # gera o instalador NSIS
+```
+
+O `npm run tauri build` compila o frontend e o CLI em release, copia o `sentinela.exe` para `app/src-tauri/bin/` e empacota tudo em `target/release/bundle/nsis/Sentinela_<versão>_x64-setup.exe`. O roteiro de testes manuais está em [docs/testes-manuais-fase-1.md](docs/testes-manuais-fase-1.md).
+
+Ao publicar uma tag `v*`, o GitHub Actions compila no Windows e cria a release com o instalador e o `sentinela.exe` solto.
 
 ## Licença
 

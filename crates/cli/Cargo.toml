@@ -1,0 +1,24 @@
+[package]
+name = "sentinela"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "sentinela"
+path = "src/main.rs"
+
+[dependencies]
+sentinela-core = { path = "../core" }
+anyhow.workspace = true
+clap.workspace = true
+ctrlc.workspace = true
+globset.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+tempfile.workspace = true
+sha2.workspace = true
+hex.workspace = true
+serde_json.workspace = true

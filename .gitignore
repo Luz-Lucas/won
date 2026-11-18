@@ -1,3 +1,6 @@
 /target
 /.superpowers
 /.claude/
+node_modules
+app/dist
+app/src-tauri/bin/

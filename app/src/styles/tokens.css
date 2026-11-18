@@ -1,0 +1,35 @@
+:root {
+  color-scheme: dark;
+
+  /* Superfícies: grafite com leve tom frio */
+  --bg: #0e1013;
+  --surface: #14171b;
+  --surface-2: #1b1f24;
+  --border: #262b32;
+
+  /* Texto */
+  --text: #e6e8eb;
+  --text-dim: #8b93a0;
+
+  /* Cor de destaque única: âmbar de sinalização */
+  --accent: #ffb020;
+  --accent-ink: #1a1203;
+  --accent-soft: rgba(255, 176, 32, 0.12);
+  --danger: #ff6b6b;
+
+  /* Tipografia (fontes locais; sem conteúdo remoto) */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-xl: 22px;
+
+  /* Espaço e forma */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --radius: 4px;
+  --sidebar-w: 200px;
+}
