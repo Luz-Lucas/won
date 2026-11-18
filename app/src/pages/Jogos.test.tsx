@@ -200,4 +200,84 @@ describe("Jogos", () => {
       await screen.findByText("Título a: acesso negado"),
     ).toBeInTheDocument();
   });
+
+  it("shows_admin_banner_when_not_elevated_even_if_blocked", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(
+      page(
+        [
+          item("a", {
+            tweak: { needs_admin: true },
+            view: { blocked: "Requer administrador." },
+          }),
+        ],
+        { elevated: false },
+      ),
+    );
+    vi.mocked(api.relaunchElevated).mockResolvedValue(undefined);
+    render(<Jogos />);
+    expect(
+      await screen.findByText("Algumas otimizações exigem administrador."),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Reiniciar como administrador" }),
+    );
+    expect(api.relaunchElevated).toHaveBeenCalled();
+  });
+
+  it("personalizado_unchecks_rows_that_became_applied_after_reload", async () => {
+    vi.mocked(api.tweaksList)
+      .mockResolvedValueOnce(page([item("a", { tweak: { recommended: false } })]))
+      .mockResolvedValue(
+        page([
+          item("a", {
+            tweak: { recommended: false },
+            view: { status: "applied" },
+          }),
+        ]),
+      );
+    vi.mocked(api.tweaksApply).mockResolvedValue(7);
+    render(<Jogos />);
+    await userEvent.click(
+      await screen.findByRole("checkbox", { name: /Título a/ }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Aplicar" }).slice(-1)[0],
+    );
+    await finish({
+      results: [{ tweak_id: "a", ok: true, message: "ok" }],
+      effect: "immediate",
+      restore_point: null,
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: /Título a/ })).not.toBeChecked(),
+    );
+    expect(screen.getByRole("button", { name: "Aplicar" })).toBeDisabled();
+  });
+
+  it("shows_alert_and_retry_when_list_fails", async () => {
+    vi.mocked(api.tweaksList).mockRejectedValueOnce("falhou");
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
+    render(<Jogos />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("falhou");
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(await screen.findByRole("checkbox", { name: /Título a/ })).toBeInTheDocument();
+  });
+
+  it("shows_alert_when_apply_job_errors", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
+    vi.mocked(api.tweaksApply).mockResolvedValue(7);
+    render(<Jogos />);
+    await screen.findByRole("checkbox", { name: /Título a/ });
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Aplicar" }).slice(-1)[0],
+    );
+    await act(async () => {
+      listeners.get("job:error")!({
+        payload: { job: 7, kind: "tweaks", message: "boom" },
+      });
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+  });
 });

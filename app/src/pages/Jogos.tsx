@@ -81,7 +81,12 @@ export default function Jogos() {
             ? recommendedIds(p)
             : new Set(
                 p.tweaks
-                  .filter((i) => selectable(i) && old.has(i.tweak.id))
+                  .filter(
+                    (i) =>
+                      selectable(i) &&
+                      i.view.status !== "applied" &&
+                      old.has(i.tweak.id),
+                  )
                   .map((i) => i.tweak.id),
               ),
         );
@@ -109,7 +114,7 @@ export default function Jogos() {
       (i) =>
         needsAdmin(i) &&
         (checked.has(i.tweak.id) ||
-          (profile === "recomendado" && recommendedIds(data).has(i.tweak.id))),
+          (i.tweak.recommended && i.view.status !== "applied")),
     );
   const titleOf = (id: string) =>
     items.find((i) => i.tweak.id === id)?.tweak.title ?? id;
@@ -165,9 +170,14 @@ export default function Jogos() {
         </p>
       )}
       {loadError && (
-        <p role="alert" className="form-error">
-          Não foi possível carregar as otimizações: {loadError}
-        </p>
+        <div>
+          <p role="alert" className="form-error">
+            Não foi possível carregar as otimizações: {loadError}
+          </p>
+          <button type="button" className="btn" onClick={load}>
+            Tentar de novo
+          </button>
+        </div>
       )}
       {job.error && (
         <p role="alert" className="form-error">
@@ -285,8 +295,8 @@ export default function Jogos() {
               <div key={i.tweak.id}>
                 <strong>{i.tweak.title}</strong>
                 <ul>
-                  {i.view.changes.map((c) => (
-                    <li key={c.description}>
+                  {i.view.changes.map((c, n) => (
+                    <li key={`${c.description}-${n}`}>
                       {`${c.description}: ${c.current} → ${c.target}`}
                     </li>
                   ))}
