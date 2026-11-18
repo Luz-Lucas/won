@@ -280,4 +280,24 @@ describe("Jogos", () => {
     });
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
   });
+
+  it("ignores_a_stale_or_foreign_job_result_from_the_shared_store", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
+    vi.mocked(api.tweaksApply).mockResolvedValue(7);
+    const { rerender } = rtlRender(<Jogos />, { wrapper: JobsProvider });
+    await screen.findByRole("checkbox", { name: /Título a/ });
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Aplicar" }).slice(-1)[0],
+    );
+    // Resultado de outro tipo (UndoReport) no job compartilhado.
+    await finish({ results: [{ tweak_id: "a", ok: true, message: "" }], conflicts: [] });
+    expect(screen.queryByText(/Ponto de restauração/)).toBeNull();
+    // Volta à página depois de um resultado concluído: nada antigo reaparece.
+    rerender(<div />);
+    rerender(<Jogos />);
+    await screen.findByRole("checkbox", { name: /Título a/ });
+    expect(screen.queryByText("Título a: aplicado")).toBeNull();
+    expect(screen.queryByText(/Ponto de restauração/)).toBeNull();
+  });
 });

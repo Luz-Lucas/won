@@ -68,6 +68,9 @@ export default function Jogos() {
   const [confirming, setConfirming] = useState(false);
   const [relaunchError, setRelaunchError] = useState<string | null>(null);
   const job = useJob<ApplyReport>("tweaks");
+  // O job "tweaks" é compartilhado com o Histórico: só mostra o relatório de
+  // uma aplicação iniciada nesta página.
+  const [started, setStarted] = useState(false);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -139,6 +142,7 @@ export default function Jogos() {
     setConfirming(false);
     const ids = chosen.map((i) => i.tweak.id);
     if (ids.length === 0) return; // nunca envia seleção vazia
+    setStarted(true);
     void job.start(() => tweaksApply(ids));
   };
 
@@ -151,7 +155,10 @@ export default function Jogos() {
     }
   };
 
-  const report = job.state === "done" ? job.result : null;
+  const report =
+    started && job.state === "done" && job.result && "effect" in job.result
+      ? job.result
+      : null;
 
   return (
     <section className="page">

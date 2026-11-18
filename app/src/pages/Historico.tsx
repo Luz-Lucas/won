@@ -15,6 +15,8 @@ export default function Historico() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const job = useJob<UndoReport>("tweaks");
+  // Job compartilhado com Jogos: só mostra relatório de um desfazer iniciado aqui.
+  const [started, setStarted] = useState(false);
 
   const load = useCallback(() => {
     setLoadError(null);
@@ -34,8 +36,8 @@ export default function Historico() {
 
   // Terminado o job: recarrega o diário.
   useEffect(() => {
-    if (job.state === "done" && job.result) load();
-  }, [job.state, job.result, load]);
+    if (job.state === "done" || job.state === "error") load();
+  }, [job.state, load]);
 
   const running = job.state === "running";
   const list = entries ?? [];
@@ -45,11 +47,15 @@ export default function Historico() {
     const p = pending;
     setPending(null);
     if (!p) return;
+    setStarted(true);
     if (p.kind === "one") void job.start(() => tweaksUndo([p.entry.tweak_id]));
     else void job.start(() => tweaksUndoAll());
   };
 
-  const report = job.state === "done" ? job.result : null;
+  const report =
+    started && job.state === "done" && job.result && "conflicts" in job.result
+      ? job.result
+      : null;
 
   return (
     <section className="page">
@@ -142,7 +148,7 @@ export default function Historico() {
           onConfirm={confirm}
           onCancel={() => setPending(null)}
         >
-          <p>Os valores voltam ao que eram antes da otimização.</p>
+          <p>Os valores voltam ao que eram antes da otimização, exceto os que mudaram depois.</p>
         </ConfirmDialog>
       )}
     </section>

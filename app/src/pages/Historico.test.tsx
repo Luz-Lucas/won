@@ -119,12 +119,12 @@ describe("Historico", () => {
     );
     await finish({
       results: [{ tweak_id: "a", ok: true, message: "" }],
-      conflicts: ["HKCU\Software\X\Y"],
+      conflicts: ["HKCU\\Software\\X\\Y"],
     });
     expect(
       await screen.findByText("Mantido porque mudou depois da otimização:"),
     ).toBeVisible();
-    expect(screen.getByText("HKCU\Software\X\Y")).toBeVisible();
+    expect(screen.getByText("HKCU\\Software\\X\\Y")).toBeVisible();
     expect(screen.getByText("Título a: desfeito")).toBeVisible();
     await waitFor(() => expect(api.tweaksJournal).toHaveBeenCalledTimes(2));
   });
@@ -156,5 +156,46 @@ describe("Historico", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "Desfazer tudo" }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent("falhou");
+  });
+
+  it("foreign_apply_report_in_shared_store_does_not_crash_or_show", async () => {
+    vi.mocked(api.tweaksJournal).mockResolvedValue([entry("a")]);
+    vi.mocked(api.tweaksUndoAll).mockResolvedValue(9);
+    render(<Historico />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Desfazer tudo" }),
+    );
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Desfazer tudo" }),
+    );
+    await finish({
+      results: [{ tweak_id: "a", ok: true, message: "ok" }],
+      effect: "reboot",
+      restore_point: "Sentinela 1",
+    });
+    expect(screen.getByRole("heading", { name: "Histórico" })).toBeVisible();
+    expect(screen.queryByText("Título a: desfeito")).toBeNull();
+  });
+
+  it("old_undo_report_does_not_reappear_after_leaving_and_returning", async () => {
+    vi.mocked(api.tweaksJournal).mockResolvedValue([entry("a")]);
+    vi.mocked(api.tweaksUndoAll).mockResolvedValue(9);
+    const { rerender } = rtlRender(<Historico />, { wrapper: JobsProvider });
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Desfazer tudo" }),
+    );
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Desfazer tudo" }),
+    );
+    await finish({
+      results: [{ tweak_id: "a", ok: true, message: "" }],
+      conflicts: [],
+    });
+    expect(await screen.findByText("Título a: desfeito")).toBeVisible();
+    rerender(<div />);
+    rerender(<Historico />);
+    await screen.findByRole("heading", { name: "Histórico" });
+    expect(screen.queryByText(/desfeito/)).toBeNull();
+    expect(screen.queryByText("a: desfeito")).toBeNull();
   });
 });
