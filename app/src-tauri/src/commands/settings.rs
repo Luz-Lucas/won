@@ -208,8 +208,16 @@ mod tests {
     fn roots() -> Vec<PathBuf> {
         vec![
             PathBuf::from(r"C:\Program Files"),
-            PathBuf::from(r"C:\Program Files"),
+            PathBuf::from(r"D:\Apps"),
         ]
+    }
+
+    #[test]
+    fn second_install_root_is_honoured() {
+        assert!(is_under_install_dir(
+            Path::new(r"d:\apps\Sentinela\a.exe"),
+            &roots()
+        ));
     }
 
     #[test]

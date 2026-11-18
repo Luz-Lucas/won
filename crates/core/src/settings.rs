@@ -61,9 +61,22 @@ pub fn load_or_init(path: &Path) -> Settings {
                 let secs = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs());
-                let mut aside = path.as_os_str().to_owned();
-                aside.push(format!(".corrompido-{secs}"));
-                let _ = std::fs::rename(path, PathBuf::from(aside));
+                let aside = (0..)
+                    .map(|n| {
+                        let mut a = path.as_os_str().to_owned();
+                        a.push(if n == 0 {
+                            format!(".corrompido-{secs}")
+                        } else {
+                            format!(".corrompido-{secs}-{n}")
+                        });
+                        PathBuf::from(a)
+                    })
+                    .find(|a| !a.exists())
+                    .expect("sequência infinita");
+                // Sem backup não sobrescreve o arquivo corrompido.
+                if std::fs::rename(path, aside).is_err() {
+                    return Settings::default();
+                }
             }
         },
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Settings::default(),
@@ -173,6 +186,22 @@ mod tests {
             .collect();
         assert_eq!(aside.len(), 1);
         assert_eq!(std::fs::read(aside[0].path()).unwrap(), b"lixo");
+    }
+
+    #[test]
+    fn set_aside_names_never_collide() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.json");
+        for _ in 0..3 {
+            std::fs::write(&p, b"lixo").unwrap();
+            load_or_init(&p);
+        }
+        let n = std::fs::read_dir(d.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".corrompido-"))
+            .count();
+        assert_eq!(n, 3);
     }
 
     #[test]
