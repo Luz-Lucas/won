@@ -8,7 +8,7 @@ use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::tweaks::{
     ApplyReport, Catalog, ItemResult, Journal, JournalEntry, SystemBackend, Tweak, TweakStatus,
     TweakView, UndoReport, WindowsBackend, create_restore_point, current_user_sid,
-    default_journal_path, is_laptop, undo, undo_all, view,
+    default_journal_path, full_catalog, is_laptop, undo, undo_all, view,
 };
 use serde::Serialize;
 use std::ffi::OsString;
@@ -283,7 +283,7 @@ pub async fn tweaks_list(state: State<'_, TweaksState>) -> Result<TweaksPage, St
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         build_page(
-            Catalog::embedded(),
+            &full_catalog(),
             state.backend().as_ref(),
             &default_journal_path(),
             is_laptop(),
@@ -302,7 +302,7 @@ pub fn tweaks_apply(
     jobs: State<'_, Arc<JobRegistry>>,
     state: State<'_, TweaksState>,
 ) -> Result<JobId, String> {
-    validate_apply(&ids, Catalog::embedded())?;
+    validate_apply(&ids, &full_catalog())?;
     let ids = dedupe(ids);
     let state = state.inner().clone();
     spawn_job(
@@ -313,7 +313,7 @@ pub fn tweaks_apply(
             let backend = state.backend();
             let report = run_apply(
                 &ids,
-                Catalog::embedded(),
+                &full_catalog(),
                 backend.as_ref(),
                 &default_journal_path(),
                 &state.restore_done,
@@ -334,7 +334,7 @@ pub fn tweaks_apply_choice(
     jobs: State<'_, Arc<JobRegistry>>,
     state: State<'_, TweaksState>,
 ) -> Result<JobId, String> {
-    validate_choice(&id, Catalog::embedded())?;
+    validate_choice(&id, &full_catalog())?;
     let state = state.inner().clone();
     spawn_job(
         jobs.inner().clone(),
@@ -344,7 +344,7 @@ pub fn tweaks_apply_choice(
             let backend = state.backend();
             let report = run_apply(
                 std::slice::from_ref(&id),
-                Catalog::embedded(),
+                &full_catalog(),
                 backend.as_ref(),
                 &default_journal_path(),
                 &state.restore_done,

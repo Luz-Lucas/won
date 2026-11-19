@@ -50,6 +50,11 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
         Hive::Hklm,
         "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
     ),
+    // ACK imediato por adaptador (ajuste gerado `nagle-off`).
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
+    ),
 ];
 
 /// Caminhos (da folha para cima) que o desfazer pode apagar se estiverem vazios:

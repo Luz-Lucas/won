@@ -3,11 +3,13 @@
 //!
 //! Dividido em submódulos (`registry`, `service`, `power`) para manter cada arquivo curto.
 
+mod network;
 mod power;
 mod registry;
 mod service;
 mod tasks;
 
+pub use network::configured_interfaces;
 pub use tasks::tasks_in_folder;
 
 use std::ptr::null_mut;

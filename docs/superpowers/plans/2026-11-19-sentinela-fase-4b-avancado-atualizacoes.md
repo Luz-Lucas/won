@@ -89,12 +89,13 @@ Todos com `recommended: false`. Grupo novo `Avancado` (serde `"avancado"`), most
 
 ### Task 4: Nagle por adaptador (aba Avançado)
 
-**Files:** `crates/core/src/tweaks/generated/nagle.rs`, catálogo gerado entra na aba Avançado.
+**Files:** `crates/core/src/tweaks/generated.rs` (gerador e `full_catalog()`), `crates/core/src/tweaks/windows/network.rs` (leitura das interfaces); a janela e a CLI passam a usar `full_catalog()` (embutido + gerados) em vez do catálogo embutido.
 
-- Um ajuste gerado `nagle-off` (situacional, admin, reboot) com, para cada interface com endereço IPv4 configurado (`HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{GUID}` com `DhcpIPAddress` ou `IPAddress` não vazio): `TcpAckFrequency` = 1 e `TCPNoDelay` = 1. Descrição: "Só afeta jogos que usam TCP; a maioria dos jogos competitivos usa UDP." `ALLOWED_ROOTS` ganha só esse caminho de interfaces.
-- Nenhuma interface → o ajuste aparece "Indisponível nesta máquina".
+- Um ajuste gerado `nagle-off` (situacional, admin, reboot) com, para cada interface com endereço IPv4 configurado (`HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{GUID}` com `DhcpIPAddress` ou `IPAddress` não vazio e diferente de `0.0.0.0`): `TcpAckFrequency` = 1. Descrição: "Só afeta jogos que usam TCP; a maioria dos jogos competitivos usa UDP." `ALLOWED_ROOTS` ganha só esse caminho de interfaces.
+- *Decisão na implementação:* o `TCPNoDelay` ficou de fora. A Microsoft documenta o `TcpAckFrequency` por interface (KB 328890), mas a única documentação oficial do `TCPNoDelay` o põe no MSMQ, não nessa chave; a descrição do ajuste diz isso.
+- Nenhuma interface → o ajuste não é gerado (não aparece). *Decisão na implementação:* um ajuste sem ações não passa na validação, e mostrar "Indisponível" pediria uma ação falsa.
 
-- [ ] **Step 1: Testes que falham:** `nagle_targets_only_configured_interfaces`, `nagle_without_interfaces_is_unavailable`, `nagle_in_fps_profile`.
+- [ ] **Step 1: Testes que falham:** `nagle_targets_only_configured_interfaces`, `nagle_without_interfaces_is_not_generated`, `nagle_in_fps_profile`, `full_catalog_keeps_the_embedded_tweaks`.
 - [ ] **Step 2–4:** FAIL → implementar → PASS.
 - [ ] **Step 5: Commit** — `feat(core): Nagle per network adapter in the advanced tab`
 

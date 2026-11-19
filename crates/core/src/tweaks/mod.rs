@@ -4,6 +4,7 @@ pub mod backend;
 pub mod catalog;
 pub mod engine;
 pub mod explorer;
+pub mod generated;
 pub mod journal;
 pub mod model;
 pub mod state;
@@ -14,6 +15,7 @@ pub use backend::{MemoryBackend, Snapshot, SystemBackend, target_of};
 pub use catalog::{ALLOWED_ROOTS, Catalog, FORBIDDEN_SERVICES, HIGH_PERFORMANCE_SCHEME, validate};
 pub use engine::{ApplyReport, ItemResult, UndoReport, apply, apply_choice, undo, undo_all};
 pub use explorer::restart_explorer;
+pub use generated::full_catalog;
 pub use journal::{
     Journal, JournalAction, JournalEntry, JournalLock, LOCK_BUSY, LockError, default_journal_path,
     lock_path,
