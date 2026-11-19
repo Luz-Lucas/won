@@ -169,6 +169,11 @@ Categorias e o que cada uma apaga (use `--category <nome>`, repetível; sem ela,
 | `browser-cache` | Somente as pastas `Cache`, `Code Cache` e `GPUCache` dos perfis de Chrome, Edge e Brave, e `cache2` do Firefox. **Nunca** toca em cookies, histórico, senhas ou dados de perfil. Com o navegador aberto, a categoria é pulada com aviso | não |
 | `recycle-bin` | Esvazia a Lixeira (sem janelas de confirmação do Windows) | não |
 | `windows-update` | `%SystemRoot%\SoftwareDistribution\Download`. Ao aplicar, para o serviço `wuauserv`, apaga e reinicia o serviço, mesmo que a exclusão falhe | sim |
+| `shader-cache` | Arquivos com mais de 24 horas em `%LOCALAPPDATA%\D3DSCache`, `NVIDIA\DXCache`, `NVIDIA\GLCache`, `AMD\DxCache`, `AMD\DxcCache` e `%USERPROFILE%\AppData\LocalLow\Intel\ShaderCache`. Os jogos recriam o cache na próxima execução | não |
+| `launcher-cache` | Só o cache web dos launchers: `Steam\htmlcache`, as pastas `webcache*` da Epic, `Battle.net\BrowserCaches` e `Cache`, `Code Cache` e `GPUCache` do Discord. **Nunca** toca em `Steam\userdata`, logins, saves ou jogos. Launcher aberto é pulado com aviso | não |
+| `thumbnail-cache` | Só os arquivos `thumbcache_*.db` e `iconcache_*.db` de `%LOCALAPPDATA%\Microsoft\Windows\Explorer`; os que o Explorer estiver usando são pulados | não |
+| `delivery-optimization` | Cache da Otimização de Entrega em `%SystemRoot%\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache` | sim |
+| `windows-logs` | `*.log` e `*.cab` de `%SystemRoot%\Logs\CBS` e `*.log` de `%SystemRoot%\Temp`, com mais de 24 horas. Nunca o log do CBS em uso | sim |
 
 Com `--json`, o resultado segue o mesmo envelope: `summary` com `files`, `bytes`, `deleted` e `freed`; `items` com uma entrada por categoria (`id`, `plan`, `applied`, `skipped_reason`); e `errors` com os arquivos pulados.
 

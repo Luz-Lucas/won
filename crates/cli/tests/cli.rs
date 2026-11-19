@@ -168,7 +168,12 @@ fn clean_dry_run_lists_categories() {
             "crash-dumps",
             "browser-cache",
             "recycle-bin",
-            "windows-update"
+            "windows-update",
+            "shader-cache",
+            "launcher-cache",
+            "thumbnail-cache",
+            "delivery-optimization",
+            "windows-logs"
         ]
     );
     assert!(v["summary"]["files"].is_u64());

@@ -14,7 +14,7 @@
 
 ## Global Constraints
 
-- Só Windows; CI `windows-latest`; builds locais com `CARGO_TARGET_DIR=C:/st`.
+- Só Windows; CI `windows-latest`; builds locais com `CARGO_TARGET_DIR=E:/st` (o disco C: não tem espaço para o cache de build).
 - Toda tarefa termina com `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `npm test` e `npm run build` verdes.
 - Nada muda sem prévia e confirmação; tudo do motor de ajustes é desfazível pelo Histórico, voltando ao valor original da máquina.
 - Limpeza: as quatro garantias do `clean` valem para cada categoria nova — sem confirmação nada é apagado; nada fora das pastas da categoria, inclusive por links; arquivos com menos de 24 h preservados onde a categoria usa idade; dados de login, saves e jogos nunca tocados.

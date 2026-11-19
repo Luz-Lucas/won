@@ -21,7 +21,7 @@ impl Default for BrowserCache {
     }
 }
 
-fn process_running(name: &str) -> bool {
+pub(super) fn process_running(name: &str) -> bool {
     use sysinfo::{ProcessesToUpdate, System};
     let mut sys = System::new();
     sys.refresh_processes(ProcessesToUpdate::All, true);
@@ -68,7 +68,7 @@ const BROWSERS: &[Browser] = &[
 const CHROMIUM_CACHE_DIRS: &[&str] = &["Cache", "Code Cache", "GPUCache"];
 
 /// True for a real directory (not a symlink / reparse point).
-fn is_plain_dir(p: &Path) -> bool {
+pub(super) fn is_plain_dir(p: &Path) -> bool {
     fs::symlink_metadata(p).is_ok_and(|m| m.is_dir() && !is_link_like(&m))
 }
 
