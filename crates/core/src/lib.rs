@@ -4,6 +4,7 @@ pub mod clean;
 pub mod finder;
 pub mod format;
 pub mod full;
+pub mod games;
 pub mod platform_fs;
 pub mod quarantine;
 pub mod scan;

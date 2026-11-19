@@ -350,6 +350,38 @@ export const startupList = () => invoke<StartupPage>("startup_list");
 export const startupSetEnabled = (id: string, enabled: boolean) =>
   invoke<StartupPage>("startup_set_enabled", { id, enabled });
 
+export type GameSource = "steam" | "epic" | "riot" | "manual";
+
+export interface GameItem {
+  /** Id do ajuste gerado (`gpu-…`). */
+  id: string;
+  name: string;
+  source: GameSource;
+  exe: string;
+  exe_exists: boolean;
+  /** "Alto desempenho" gravado agora. */
+  enabled: boolean;
+  in_journal: boolean;
+  /** Ligado fora do Sentinela (Configurações → Gráficos). */
+  external: boolean;
+  blocked: string | null;
+}
+
+export interface GamesPage {
+  games: GameItem[];
+  /** No Histórico, mas o jogo não é mais encontrado. */
+  missing: { id: string; title: string }[];
+  gpus: number;
+  warnings: string[];
+}
+
+export const gamesList = () => invoke<GamesPage>("games_list");
+export const gamesGpuSet = (id: string, enabled: boolean) =>
+  invoke<GamesPage>("games_gpu_set", { id, enabled });
+export const gamesAdd = (path: string) => invoke<GamesPage>("games_add", { path });
+export const gamesRemove = (path: string) =>
+  invoke<GamesPage>("games_remove", { path });
+
 export interface SettingsView {
   start_with_windows: boolean;
   close_to_tray: boolean;

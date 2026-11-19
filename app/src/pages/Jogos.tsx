@@ -9,6 +9,7 @@ import type {
   TweaksPage,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import GpuPerGame from "../components/GpuPerGame";
 import StartupList from "../components/StartupList";
 import { useJob } from "../jobs";
 
@@ -388,6 +389,7 @@ export default function Jogos() {
         O Sentinela não desativa Defender, Windows Update, firewall nem outras
         proteções para ganhar FPS.
       </p>
+      <GpuPerGame />
       <StartupList />
       {confirming && (
         <ConfirmDialog
