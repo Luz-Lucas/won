@@ -217,6 +217,27 @@ fn dedupe(ids: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+/// Só ids de uma lista de opções (`choice`) passam por `tweaks_apply_choice`.
+fn validate_choice(id: &str, cat: &Catalog) -> Result<(), String> {
+    match cat.get(id) {
+        None => Err(format!("otimização desconhecida: {id}")),
+        Some(t) if t.choice.is_none() => Err(format!("não é uma opção de lista: {id}")),
+        Some(_) => Ok(()),
+    }
+}
+
+const EXPLORER_OTHER_ACCOUNT: &str =
+    "Esta janela está em outra conta do Windows; reinicie o Explorer pela janela normal.";
+
+/// O Explorer reiniciado é o desta conta; numa janela de outra conta, não.
+fn explorer_allowed(hkcu_allowed: bool) -> Result<(), String> {
+    if hkcu_allowed {
+        Ok(())
+    } else {
+        Err(EXPLORER_OTHER_ACCOUNT.into())
+    }
+}
+
 fn validate_undo(ids: &[String]) -> Result<(), String> {
     if ids.is_empty() {
         return Err("Nenhuma otimização selecionada.".into());
@@ -291,6 +312,48 @@ pub fn tweaks_apply(
             Ok(report)
         },
     )
+}
+
+/// Aplica uma opção de lista; o motor desfaz antes a outra opção do mesmo grupo
+/// que o Sentinela tiver aplicado (`apply` roteia ids com `choice` por `apply_choice`).
+#[tauri::command]
+pub fn tweaks_apply_choice(
+    id: String,
+    app: AppHandle,
+    jobs: State<'_, Arc<JobRegistry>>,
+    state: State<'_, TweaksState>,
+) -> Result<JobId, String> {
+    validate_choice(&id, Catalog::embedded())?;
+    let state = state.inner().clone();
+    spawn_job(
+        jobs.inner().clone(),
+        Arc::new(TauriSink(app)),
+        JobKind::Tweaks,
+        move |_, _, _| {
+            let backend = state.backend();
+            let report = run_apply(
+                std::slice::from_ref(&id),
+                Catalog::embedded(),
+                backend.as_ref(),
+                &default_journal_path(),
+                &state.restore_done,
+                &create_restore_point,
+            );
+            log_applied(&report);
+            Ok(report)
+        },
+    )
+}
+
+/// Reinicia o Explorer, só por clique do usuário (fecha as janelas de pastas).
+#[tauri::command]
+pub async fn restart_explorer(state: State<'_, TweaksState>) -> Result<(), String> {
+    explorer_allowed(state.hkcu_allowed)?;
+    tauri::async_runtime::spawn_blocking(sentinela_core::tweaks::restart_explorer)
+        .await
+        .map_err(|_| "Não foi possível reiniciar o Explorer.".to_string())??;
+    log_activity("Explorer reiniciado");
+    Ok(())
 }
 
 #[tauri::command]
@@ -405,6 +468,31 @@ mod tests {
             "otimização desconhecida: zzz"
         );
         assert!(validate_apply(&["t1".into()], &cat()).is_ok());
+    }
+
+    #[test]
+    fn apply_choice_rejects_non_choice_id() {
+        let mut c = cat();
+        let mut opt = c.tweaks[0].clone();
+        opt.id = "opt".into();
+        opt.choice = Some("grupo".into());
+        opt.choice_label = Some("Grupo".into());
+        c.tweaks.push(opt);
+        assert_eq!(
+            validate_choice("t1", &c).unwrap_err(),
+            "não é uma opção de lista: t1"
+        );
+        assert_eq!(
+            validate_choice("zzz", &c).unwrap_err(),
+            "otimização desconhecida: zzz"
+        );
+        assert!(validate_choice("opt", &c).is_ok());
+    }
+
+    #[test]
+    fn explorer_restart_refused_in_other_account() {
+        assert!(explorer_allowed(true).is_ok());
+        assert_eq!(explorer_allowed(false).unwrap_err(), EXPLORER_OTHER_ACCOUNT);
     }
 
     #[test]

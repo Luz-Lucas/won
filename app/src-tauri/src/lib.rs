@@ -117,6 +117,8 @@ pub fn run() {
             commands::apps::apps_upgrade,
             commands::tweaks::tweaks_list,
             commands::tweaks::tweaks_apply,
+            commands::tweaks::tweaks_apply_choice,
+            commands::tweaks::restart_explorer,
             commands::tweaks::tweaks_undo,
             commands::tweaks::tweaks_undo_all,
             commands::tweaks::tweaks_journal,

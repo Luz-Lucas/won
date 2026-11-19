@@ -461,9 +461,29 @@ body {
   gap: var(--sp-2);
 }
 
-.tweak-profiles .btn[aria-pressed="true"] {
+.tweak-profiles .btn[aria-pressed="true"],
+.tweak-profiles .btn[aria-selected="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice-group legend {
+  width: 100%;
+  margin-bottom: var(--sp-2);
+  font-weight: 600;
+}
+
+.choice-group .clean-check {
+  min-width: 0;
 }
 
 .tweak-badge {

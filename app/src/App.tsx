@@ -11,6 +11,7 @@ import Historico from "./pages/Historico";
 import Inicio from "./pages/Inicio";
 import Jogos from "./pages/Jogos";
 import Limpeza from "./pages/Limpeza";
+import Personalizar from "./pages/Personalizar";
 import Seguranca from "./pages/Seguranca";
 import "./styles/tokens.css";
 import "./styles/app.css";
@@ -83,6 +84,7 @@ function Shell() {
         {page === "jogos" && <Jogos />}
         {page === "limpeza" && <Limpeza />}
         {page === "aplicativos" && <Aplicativos />}
+        {page === "personalizar" && <Personalizar />}
         {page === "seguranca" && (
           <Seguranca onNavigate={setPage} onRestored={refreshStatus} />
         )}

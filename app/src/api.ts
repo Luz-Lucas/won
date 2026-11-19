@@ -204,6 +204,8 @@ export type TweakAction =
   | { kind: "service"; name: string; start: "automatic" | "manual" | "disabled" }
   | { kind: "power_plan"; scheme: string };
 
+export type TweakArea = "barra" | "iniciar" | "explorador" | "aparencia" | "sistema";
+
 export interface Tweak {
   id: string;
   title: string;
@@ -216,6 +218,12 @@ export interface Tweak {
   recommended: boolean;
   source: string;
   actions: TweakAction[];
+  /** Grupo de opções mutuamente exclusivas (lista de opções). */
+  choice?: string | null;
+  /** Nome da lista de opções, quando há `choice`. */
+  choice_label?: string | null;
+  /** Aba da página Personalizar. */
+  area?: TweakArea | null;
 }
 
 export interface TweakChange {
@@ -291,6 +299,10 @@ export interface JournalEntry {
 export const tweaksList = () => invoke<TweaksPage>("tweaks_list");
 export const tweaksApply = (ids: string[]) =>
   invoke<number>("tweaks_apply", { ids });
+export const tweaksApplyChoice = (id: string) =>
+  invoke<number>("tweaks_apply_choice", { id });
+/** Reinicia o Explorer (fecha as janelas de pastas abertas). */
+export const restartExplorer = () => invoke<void>("restart_explorer");
 export const tweaksUndo = (ids: string[]) =>
   invoke<number>("tweaks_undo", { ids });
 export const tweaksUndoAll = () => invoke<number>("tweaks_undo_all");
