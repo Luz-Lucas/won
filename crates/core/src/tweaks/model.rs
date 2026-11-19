@@ -13,6 +13,9 @@ pub enum Group {
     Personalizacao,
     /// Situacionais e controversos: aba "Avançado", nunca no perfil Recomendado.
     Avancado,
+    /// Modos de Atualizações do Windows: o único grupo que toca nos serviços e
+    /// nas tarefas de atualização.
+    Atualizacoes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,6 +86,20 @@ pub enum Action {
     PowerPlan {
         scheme: String,
     },
+    /// Liga ou desliga uma tarefa do Agendador (caminho completo, ex.:
+    /// `\Microsoft\Windows\UpdateOrchestrator\Schedule Scan`). Melhor esforço:
+    /// tarefa que nega acesso falha sozinha, sem interromper o resto do ajuste.
+    ScheduledTask {
+        path: String,
+        enabled: bool,
+    },
+}
+
+impl Action {
+    /// Falha desta ação vira aviso e o ajuste continua (ver `ScheduledTask`).
+    pub fn best_effort(&self) -> bool {
+        matches!(self, Action::ScheduledTask { .. })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

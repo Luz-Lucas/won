@@ -6,6 +6,9 @@
 mod power;
 mod registry;
 mod service;
+mod tasks;
+
+pub use tasks::tasks_in_folder;
 
 use std::ptr::null_mut;
 
@@ -111,6 +114,9 @@ impl SystemBackend for WindowsBackend {
                     scheme: power::active_scheme()?,
                 })
             }
+            Action::ScheduledTask { path, .. } => Ok(Snapshot::ScheduledTask {
+                enabled: tasks::read_enabled(path)?,
+            }),
         }
     }
 
@@ -145,6 +151,9 @@ impl SystemBackend for WindowsBackend {
                 service::write_start(name, *start)
             }
             (Action::PowerPlan { .. }, Snapshot::PowerPlan { scheme }) => power::set_active(scheme),
+            (Action::ScheduledTask { path, .. }, Snapshot::ScheduledTask { enabled }) => {
+                tasks::set_enabled(path, *enabled)
+            }
             _ => Err("estado incompatível com a ação".to_string()),
         }
     }

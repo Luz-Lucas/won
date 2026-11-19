@@ -176,7 +176,8 @@ export type TweakGroup =
   | "privacidade"
   | "visual"
   | "personalizacao"
-  | "avancado";
+  | "avancado"
+  | "atualizacoes";
 export type TweakEvidence = "comprovado" | "situacional" | "controverso";
 export type TweakEffect = "immediate" | "explorer" | "relogon" | "reboot";
 export type TweakStatus = "applied" | "not_applied" | "partial" | "unavailable";
@@ -203,7 +204,8 @@ export type TweakAction =
       value: string;
     }
   | { kind: "service"; name: string; start: "automatic" | "manual" | "disabled" }
-  | { kind: "power_plan"; scheme: string };
+  | { kind: "power_plan"; scheme: string }
+  | { kind: "scheduled_task"; path: string; enabled: boolean };
 
 export type TweakArea = "barra" | "iniciar" | "explorador" | "aparencia" | "sistema";
 
@@ -281,6 +283,7 @@ export type JournalSnapshot =
   | { kind: "list_entry"; value: string | null }
   | { kind: "service"; start: "automatic" | "manual" | "disabled" }
   | { kind: "power_plan"; scheme: string }
+  | { kind: "scheduled_task"; enabled: boolean }
   | { kind: "unavailable"; reason: string };
 
 export interface JournalAction {

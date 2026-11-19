@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use super::model::{Action, Hive, Tweak};
+use super::model::{Action, Group, Hive, Tweak};
 
 /// Áreas válidas da página Personalizar.
 pub const AREAS: &[&str] = &["barra", "iniciar", "explorador", "aparencia", "sistema"];
@@ -112,6 +112,36 @@ pub const FORBIDDEN_SERVICES: &[&str] = &[
     "TrustedInstaller",
 ];
 
+/// Serviços de atualização: só os ajustes do grupo `Atualizacoes` podem
+/// mudá-los (§6.5); para qualquer outro grupo são proibidos.
+pub const UPDATE_SERVICES: &[&str] = &["wuauserv", "UsoSvc", "BITS"];
+
+/// Pastas do Agendador cujas tarefas o grupo `Atualizacoes` pode ligar e
+/// desligar (só tarefas diretamente dentro delas, sem subpastas).
+pub const ALLOWED_TASK_FOLDERS: &[&str] = &[
+    "\\Microsoft\\Windows\\UpdateOrchestrator",
+    "\\Microsoft\\Windows\\WindowsUpdate",
+    "\\Microsoft\\Windows\\InstallService",
+    "\\Microsoft\\Windows\\UpdateAssistant",
+    "\\Microsoft\\Windows\\WaaSMedic",
+    "\\Microsoft\\WindowsUpdate",
+];
+
+/// `path` é uma tarefa diretamente dentro de uma pasta permitida?
+pub fn task_allowed(path: &str) -> bool {
+    ALLOWED_TASK_FOLDERS.iter().any(|folder| {
+        path.len() > folder.len()
+            && path[..folder.len()].eq_ignore_ascii_case(folder)
+            && path[folder.len()..]
+                .strip_prefix('\\')
+                .is_some_and(|name| !name.trim().is_empty() && !name.contains('\\') && name != "..")
+    })
+}
+
+fn is_update_service(name: &str) -> bool {
+    UPDATE_SERVICES.iter().any(|u| u.eq_ignore_ascii_case(name))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
     pub tweaks: Vec<Tweak>,
@@ -136,6 +166,15 @@ impl Catalog {
 
     pub fn get(&self, id: &str) -> Option<&Tweak> {
         self.tweaks.iter().find(|t| t.id == id)
+    }
+
+    /// Este catálogo mais ajustes montados em tempo de execução (um por jogo,
+    /// por adaptador, por modo de atualização), validados pelas mesmas regras.
+    pub fn with_generated(&self, extra: Vec<Tweak>) -> Result<Catalog, String> {
+        let mut c = self.clone();
+        c.tweaks.extend(extra);
+        validate(&c)?;
+        Ok(c)
     }
 }
 
@@ -225,9 +264,12 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
                 }
             }
             Action::Service { name, .. } => {
-                if FORBIDDEN_SERVICES
-                    .iter()
-                    .any(|f| f.eq_ignore_ascii_case(name))
+                let update_ok = is_update_service(name) && t.group == Group::Atualizacoes;
+                if !update_ok
+                    && (is_update_service(name)
+                        || FORBIDDEN_SERVICES
+                            .iter()
+                            .any(|f| f.eq_ignore_ascii_case(name)))
                 {
                     return Err(format!("{id}: serviço proibido: {name}"));
                 }
@@ -238,6 +280,17 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
             Action::PowerPlan { scheme } => {
                 if !valid_guid(scheme) {
                     return Err(format!("{id}: GUID de plano de energia inválido: {scheme}"));
+                }
+            }
+            Action::ScheduledTask { path, .. } => {
+                if t.group != Group::Atualizacoes {
+                    return Err(format!("{id}: tarefa agendada só no grupo Atualizações"));
+                }
+                if !task_allowed(path) {
+                    return Err(format!("{id}: tarefa fora das pastas permitidas: {path}"));
+                }
+                if !t.needs_admin {
+                    return Err(format!("{id}: tarefa agendada exige needs_admin"));
                 }
             }
         }
@@ -290,7 +343,17 @@ fn validate_choices(c: &Catalog) -> Result<(), String> {
                 t.id, f.id
             ));
         }
-        if t.actions.len() != f.actions.len() || key_set(t) != key_set(f) {
+        if t.group != f.group {
+            return Err(format!(
+                "{}: as opções de '{ch}' devem ser do mesmo grupo ({})",
+                t.id, f.id
+            ));
+        }
+        // Os modos de atualização mexem em coisas diferentes (políticas, serviços,
+        // tarefas); o motor desfaz o modo anterior inteiro antes de aplicar outro.
+        if t.group != Group::Atualizacoes
+            && (t.actions.len() != f.actions.len() || key_set(t) != key_set(f))
+        {
             return Err(format!(
                 "{}: as opções de '{ch}' devem ter as mesmas chaves ({})",
                 t.id, f.id
@@ -921,6 +984,116 @@ mod tests {
                 "{a:?}"
             );
         }
+    }
+
+    fn sample_tweak(id: &str) -> Tweak {
+        tweak(id, vec![reg(Hive::Hkcu, "Software\\Microsoft\\X")], false)
+    }
+
+    fn update_tweak(id: &str, actions: Vec<Action>) -> Tweak {
+        let mut t = sample_tweak(id);
+        t.group = Group::Atualizacoes;
+        t.needs_admin = true;
+        t.actions = actions;
+        t
+    }
+
+    fn task_action(path: &str) -> Action {
+        Action::ScheduledTask {
+            path: path.into(),
+            enabled: false,
+        }
+    }
+
+    #[test]
+    fn task_folder_outside_allowlist_rejected() {
+        let ok = update_tweak(
+            "wu-a",
+            vec![task_action(
+                "\\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan",
+            )],
+        );
+        assert!(validate_tweak(&ok).is_ok(), "{:?}", validate_tweak(&ok));
+        for bad in [
+            "\\Microsoft\\Windows\\Defrag\\ScheduledDefrag",
+            "\\Microsoft\\Windows\\UpdateOrchestrator\\Sub\\Task",
+            "\\Microsoft\\Windows\\UpdateOrchestrator\\",
+            "\\Microsoft\\Windows\\UpdateOrchestrator\\..\\Defrag",
+            "Microsoft\\Windows\\UpdateOrchestrator\\Sem barra inicial",
+        ] {
+            let t = update_tweak("wu-b", vec![task_action(bad)]);
+            assert!(validate_tweak(&t).is_err(), "{bad} deveria ser recusada");
+        }
+        // Tarefa só no grupo Atualizações e sempre com administrador.
+        let mut other = ok.clone();
+        other.group = Group::Jogos;
+        assert!(validate_tweak(&other).is_err());
+        let mut no_admin = ok;
+        no_admin.needs_admin = false;
+        assert!(validate_tweak(&no_admin).is_err());
+    }
+
+    #[test]
+    fn update_services_only_in_update_group() {
+        for name in ["wuauserv", "UsoSvc", "BITS"] {
+            let svc = Action::Service {
+                name: name.into(),
+                start: StartType::Disabled,
+            };
+            assert!(
+                validate_tweak(&update_tweak("wu-a", vec![svc.clone()])).is_ok(),
+                "{name}"
+            );
+            let mut t = update_tweak("x", vec![svc]);
+            t.group = Group::SegundoPlano;
+            assert!(validate_tweak(&t).is_err(), "{name} fora do grupo");
+        }
+        // O resto da lista proibida continua proibido também no grupo Atualizações.
+        for name in ["WaaSMedicSvc", "WinDefend"] {
+            let svc = Action::Service {
+                name: name.into(),
+                start: StartType::Disabled,
+            };
+            assert!(
+                validate_tweak(&update_tweak("wu-a", vec![svc])).is_err(),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn generated_catalog_is_validated() {
+        let base = Catalog { tweaks: vec![] };
+        let ok = sample_tweak("gpu-1a2b3c4d");
+        let g = base.with_generated(vec![ok.clone()]).unwrap();
+        assert!(g.get("gpu-1a2b3c4d").is_some());
+        // Raiz fora da lista, id repetido e id inválido são recusados.
+        let mut bad = sample_tweak("gpu-bad");
+        bad.actions = vec![Action::Registry {
+            hive: Hive::Hkcu,
+            path: "Software\\Valve\\Steam".into(),
+            name: "x".into(),
+            value: None,
+        }];
+        assert!(base.with_generated(vec![bad]).is_err());
+        assert!(g.with_generated(vec![ok]).is_err());
+        assert!(base.with_generated(vec![sample_tweak("GPU X")]).is_err());
+        // Opções do grupo Atualizações podem ter chaves diferentes entre si.
+        let mut a = update_tweak("wu-a", vec![task_action("\\Microsoft\\WindowsUpdate\\T")]);
+        let mut b = update_tweak(
+            "wu-b",
+            vec![Action::Registry {
+                hive: Hive::Hklm,
+                path: "SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate".into(),
+                name: "DeferFeatureUpdates".into(),
+                value: None,
+            }],
+        );
+        for t in [&mut a, &mut b] {
+            t.choice = Some("windows-update".into());
+            t.choice_label = Some("Atualizações do Windows".into());
+        }
+        assert!(base.with_generated(vec![a, b]).is_ok());
     }
 
     #[test]
