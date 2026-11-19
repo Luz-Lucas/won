@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use crate::apps::{self, AppsCommand};
 use crate::progress::{self, TerminalProgress};
 use crate::report::{self, human_bytes};
+use crate::startup::{self, StartupCommand};
 use crate::tweak::{self, TweakCommand};
 use sentinela_core::clean::category::Env;
 use sentinela_core::clean::{self, CleanReport, platform};
@@ -118,6 +119,11 @@ enum Command {
         #[command(subcommand)]
         action: AppsCommand,
     },
+    /// Lista, ativa e desativa programas que iniciam com o Windows
+    Startup {
+        #[command(subcommand)]
+        action: StartupCommand,
+    },
     /// Mostra versão, banco de assinaturas e privilégios
     Info,
 }
@@ -194,6 +200,7 @@ fn dispatch(command: Command) -> Result<i32> {
         }
         Command::Tweak { action } => tweak::run(action),
         Command::Apps { action } => apps::run(action),
+        Command::Startup { action } => startup::run(action),
         Command::Info => cmd_info(),
     }
 }

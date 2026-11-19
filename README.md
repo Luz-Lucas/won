@@ -12,13 +12,17 @@ Baixe o instalador `Sentinela_<versão>_x64-setup.exe` mais recente na página d
 
 ### Interface gráfica
 
-A janela do Sentinela tem cinco páginas, na barra lateral:
+A janela do Sentinela tem estas páginas, na barra lateral:
 
 - **Início**: situação da proteção, atalhos para verificar e liberar espaço, e a atividade recente.
+- **Jogos**: otimizações do Windows com prévia, perfil recomendado e ponto de restauração. No fim, **Programas que iniciam com o Windows**: liga e desliga cada programa como o Gerenciador de Tarefas, sem apagar nada; entradas de todos os usuários pedem administrador, e programas cujo arquivo sumiu aparecem como "Arquivo não encontrado".
 - **Limpeza**: simula a limpeza e mostra, por categoria, o que seria apagado e o espaço liberado. Nada é apagado antes de você confirmar; categorias desmarcadas são mantidas.
+- **Aplicativos**: instala e atualiza aplicativos do catálogo pelo winget.
+- **Personalizar**: barra de tarefas, menu Iniciar, Explorador, tema e sistema, com interruptores e listas de opções. Cada mudança mostra a prévia, pede confirmação e pode ser desfeita pelo Histórico. Mudanças que só aparecem com o Explorer reiniciado oferecem o botão "Reiniciar Explorer"; o Sentinela nunca o reinicia sozinho.
 - **Segurança**: verifica pastas ou o computador inteiro (com cancelamento) e lista o que encontrou, sem mover nem apagar nada; também lista os itens que o `sentinela full` colocou em quarentena e permite restaurá-los, sempre depois de confirmar.
 - **Disco**: lista os maiores arquivos e os duplicados de uma pasta. Só lista; nunca apaga.
-- **Ajustes**: atualiza o banco de assinaturas e guarda a chave gratuita da abuse.ch.
+- **Histórico**: as otimizações e personalizações aplicadas, com desfazer.
+- **Ajustes**: atualiza o banco de assinaturas, guarda a chave gratuita da abuse.ch e define a inicialização com o Windows e a bandeja.
 
 O rodapé da barra lateral mostra se o programa está como administrador e oferece "Reiniciar como administrador". As regras de segurança são as mesmas do `sentinela.exe` descrito abaixo.
 
@@ -39,6 +43,7 @@ sentinela quarantine [--json]
 sentinela restore <id>
 sentinela tweak list | apply <id>... | undo (<id>... | --all)
 sentinela apps list | install <id>... | upgrade (<id>... | --all)
+sentinela startup list | enable <id> | disable <id>
 sentinela info
 ```
 
@@ -194,6 +199,22 @@ sentinela tweak undo (<id>... | --all) [--yes] [--json]
 - Só um processo altera as otimizações por vez; se outro estiver alterando, o item falha com "outro processo está alterando as otimizações; tente de novo."
 - Códigos de saída: `0` sucesso (inclusive "nada a fazer"), `1` se algum item falhou ou houve conflito no `undo`, `2` erro global (id desconhecido, uso incorreto).
 - Com `--json`, `list` devolve uma lista de `{ id, title, status, blocked, changes }`, em que `status` é `applied`, `not_applied`, `partial` ou `unavailable`; `apply` e `undo` devolvem o relatório.
+- As personalizações (`taskbar-*`, `start-*`, `explorer-*`, `theme-*` e as de sistema) também aparecem no `list`. As que formam uma lista de opções (por exemplo `taskbar-align-left` e `taskbar-align-center`) são exclusivas: aplicar uma desfaz antes a outra opção do mesmo grupo que o Sentinela tiver aplicado. Quando a mudança só aparece com o Explorer reiniciado, o `apply` termina com "Reinicie o Explorer para concluir."; o CLI não reinicia o Explorer.
+
+### `startup`: programas que iniciam com o Windows
+
+```
+sentinela startup list [--json]
+sentinela startup enable <id> [--yes]
+sentinela startup disable <id> [--yes]
+```
+
+- `list` mostra cada entrada das chaves `Run` (usuário, todos os usuários e 32 bits) e das pastas Inicializar (usuário e comum): id, estado (`ativado`/`desativado`), nome, origem e o comando, com `(arquivo não encontrado)`, `(requer administrador)` ou `(este é o Sentinela)` quando for o caso. Só lê o sistema.
+- `enable` e `disable` **perguntam `[s/N]`** (`--yes` pula) e só alternam o estado "aprovado/desativado" de `Explorer\StartupApproved`, exatamente como o Gerenciador de Tarefas. **Nunca** apagam a entrada nem o atalho: o programa continua instalado e pode ser religado a qualquer momento (pelo Sentinela ou pelo Gerenciador de Tarefas).
+- O id é `<origem>:<nome>`, como mostrado no `list`; ids com espaço vão entre aspas (`sentinela startup disable "run_hkcu:Rise Mode Controller"`).
+- Entradas de todos os usuários exigem o terminal como administrador. A entrada do próprio Sentinela não é alterada aqui: use Ajustes → Inicialização na janela.
+- Id desconhecido encerra com código `2` antes de qualquer pergunta. Códigos de saída: `0` sucesso (inclusive "já estava" e cancelamento), `2` erro (id desconhecido, falta de administrador, falha ao gravar).
+- Com `--json`, `list` devolve `{ entries, warnings }`; cada entrada tem `id`, `name`, `command`, `source` (`run_hkcu`, `run_hklm`, `run_hklm32`, `startup_folder_user`, `startup_folder_common`), `enabled`, `file_exists` e `needs_admin`.
 
 ### `apps`: aplicativos via winget
 

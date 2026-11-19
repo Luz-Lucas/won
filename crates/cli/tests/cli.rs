@@ -415,6 +415,86 @@ fn tweak_list_shows_catalog_ids() {
 }
 
 #[test]
+fn tweak_list_includes_personalization() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["tweak", "list"])
+        .assert()
+        .success()
+        .stdout(contains("taskbar-align-left"))
+        .stdout(contains("taskbar-align-center"))
+        .stdout(contains("explorer-show-extensions"))
+        .stdout(contains("lockscreen-off"));
+}
+
+/// Simulação (sem `--apply`): nada é apagado.
+#[test]
+fn clean_lists_new_categories() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = sentinela(&tmp.path().join("db"))
+        .arg("clean")
+        .assert()
+        .success();
+    let out = out.get_output();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    for id in [
+        "shader-cache",
+        "launcher-cache",
+        "thumbnail-cache",
+        "delivery-optimization",
+        "windows-logs",
+    ] {
+        assert!(stdout.contains(id), "{id} ausente em:\n{stdout}");
+    }
+}
+
+/// Só leitura: lista as entradas reais desta máquina.
+#[test]
+fn startup_list_runs() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["startup", "list"])
+        .assert()
+        .code(0);
+    let out = Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["startup", "list", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let v = json_of(&out);
+    assert!(v["entries"].is_array());
+    assert!(v["warnings"].is_array());
+}
+
+#[test]
+fn startup_disable_unknown_id_exits_2() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args([
+            "startup",
+            "disable",
+            "run_hkcu:nao-existe-sentinela-teste",
+            "--yes",
+        ])
+        .assert()
+        .code(2)
+        .stderr(contains(
+            "entrada de inicialização desconhecida: run_hkcu:nao-existe-sentinela-teste",
+        ));
+}
+
+#[test]
+fn startup_enable_requires_an_id() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["startup", "enable"])
+        .assert()
+        .code(2);
+}
+
+#[test]
 fn tweak_apply_unknown_id_exits_2() {
     let dir = tempfile::tempdir().unwrap();
     Command::cargo_bin("sentinela")

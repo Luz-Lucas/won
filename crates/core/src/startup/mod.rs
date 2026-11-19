@@ -287,7 +287,8 @@ impl<S: StartupStore> Startup<S> {
     }
 }
 
-fn source_label(s: StartupSource) -> &'static str {
+/// Nome da origem em pt-BR, para listas e avisos.
+pub fn source_label(s: StartupSource) -> &'static str {
     match s {
         StartupSource::RunHkcu => "Registro (usuário)",
         StartupSource::RunHklm => "Registro (todos os usuários)",
