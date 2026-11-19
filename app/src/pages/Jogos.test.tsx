@@ -18,6 +18,8 @@ vi.mock("../api", () => ({
   tweaksList: vi.fn(),
   tweaksApply: vi.fn(),
   relaunchElevated: vi.fn(),
+  startupList: vi.fn().mockResolvedValue({ items: [], warnings: [], elevated: true }),
+  startupSetEnabled: vi.fn(),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),
 }));

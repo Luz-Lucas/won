@@ -4,5 +4,6 @@ pub mod disk;
 pub mod scan;
 pub mod settings;
 pub mod signatures;
+pub mod startup;
 pub mod system;
 pub mod tweaks;

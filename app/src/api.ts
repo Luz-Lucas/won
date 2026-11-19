@@ -314,6 +314,38 @@ export interface HistoryPage {
 
 export const tweaksJournal = () => invoke<HistoryPage>("tweaks_journal");
 
+export type StartupSource =
+  | "run_hkcu"
+  | "run_hklm"
+  | "run_hklm32"
+  | "startup_folder_user"
+  | "startup_folder_common";
+
+export interface StartupItem {
+  id: string;
+  name: string;
+  command: string;
+  source: StartupSource;
+  enabled: boolean;
+  file_exists: boolean;
+  needs_admin: boolean;
+  /** A entrada do próprio Sentinela (sem interruptor). */
+  sentinela: boolean;
+  /** Por que o interruptor está travado nesta janela. */
+  locked: string | null;
+}
+
+export interface StartupPage {
+  items: StartupItem[];
+  warnings: string[];
+  elevated: boolean;
+}
+
+export const startupList = () => invoke<StartupPage>("startup_list");
+/** Liga ou desliga e devolve a lista atualizada. */
+export const startupSetEnabled = (id: string, enabled: boolean) =>
+  invoke<StartupPage>("startup_set_enabled", { id, enabled });
+
 export interface SettingsView {
   start_with_windows: boolean;
   close_to_tray: boolean;

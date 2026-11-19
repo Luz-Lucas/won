@@ -122,6 +122,8 @@ pub fn run() {
             commands::tweaks::tweaks_undo,
             commands::tweaks::tweaks_undo_all,
             commands::tweaks::tweaks_journal,
+            commands::startup::startup_list,
+            commands::startup::startup_set_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela");

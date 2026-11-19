@@ -9,6 +9,7 @@ import type {
   TweaksPage,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import StartupList from "../components/StartupList";
 import { useJob } from "../jobs";
 
 type Profile = "recomendado" | "personalizado";
@@ -331,6 +332,7 @@ export default function Jogos() {
         O Sentinela não desativa Defender, Windows Update, firewall nem outras
         proteções para ganhar FPS.
       </p>
+      <StartupList />
       {confirming && (
         <ConfirmDialog
           title={`Aplicar ${chosen.length} otimização(ões)?`}
