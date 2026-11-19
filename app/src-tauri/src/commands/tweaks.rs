@@ -151,6 +151,17 @@ pub fn applied_count(cat: &Catalog, b: &dyn SystemBackend) -> usize {
         .count()
 }
 
+/// O cartão "Otimização" do Início: aplicados e total entre os recomendados
+/// (personalização e aba Avançado não são otimizações a cumprir).
+pub fn optimization_progress(cat: &Catalog, b: &dyn SystemBackend) -> (usize, usize) {
+    let recommended: Vec<&Tweak> = cat.tweaks.iter().filter(|t| t.recommended).collect();
+    let applied = recommended
+        .iter()
+        .filter(|t| view(t, b).status == TweakStatus::Applied)
+        .count();
+    (applied, recommended.len())
+}
+
 fn validate_apply(ids: &[String], cat: &Catalog) -> Result<(), String> {
     if ids.is_empty() {
         return Err("Nenhuma otimização selecionada.".into());
@@ -693,5 +704,32 @@ mod tests {
         let page = build_page(&c, &b, &jp, false, true, false).unwrap();
         assert!(page.tweaks[0].in_journal);
         assert_eq!(page.journal_count, 1);
+    }
+
+    #[test]
+    fn home_progress_counts_only_recommended() {
+        let mut c = cat();
+        let mut rec = c.tweaks[0].clone();
+        rec.id = "rec".into();
+        rec.recommended = true;
+        c.tweaks.push(rec);
+        let b = MemoryBackend::new();
+        assert_eq!(optimization_progress(&c, &b), (0, 1));
+        // `t1` (não recomendado) aplicado não conta; `rec` toca a mesma chave e conta.
+        b.set(
+            &reg(),
+            Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        );
+        assert_eq!(optimization_progress(&c, &b), (1, 1));
+        assert_eq!(
+            optimization_progress(Catalog::embedded(), &b).1,
+            Catalog::embedded()
+                .tweaks
+                .iter()
+                .filter(|t| t.recommended)
+                .count()
+        );
     }
 }

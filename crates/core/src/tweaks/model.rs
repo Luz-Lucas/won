@@ -11,6 +11,8 @@ pub enum Group {
     Privacidade,
     Visual,
     Personalizacao,
+    /// Situacionais e controversos: aba "Avançado", nunca no perfil Recomendado.
+    Avancado,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

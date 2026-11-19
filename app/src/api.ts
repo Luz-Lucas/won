@@ -175,7 +175,8 @@ export type TweakGroup =
   | "segundo_plano"
   | "privacidade"
   | "visual"
-  | "personalizacao";
+  | "personalizacao"
+  | "avancado";
 export type TweakEvidence = "comprovado" | "situacional" | "controverso";
 export type TweakEffect = "immediate" | "explorer" | "relogon" | "reboot";
 export type TweakStatus = "applied" | "not_applied" | "partial" | "unavailable";

@@ -2,7 +2,7 @@
 //!
 //! Camada fina: a lógica de negócio vive em `sentinela_core`.
 
-use crate::commands::tweaks::{FOR_SID_ARG, SID_UNKNOWN, TweaksState, applied_count};
+use crate::commands::tweaks::{FOR_SID_ARG, SID_UNKNOWN, TweaksState, optimization_progress};
 use crate::jobs::{JobId, JobKind, JobRegistry};
 use sentinela_core::activity::{self, ActivityEntry};
 use sentinela_core::status::{self, DbStatus};
@@ -31,15 +31,16 @@ pub struct SystemStatus {
 }
 
 fn collect_status(tweaks: &TweaksState) -> SystemStatus {
-    let cat = Catalog::embedded();
+    let (tweaks_applied, tweaks_total) =
+        optimization_progress(Catalog::embedded(), tweaks.backend().as_ref());
     SystemStatus {
         version: env!("CARGO_PKG_VERSION").to_string(),
         elevated: clean::platform::is_elevated(),
         db: status::db_status(&signatures::default_db_dir()),
         quarantine_count: quarantine::list(&quarantine::default_quarantine_dir()).len(),
         activity: activity::recent(&activity::default_activity_path(), RECENT_ACTIVITY),
-        tweaks_applied: applied_count(cat, tweaks.backend().as_ref()),
-        tweaks_total: cat.tweaks.len(),
+        tweaks_applied,
+        tweaks_total,
     }
 }
 

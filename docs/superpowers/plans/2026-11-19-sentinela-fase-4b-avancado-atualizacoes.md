@@ -42,7 +42,7 @@ Todos com `recommended: false`. Grupo novo `Avancado` (serde `"avancado"`), most
 | id | evidência | admin | efeito | ação |
 |---|---|---|---|---|
 | `fullscreen-optimizations-off` | controverso | não | relogon | `HKCU\System\GameConfigStore`: `GameDVR_FSEBehaviorMode` = 2, `GameDVR_HonorUserFSEBehaviorMode` = 1, `GameDVR_DXGIHonorFSEWindowsCompatible` = 1 |
-| `mmcss-responsiveness` | situacional | sim | reboot | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile`: `SystemResponsiveness` = 10, `NetworkThrottlingIndex` = 0xFFFFFFFF |
+| `mmcss-responsiveness` | situacional | sim | reboot | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile`: `SystemResponsiveness` = 10 (a documentação do MMCSS diz que valores abaixo de 10 viram 20, então o "0" dos guias não faz nada). `NetworkThrottlingIndex` não tem documentação da Microsoft nessa página e vai para a fase de rede (N1), onde há medição |
 | `timer-resolution-global` | controverso | sim | reboot | `HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel`: `GlobalTimerResolutionRequests` = 1; `laptop_warning: true` |
 | `services-manual-extra` | situacional | sim | reboot | serviços para Manual: `SysMain`, `MapsBroker`, `StorSvc` (revisão da lista do winutil: só os que ficam em Manual; nada desativado) |
 | `search-indexing-off` | situacional | sim | immediate | serviço `WSearch` desativado (a busca do Windows fica mais lenta: dito na descrição) |

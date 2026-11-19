@@ -41,6 +41,15 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
         Hive::Hklm,
         "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
     ),
+    // Aba Avançado: MMCSS e a chave do kernel (só `GlobalTimerResolutionRequests`).
+    (
+        Hive::Hklm,
+        "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+    ),
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+    ),
 ];
 
 /// Caminhos (da folha para cima) que o desfazer pode apagar se estiverem vazios:
@@ -840,5 +849,94 @@ mod tests {
         for id in ["taskbar-widgets-off", "lockscreen-off", "logon-blur-off"] {
             assert!(c.get(id).unwrap().needs_admin, "{id}");
         }
+    }
+
+    #[test]
+    fn advanced_catalog_is_valid() {
+        use crate::tweaks::model::{Effect, Evidence, Group, StartType};
+        // (id, evidência, admin, efeito)
+        let table: &[(&str, Evidence, bool, Effect)] = &[
+            (
+                "fullscreen-optimizations-off",
+                Evidence::Controverso,
+                false,
+                Effect::Relogon,
+            ),
+            (
+                "mmcss-responsiveness",
+                Evidence::Situacional,
+                true,
+                Effect::Reboot,
+            ),
+            (
+                "timer-resolution-global",
+                Evidence::Controverso,
+                true,
+                Effect::Reboot,
+            ),
+            (
+                "services-manual-extra",
+                Evidence::Situacional,
+                true,
+                Effect::Reboot,
+            ),
+            (
+                "search-indexing-off",
+                Evidence::Situacional,
+                true,
+                Effect::Immediate,
+            ),
+        ];
+        let c = Catalog::embedded();
+        for (id, evidence, admin, effect) in table {
+            let t = c.get(id).unwrap_or_else(|| panic!("{id} ausente"));
+            assert_eq!(t.group, Group::Avancado, "{id}");
+            assert_eq!(t.evidence, *evidence, "{id}");
+            assert_eq!(t.needs_admin, *admin, "{id}");
+            assert_eq!(t.effect, *effect, "{id}");
+            assert!(!t.recommended, "{id} não pode ser recomendado");
+        }
+        assert!(c.get("timer-resolution-global").unwrap().laptop_warning);
+        for t in &c.tweaks {
+            // Avançado nunca é recomendado; controverso só existe no Avançado.
+            if t.group == Group::Avancado {
+                assert!(!t.recommended, "{}", t.id);
+                assert_ne!(t.evidence, Evidence::Comprovado, "{}", t.id);
+            }
+            if t.evidence == Evidence::Controverso {
+                assert_eq!(t.group, Group::Avancado, "{}", t.id);
+            }
+        }
+        // Os serviços extras só vão para Manual: nada desativado.
+        let extra = c.get("services-manual-extra").unwrap();
+        for a in &extra.actions {
+            assert!(
+                matches!(
+                    a,
+                    Action::Service {
+                        start: StartType::Manual,
+                        ..
+                    }
+                ),
+                "{a:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allowed_roots_cover_advanced() {
+        assert!(path_allowed(
+            Hive::Hklm,
+            "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile"
+        ));
+        assert!(path_allowed(
+            Hive::Hklm,
+            "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel"
+        ));
+        // Só a chave do kernel: o resto do Session Manager continua fora.
+        assert!(!path_allowed(
+            Hive::Hklm,
+            "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
+        ));
     }
 }
