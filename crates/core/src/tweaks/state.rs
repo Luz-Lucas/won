@@ -76,6 +76,8 @@ pub fn snapshot_text(s: &Snapshot) -> String {
         Snapshot::PowerPlan { scheme } => plan_name(scheme),
         Snapshot::ScheduledTask { enabled: true } => "Ligada".to_string(),
         Snapshot::ScheduledTask { enabled: false } => "Desligada".to_string(),
+        Snapshot::DnsServers { servers } if servers.is_empty() => "automático (DHCP)".to_string(),
+        Snapshot::DnsServers { servers } => servers.join(", "),
         Snapshot::Unavailable { reason } => format!("indisponível ({reason})"),
     }
 }
@@ -109,6 +111,12 @@ pub fn describe(action: &Action) -> String {
         Action::Service { name, .. } => format!("Serviço {name} (inicialização)"),
         Action::PowerPlan { .. } => "Plano de energia ativo".to_string(),
         Action::ScheduledTask { path, .. } => format!("Tarefa agendada {path}"),
+        Action::DnsServers {
+            interface, ipv6, ..
+        } => format!(
+            "DNS do adaptador {interface} ({})",
+            if *ipv6 { "IPv6" } else { "IPv4" }
+        ),
     }
 }
 

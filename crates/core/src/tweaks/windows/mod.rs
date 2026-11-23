@@ -3,6 +3,7 @@
 //!
 //! Dividido em submódulos (`registry`, `service`, `power`) para manter cada arquivo curto.
 
+mod dns;
 mod network;
 mod power;
 mod registry;
@@ -119,6 +120,11 @@ impl SystemBackend for WindowsBackend {
             Action::ScheduledTask { path, .. } => Ok(Snapshot::ScheduledTask {
                 enabled: tasks::read_enabled(path)?,
             }),
+            Action::DnsServers {
+                interface, ipv6, ..
+            } => Ok(Snapshot::DnsServers {
+                servers: dns::read_servers(interface, *ipv6)?,
+            }),
         }
     }
 
@@ -156,6 +162,12 @@ impl SystemBackend for WindowsBackend {
             (Action::ScheduledTask { path, .. }, Snapshot::ScheduledTask { enabled }) => {
                 tasks::set_enabled(path, *enabled)
             }
+            (
+                Action::DnsServers {
+                    interface, ipv6, ..
+                },
+                Snapshot::DnsServers { servers },
+            ) => dns::write_servers(interface, *ipv6, servers),
             _ => Err("estado incompatível com a ação".to_string()),
         }
     }

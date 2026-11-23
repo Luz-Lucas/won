@@ -7,6 +7,7 @@ use std::net::{IpAddr, ToSocketAddrs};
 use serde::{Deserialize, Serialize};
 
 pub mod bufferbloat;
+pub mod dns;
 pub mod history;
 pub mod probe;
 pub mod stats;

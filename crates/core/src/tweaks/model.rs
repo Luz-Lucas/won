@@ -16,6 +16,8 @@ pub enum Group {
     /// Modos de Atualizações do Windows: o único grupo que toca nos serviços e
     /// nas tarefas de atualização.
     Atualizacoes,
+    /// DNS e ajustes de adaptador (página Rede).
+    Rede,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,6 +94,13 @@ pub enum Action {
     ScheduledTask {
         path: String,
         enabled: bool,
+    },
+    /// Servidores DNS fixos de um adaptador (`{GUID}`), IPv4 ou IPv6. Lista
+    /// vazia = automático (DHCP).
+    DnsServers {
+        interface: String,
+        ipv6: bool,
+        servers: Vec<String>,
     },
 }
 

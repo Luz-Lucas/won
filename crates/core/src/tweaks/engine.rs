@@ -1219,6 +1219,9 @@ mod tests {
                     Action::ScheduledTask { enabled, .. } => {
                         Snapshot::ScheduledTask { enabled: !enabled }
                     }
+                    Action::DnsServers { .. } => Snapshot::DnsServers {
+                        servers: vec!["192.0.2.53".into()],
+                    },
                 };
                 assert_ne!(s, target);
                 b.set(a, s.clone());

@@ -1,25 +1,12 @@
 //! Ajustes montados em tempo de execução a partir desta máquina e o catálogo
 //! completo (embutido + gerados) que a janela e a CLI usam.
 
-use super::catalog::Catalog;
+use super::catalog::{Catalog, is_braced_guid};
 use super::model::{Action, Effect, Evidence, Group, Hive, RegValue, Tweak};
 
 /// Chaves de cada interface de rede (`{GUID}`) do TCP/IP.
 pub const INTERFACES_KEY: &str =
     "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces";
-
-/// `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}` (maiúsculas ou minúsculas).
-fn is_braced_guid(s: &str) -> bool {
-    let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
-        return false;
-    };
-    let parts: Vec<&str> = inner.split('-').collect();
-    parts.len() == 5
-        && parts
-            .iter()
-            .zip([8, 4, 4, 4, 12])
-            .all(|(p, n)| p.len() == n && p.bytes().all(|b| b.is_ascii_hexdigit()))
-}
 
 fn real_ip(ip: &str) -> bool {
     let ip = ip.trim();

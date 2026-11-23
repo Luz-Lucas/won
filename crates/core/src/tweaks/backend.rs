@@ -31,6 +31,10 @@ pub enum Snapshot {
     ScheduledTask {
         enabled: bool,
     },
+    /// Servidores DNS fixos; vazio = automático (DHCP).
+    DnsServers {
+        servers: Vec<String>,
+    },
     /// Ex.: plano de energia inexistente.
     Unavailable {
         reason: String,
@@ -96,6 +100,9 @@ pub fn target_of(action: &Action) -> Snapshot {
             scheme: scheme.clone(),
         },
         Action::ScheduledTask { enabled, .. } => Snapshot::ScheduledTask { enabled: *enabled },
+        Action::DnsServers { servers, .. } => Snapshot::DnsServers {
+            servers: servers.clone(),
+        },
     }
 }
 
@@ -121,6 +128,9 @@ fn action_key(action: &Action) -> String {
         Action::Service { name, .. } => format!("svc:{name}"),
         Action::PowerPlan { .. } => "power".to_string(),
         Action::ScheduledTask { path, .. } => format!("task:{path}"),
+        Action::DnsServers {
+            interface, ipv6, ..
+        } => format!("dns:{interface}:{}", if *ipv6 { "v6" } else { "v4" }),
     }
 }
 
@@ -136,6 +146,9 @@ fn default_snapshot(action: &Action) -> Snapshot {
         },
         Action::ScheduledTask { .. } => Snapshot::Unavailable {
             reason: "tarefa não existe".to_string(),
+        },
+        Action::DnsServers { .. } => Snapshot::DnsServers {
+            servers: Vec::new(),
         },
     }
 }

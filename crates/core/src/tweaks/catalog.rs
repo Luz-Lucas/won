@@ -148,6 +148,19 @@ pub fn task_allowed(path: &str) -> bool {
     })
 }
 
+/// `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}` (maiúsculas ou minúsculas).
+pub fn is_braced_guid(s: &str) -> bool {
+    let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
+        return false;
+    };
+    let parts: Vec<&str> = inner.split('-').collect();
+    parts.len() == 5
+        && parts
+            .iter()
+            .zip([8, 4, 4, 4, 12])
+            .all(|(p, n)| p.len() == n && p.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 fn is_update_service(name: &str) -> bool {
     UPDATE_SERVICES.iter().any(|u| u.eq_ignore_ascii_case(name))
 }
@@ -301,6 +314,30 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
                 }
                 if !t.needs_admin {
                     return Err(format!("{id}: tarefa agendada exige needs_admin"));
+                }
+            }
+            Action::DnsServers {
+                interface,
+                ipv6,
+                servers,
+            } => {
+                if t.group != Group::Rede {
+                    return Err(format!("{id}: DNS só no grupo Rede"));
+                }
+                if !is_braced_guid(interface) {
+                    return Err(format!("{id}: adaptador inválido: {interface}"));
+                }
+                if !t.needs_admin {
+                    return Err(format!("{id}: DNS exige needs_admin"));
+                }
+                for s in servers {
+                    let family_ok = match s.parse::<std::net::IpAddr>() {
+                        Ok(ip) => ip.is_ipv6() == *ipv6,
+                        Err(_) => false,
+                    };
+                    if !family_ok {
+                        return Err(format!("{id}: servidor DNS inválido: {s}"));
+                    }
                 }
             }
         }
