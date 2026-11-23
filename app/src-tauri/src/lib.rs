@@ -127,6 +127,7 @@ pub fn run() {
             commands::startup::startup_set_enabled,
             commands::games::games_list,
             commands::games::games_gpu_set,
+            commands::games::games_qos_set,
             commands::games::games_add,
             commands::games::games_remove,
             commands::updates::updates_status,

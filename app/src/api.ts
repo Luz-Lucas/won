@@ -381,19 +381,34 @@ export interface GameItem {
   /** Ligado fora do Sentinela (Configurações → Gráficos). */
   external: boolean;
   blocked: string | null;
+  /** Prioridade de rede (QoS, DSCP 46). */
+  qos: GameSwitch;
+}
+
+export interface GameSwitch {
+  /** Id do ajuste gerado (`qos-…`). */
+  id: string;
+  enabled: boolean;
+  in_journal: boolean;
+  external: boolean;
+  blocked: string | null;
 }
 
 export interface GamesPage {
   games: GameItem[];
   /** No Histórico, mas o jogo não é mais encontrado. */
-  missing: { id: string; title: string }[];
+  missing: { id: string; title: string; kind: "gpu" | "qos" }[];
   gpus: number;
   warnings: string[];
+  elevated: boolean;
 }
 
 export const gamesList = () => invoke<GamesPage>("games_list");
 export const gamesGpuSet = (id: string, enabled: boolean) =>
   invoke<GamesPage>("games_gpu_set", { id, enabled });
+/** Prioridade de rede (QoS); exige administrador. */
+export const gamesQosSet = (id: string, enabled: boolean) =>
+  invoke<GamesPage>("games_qos_set", { id, enabled });
 export const gamesAdd = (path: string) => invoke<GamesPage>("games_add", { path });
 export const gamesRemove = (path: string) =>
   invoke<GamesPage>("games_remove", { path });

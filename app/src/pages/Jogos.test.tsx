@@ -19,7 +19,7 @@ vi.mock("../api", () => ({
   tweaksApply: vi.fn(),
   relaunchElevated: vi.fn(),
   startupList: vi.fn().mockResolvedValue({ items: [], warnings: [], elevated: true }),
-  gamesList: vi.fn().mockResolvedValue({ games: [], missing: [], gpus: 2, warnings: [] }),
+  gamesList: vi.fn().mockResolvedValue({ games: [], missing: [], gpus: 2, warnings: [], elevated: true }),
   startupSetEnabled: vi.fn(),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),

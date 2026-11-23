@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 use crate::tweaks::{Action, Effect, Evidence, Group, Hive, Tweak};
 
 pub mod epic;
+pub mod qos;
 pub mod riot;
 pub mod steam;
 #[cfg(windows)]
@@ -134,7 +135,7 @@ pub fn exe_candidates(dir: &Path) -> Vec<PathBuf> {
     found.into_iter().take(MAX_EXES).map(|(p, _)| p).collect()
 }
 
-fn path_key(p: &Path) -> String {
+pub(crate) fn path_key(p: &Path) -> String {
     p.to_string_lossy().replace('/', "\\").to_lowercase()
 }
 

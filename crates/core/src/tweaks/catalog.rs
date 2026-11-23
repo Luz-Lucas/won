@@ -60,6 +60,12 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
         Hive::Hklm,
         "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
     ),
+    // QoS por jogo (`qos-…`) e o "Do not use NLA" compartilhado (`qos-allow-local`).
+    (Hive::Hklm, "SOFTWARE\\Policies\\Microsoft\\Windows\\QoS"),
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\QoS",
+    ),
     // Economia de energia/EEE por adaptador (ajuste gerado `nic-…`).
     (
         Hive::Hklm,
