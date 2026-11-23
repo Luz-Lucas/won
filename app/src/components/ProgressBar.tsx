@@ -14,6 +14,23 @@ export default function ProgressBar({
       </p>
     );
   }
+  if (progress.phase === "apps") {
+    const pct = progress.total > 0 ? Math.floor((progress.index / progress.total) * 100) : 0;
+    return (
+      <div className="progress">
+        <div
+          className="progress-track"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+        >
+          <div className="progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="muted progress-current">{`${progress.index + 1} de ${progress.total} · ${progress.current}`}</p>
+      </div>
+    );
+  }
   const ratio =
     progress.total_bytes > 0
       ? progress.bytes_done / progress.total_bytes

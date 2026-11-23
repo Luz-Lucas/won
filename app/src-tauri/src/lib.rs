@@ -44,6 +44,7 @@ pub fn run() {
         )
         .setup(|app| {
             app.manage(Arc::new(JobRegistry::new()));
+            app.manage(commands::apps::AppsState::system());
             app.manage(commands::tweaks::TweaksState::new(
                 commands::tweaks::startup_hkcu_allowed(),
             ));
@@ -78,9 +79,16 @@ pub fn run() {
             // Sem ícone na bandeja, esconder deixaria o app inalcançável.
             let to_tray =
                 settings.snapshot().close_to_tray && settings.tray_ok.load(Ordering::Relaxed);
-            if on_window_close(window.label(), to_tray, &jobs) == CloseAction::HideToTray {
-                api.prevent_close();
-                tray::hide_main(window.app_handle());
+            match on_window_close(window.label(), to_tray, &jobs) {
+                CloseAction::HideToTray => {
+                    api.prevent_close();
+                    tray::hide_main(window.app_handle());
+                }
+                CloseAction::ConfirmQuit => {
+                    api.prevent_close();
+                    tray::ask_quit(window.app_handle());
+                }
+                CloseAction::Ignore | CloseAction::Exit => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -99,9 +107,14 @@ pub fn run() {
             commands::system::relaunch_elevated,
             commands::system::job_cancel,
             commands::system::job_running,
+            commands::system::quit_app,
             tray::window_ready,
             commands::settings::settings_get,
             commands::settings::settings_set,
+            commands::apps::apps_page,
+            commands::apps::apps_page_refresh,
+            commands::apps::apps_install,
+            commands::apps::apps_upgrade,
             commands::tweaks::tweaks_list,
             commands::tweaks::tweaks_apply,
             commands::tweaks::tweaks_undo,

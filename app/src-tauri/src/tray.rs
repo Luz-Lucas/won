@@ -1,13 +1,14 @@
 //! Ícone da bandeja e esconder/mostrar a janela principal. Só fiação.
 
+use crate::commands::apps::AppsState;
 use crate::commands::settings::SettingsState;
-use crate::commands::system::on_tray_quit;
+use crate::commands::system::{QUIT_CONFIRM_EVENT, QuitAction, on_tray_quit};
 use crate::jobs::JobRegistry;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 const TRAY_NOTICE: &str =
@@ -48,13 +49,27 @@ pub fn window_ready(app: AppHandle) {
     show_startup(&app);
 }
 
-/// Mostra, restaura e foca a janela principal.
+/// Evento: a janela voltou a aparecer (a página de aplicativos relê os estados).
+pub const SHOWN_EVENT: &str = "app:shown";
+
+/// Mostra, restaura e foca a janela principal. Os estados dos aplicativos podem
+/// ter mudado enquanto ela estava escondida: o cache é descartado.
 pub fn show_main(app: &AppHandle) {
+    if let Some(apps) = app.try_state::<AppsState>() {
+        apps.invalidate();
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
     }
+    let _ = app.emit(SHOWN_EVENT, ());
+}
+
+/// Mostra a janela e pede a confirmação de saída (fila de aplicativos rodando).
+pub fn ask_quit(app: &AppHandle) {
+    show_main(app);
+    let _ = app.emit(QUIT_CONFIRM_EVENT, ());
 }
 
 /// Esconde a janela; na primeira vez avisa (notificação do Windows) onde o app ficou.
@@ -88,10 +103,13 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main(app),
             "quit" => {
-                if let Some(jobs) = app.try_state::<Arc<JobRegistry>>() {
-                    on_tray_quit(&jobs);
+                let action = app
+                    .try_state::<Arc<JobRegistry>>()
+                    .map_or(QuitAction::Exit, |jobs| on_tray_quit(&jobs));
+                match action {
+                    QuitAction::Exit => app.exit(0),
+                    QuitAction::Confirm => ask_quit(app),
                 }
-                app.exit(0);
             }
             _ => {}
         })

@@ -18,6 +18,7 @@ pub enum ActivityKind {
     Restore,
     Update,
     Tweak,
+    Apps,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +96,20 @@ mod tests {
         assert_eq!(r.len(), 2);
         assert_eq!(r[0].kind, ActivityKind::Tweak);
         assert_eq!(r[1].kind, ActivityKind::Clean);
+    }
+
+    #[test]
+    fn apps_kind_serializes_lowercase_and_old_files_still_load() {
+        assert_eq!(serde_json::to_value(ActivityKind::Apps).unwrap(), "apps");
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("a.json");
+        std::fs::write(
+            &p,
+            br#"[{"at":"2026-01-01T00:00:00Z","kind":"tweak","summary":"x"}]"#,
+        )
+        .unwrap();
+        append(&p, ActivityKind::Apps, "y").unwrap();
+        assert_eq!(recent(&p, 5).len(), 2);
     }
 
     #[test]

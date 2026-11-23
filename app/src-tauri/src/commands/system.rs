@@ -172,10 +172,13 @@ pub enum CloseAction {
     HideToTray,
     /// Operações canceladas; o fechamento segue e o app encerra.
     Exit,
+    /// Há uma fila de aplicativos rodando: não fecha e pede confirmação.
+    ConfirmQuit,
 }
 
 /// Decide o fechamento. Esconder para a bandeja nunca cancela operações;
-/// sair de verdade (`close_to_tray` desligado) cancela tudo.
+/// sair de verdade (`close_to_tray` desligado) cancela tudo, mas com uma fila
+/// de aplicativos rodando pergunta antes.
 pub fn on_window_close(label: &str, close_to_tray: bool, jobs: &JobRegistry) -> CloseAction {
     if label != "main" {
         return CloseAction::Ignore;
@@ -183,13 +186,44 @@ pub fn on_window_close(label: &str, close_to_tray: bool, jobs: &JobRegistry) -> 
     if close_to_tray {
         return CloseAction::HideToTray;
     }
-    jobs.cancel_all();
-    CloseAction::Exit
+    match on_tray_quit(jobs) {
+        QuitAction::Exit => CloseAction::Exit,
+        QuitAction::Confirm => CloseAction::ConfirmQuit,
+    }
 }
 
-/// "Sair" do menu da bandeja: única saída real com a janela escondida.
-pub fn on_tray_quit(jobs: &JobRegistry) {
+/// Resposta a um pedido de sair do app.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuitAction {
+    /// Operações canceladas: pode encerrar.
+    Exit,
+    /// Fila de aplicativos rodando: mostrar a janela e pedir confirmação.
+    Confirm,
+}
+
+/// Evento que pede à janela a confirmação de saída.
+pub const QUIT_CONFIRM_EVENT: &str = "app:quit-confirm";
+
+/// "Sair" (bandeja ou fechar sem bandeja). Com um winget instalando, sair o
+/// deixaria órfão e largaria o resto da fila: pergunta antes, sem cancelar nada.
+pub fn on_tray_quit(jobs: &JobRegistry) -> QuitAction {
+    if jobs.running(JobKind::Apps).is_some() {
+        return QuitAction::Confirm;
+    }
+    confirm_quit(jobs);
+    QuitAction::Exit
+}
+
+/// Saída confirmada: cancela tudo (o winget em andamento não é morto).
+pub fn confirm_quit(jobs: &JobRegistry) {
     jobs.cancel_all();
+}
+
+/// O usuário confirmou "Sair" no diálogo da janela.
+#[tauri::command]
+pub fn quit_app(app: AppHandle, jobs: State<'_, Arc<JobRegistry>>) {
+    confirm_quit(&jobs);
+    app.exit(0);
 }
 
 #[cfg(test)]
@@ -262,7 +296,37 @@ mod tests {
     fn tray_quit_cancels_running_jobs() {
         let reg = JobRegistry::new();
         let (_, flag) = reg.start(JobKind::Scan).unwrap();
-        on_tray_quit(&reg);
+        assert_eq!(on_tray_quit(&reg), QuitAction::Exit);
+        assert!(flag.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn tray_quit_with_apps_job_asks_without_cancelling() {
+        let reg = JobRegistry::new();
+        let (_, apps) = reg.start(JobKind::Apps).unwrap();
+        let (_, scan) = reg.start(JobKind::Scan).unwrap();
+        assert_eq!(on_tray_quit(&reg), QuitAction::Confirm);
+        assert!(!apps.load(Ordering::Relaxed));
+        assert!(!scan.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn close_without_tray_with_apps_job_asks() {
+        let reg = JobRegistry::new();
+        let (_, flag) = reg.start(JobKind::Apps).unwrap();
+        assert_eq!(
+            on_window_close("main", false, &reg),
+            CloseAction::ConfirmQuit
+        );
+        assert!(!flag.load(Ordering::Relaxed));
+        assert_eq!(on_window_close("main", true, &reg), CloseAction::HideToTray);
+    }
+
+    #[test]
+    fn confirmed_quit_cancels_everything() {
+        let reg = JobRegistry::new();
+        let (_, flag) = reg.start(JobKind::Apps).unwrap();
+        confirm_quit(&reg);
         assert!(flag.load(Ordering::Relaxed));
     }
 }

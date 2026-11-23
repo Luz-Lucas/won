@@ -171,9 +171,17 @@ describe("App", () => {
     await waitFor(() => expect(statusCalls()).toBe(before + 1));
   });
 
-  it("mostra as sete páginas e troca de página", async () => {
+  it("sidebar_has_aplicativos_after_limpeza", async () => {
     render(<App />);
-    for (const n of ["Início", "Jogos", "Limpeza", "Segurança", "Disco", "Histórico", "Ajustes"])
+    const nav = within(screen.getByRole("navigation", { name: "Principal" }));
+    expect(
+      nav.getAllByRole("button").slice(0, 8).map((b) => b.textContent),
+    ).toEqual(["Início", "Jogos", "Limpeza", "Aplicativos", "Segurança", "Disco", "Histórico", "Ajustes"]);
+  });
+
+  it("mostra as oito páginas e troca de página", async () => {
+    render(<App />);
+    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Segurança", "Disco", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(
@@ -231,6 +239,27 @@ describe("App", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Segurança" }),
     ).toBeInTheDocument();
+  });
+
+  it("Sair durante uma fila de aplicativos pede confirmação", async () => {
+    render(<App />);
+    await screen.findByRole("heading", { level: 1, name: "Início" });
+    const quitCalls = () =>
+      invokeMock.mock.calls.filter(([cmd]) => cmd === "quit_app").length;
+    await emit("app:quit-confirm", null);
+    let dlg = screen.getByRole("dialog");
+    expect(
+      within(dlg).getByText(
+        "Um aplicativo está sendo instalado. Ele vai terminar em segundo plano e os próximos da fila não serão instalados. Sair mesmo assim?",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(within(dlg).getByRole("button", { name: "Continuar" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(quitCalls()).toBe(0);
+    await emit("app:quit-confirm", null);
+    dlg = screen.getByRole("dialog");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Sair" }));
+    expect(quitCalls()).toBe(1);
   });
 
   it("falha em system_status mostra mensagem, não página em branco", async () => {

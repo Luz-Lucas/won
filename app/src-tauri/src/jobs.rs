@@ -23,6 +23,7 @@ pub enum JobKind {
     FindDupes,
     Update,
     Tweaks,
+    Apps,
 }
 
 pub trait Sink: Send + Sync {

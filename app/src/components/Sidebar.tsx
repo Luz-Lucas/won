@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { relaunchElevated } from "../api";
 
-export type Page = "inicio" | "jogos" | "limpeza" | "seguranca" | "disco" | "historico" | "ajustes";
+export type Page = "inicio" | "jogos" | "limpeza" | "aplicativos" | "seguranca" | "disco" | "historico" | "ajustes";
 
 const ITEMS: { page: Page; label: string }[] = [
   { page: "inicio", label: "Início" },
   { page: "jogos", label: "Jogos" },
   { page: "limpeza", label: "Limpeza" },
+  { page: "aplicativos", label: "Aplicativos" },
   { page: "seguranca", label: "Segurança" },
   { page: "disco", label: "Disco" },
   { page: "historico", label: "Histórico" },

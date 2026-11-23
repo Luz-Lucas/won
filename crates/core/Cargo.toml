@@ -21,7 +21,7 @@ yara-x.workspace = true
 zip.workspace = true
 
 [target."cfg(windows)".dependencies]
-windows-sys = { workspace = true, features = ["Win32_Security_Credentials"] }
+windows-sys = { workspace = true, features = ["Win32_Security_Credentials", "Win32_System_JobObjects", "Win32_System_Threading"] }
 
 [dev-dependencies]
 tempfile.workspace = true

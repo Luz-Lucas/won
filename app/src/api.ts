@@ -14,7 +14,7 @@ export interface DbStatus {
   warnings: string[];
 }
 
-export type ActivityKind = "clean" | "scan" | "quarantine" | "restore" | "update" | "tweak";
+export type ActivityKind = "clean" | "scan" | "quarantine" | "restore" | "update" | "tweak" | "apps";
 
 export interface ActivityEntry {
   at: string;
@@ -36,7 +36,7 @@ export const systemStatus = () => invoke<SystemStatus>("system_status");
 export const relaunchElevated = () => invoke<void>("relaunch_elevated");
 export const jobCancel = (id: number) => invoke<boolean>("job_cancel", { id });
 
-export type JobKind = "scan" | "clean" | "find_large" | "find_dupes" | "update" | "tweaks";
+export type JobKind = "scan" | "clean" | "find_large" | "find_dupes" | "update" | "tweaks" | "apps";
 
 /** Id do job deste tipo que segue rodando no backend, se houver. */
 export const jobRunning = (kind: JobKind) =>
@@ -315,3 +315,58 @@ export const settingsSet = (startWithWindows: boolean, closeToTray: boolean) =>
 
 /** Avisa o backend que a interface carregou (ele mostra a janela). */
 export const windowReady = () => invoke<void>("window_ready");
+/** Sai do app depois que o usuário confirmou (fila de aplicativos rodando). */
+export const quitApp = () => invoke<void>("quit_app");
+
+export type AppCategory =
+  | "navegadores"
+  | "comunicacao"
+  | "jogos"
+  | "ferramentas_jogos"
+  | "multimidia"
+  | "utilitarios"
+  | "desenvolvimento";
+export type AppState = "not_installed" | "installed" | "update_available";
+
+export interface CatalogApp {
+  id: string;
+  name: string;
+  description: string;
+  category: AppCategory;
+  winget: string;
+  link: string;
+  foss: boolean;
+}
+
+export interface AppItem {
+  app: CatalogApp;
+  /** null: winget indisponível ou consulta falhou. */
+  state: AppState | null;
+}
+
+export interface Availability {
+  available: boolean;
+  version: string | null;
+  reason: string | null;
+}
+
+export interface AppsPage {
+  availability: Availability;
+  apps: AppItem[];
+  categories: { id: AppCategory; label: string }[];
+}
+
+export interface AppOutcome {
+  /** Id do catálogo (não o do winget). */
+  id: string;
+  ok: boolean;
+  changed: boolean;
+  message: string;
+}
+
+export const STORE_APP_INSTALLER_URL = "ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1";
+
+export const appsPage = () => invoke<AppsPage>("apps_page");
+export const appsPageRefresh = () => invoke<AppsPage>("apps_page_refresh");
+export const appsInstall = (ids: string[]) => invoke<number>("apps_install", { ids });
+export const appsUpgrade = (ids: string[]) => invoke<number>("apps_upgrade", { ids });

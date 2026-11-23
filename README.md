@@ -38,6 +38,7 @@ sentinela full [--json]
 sentinela quarantine [--json]
 sentinela restore <id>
 sentinela tweak list | apply <id>... | undo (<id>... | --all)
+sentinela apps list | install <id>... | upgrade (<id>... | --all)
 sentinela info
 ```
 
@@ -188,6 +189,24 @@ sentinela tweak undo (<id>... | --all) [--yes] [--json]
 - Só um processo altera as otimizações por vez; se outro estiver alterando, o item falha com "outro processo está alterando as otimizações; tente de novo."
 - Códigos de saída: `0` sucesso (inclusive "nada a fazer"), `1` se algum item falhou ou houve conflito no `undo`, `2` erro global (id desconhecido, uso incorreto).
 - Com `--json`, `list` devolve uma lista de `{ id, title, status, blocked, changes }`, em que `status` é `applied`, `not_applied`, `partial` ou `unavailable`; `apply` e `undo` devolvem o relatório.
+
+### `apps`: aplicativos via winget
+
+```
+sentinela apps list [--category <id>] [--json]
+sentinela apps install <id>... [--yes]
+sentinela apps upgrade (<id>... | --all) [--yes]
+```
+
+- Só aplicativos do catálogo embutido, e sempre instalados pelo **winget** (nunca por download direto). Exige o winget 1.6 ou mais novo.
+- `list` mostra id, nome, categoria e estado (`instalado`, `atualização disponível`, `não instalado` ou `?` quando o winget não responde). `--category` filtra por categoria (`navegadores`, `comunicacao`, `jogos`, `ferramentas_jogos`, `multimidia`, `utilitarios`, `desenvolvimento`). Só lê o sistema; sem winget, lista tudo com `?` e sai com `0`.
+- `install` e `upgrade` listam o que vão fazer, mostram o aviso "Ao continuar, você aceita os termos de licença de cada aplicativo." e **perguntam `[s/N]`**; `--yes` pula a pergunta (o aviso continua aparecendo). Um aplicativo por vez, com uma linha por item (`[1/3] Steam… instalado.`). Prévia, aviso e pergunta saem no stderr.
+- `upgrade --all` atualiza todo aplicativo do catálogo com atualização disponível; se não houver nenhum, imprime `Nada para atualizar.`.
+- Ctrl+C para depois do aplicativo atual: o winget em andamento nunca é interrompido à força, e os itens restantes não são processados.
+- Ids repetidos são tratados uma vez. Id desconhecido encerra com código `2` antes de qualquer pergunta ou chamada ao winget.
+- Códigos de saída: `0` sucesso (inclusive "nada a fazer" e cancelamento), `1` se algum item falhou ou a fila foi interrompida, `2` erro global (id desconhecido, winget indisponível, uso incorreto).
+- Com `--json`, `list` devolve uma lista de `{ id, name, category, winget, state }`, em que `state` é `installed`, `update_available`, `not_installed` ou `null` (desconhecido).
+- A variável `SENTINELA_WINGET` (caminho do executável) existe **só para testes**; apontando para algo inexistente, simula o winget ausente.
 
 ### `find-large`: maiores arquivos
 
