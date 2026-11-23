@@ -333,6 +333,976 @@
           }
         }
       ]
+    },
+    {
+      "id": "fullscreen-optimizations-off",
+      "title": "Desligar otimizações de tela cheia em todos os jogos",
+      "description": "Faz os jogos em tela cheia usarem a tela cheia exclusiva antiga em vez das otimizações de tela cheia do Windows. Ajuda em alguns jogos antigos e piora em outros (troca de janela mais lenta, sobreposições que deixam de aparecer). As chaves usadas não são documentadas pela Microsoft; para um jogo só, prefira a opção \"Desabilitar otimizações de tela cheia\" nas propriedades do executável. Vale após sair e entrar de novo no Windows.",
+      "group": "avancado",
+      "evidence": "controverso",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://devblogs.microsoft.com/directx/demystifying-full-screen-optimizations/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "System\\GameConfigStore",
+          "name": "GameDVR_FSEBehaviorMode",
+          "value": {
+            "type": "dword",
+            "data": 2
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "System\\GameConfigStore",
+          "name": "GameDVR_HonorUserFSEBehaviorMode",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "System\\GameConfigStore",
+          "name": "GameDVR_DXGIHonorFSEWindowsCompatible",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "mmcss-responsiveness",
+      "title": "Reservar menos CPU para tarefas de fundo (MMCSS)",
+      "description": "Reduz de 20% para 10% a fatia de CPU que o agendador multimídia do Windows garante às tarefas de baixa prioridade enquanto um jogo ou áudio está em primeiro plano. O ganho medido é pequeno e depende do jogo. 10% é o mínimo que o Windows aceita: valores menores voltam a 20%. Exige reinício.",
+      "group": "avancado",
+      "evidence": "situacional",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/win32/procthread/multimedia-class-scheduler-service",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+          "name": "SystemResponsiveness",
+          "value": {
+            "type": "dword",
+            "data": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "timer-resolution-global",
+      "title": "Resolução do timer global",
+      "description": "Faz o pedido de timer de alta resolução de um programa valer para o sistema todo, como era antes do Windows 10 2004. Alguns jogadores relatam ritmo de quadros mais estável; o efeito não é documentado pela Microsoft e aumenta o consumo de energia. Exige reinício.",
+      "group": "avancado",
+      "evidence": "controverso",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": true,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/win32/api/timeapi/nf-timeapi-timebeginperiod",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+          "name": "GlobalTimerResolutionRequests",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "services-manual-extra",
+      "title": "Serviços extras em modo manual",
+      "description": "Deixa SysMain (pré-carregamento de programas), MapsBroker (mapas offline) e StorSvc (serviço de armazenamento) iniciando só quando algum programa precisar. Pode liberar um pouco de disco e memória durante o jogo; em HD mecânico, desligar o SysMain deixa a abertura de programas mais lenta. Nenhum serviço é desativado. Exige reinício.",
+      "group": "avancado",
+      "evidence": "situacional",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "service",
+          "name": "SysMain",
+          "start": "manual"
+        },
+        {
+          "kind": "service",
+          "name": "MapsBroker",
+          "start": "manual"
+        },
+        {
+          "kind": "service",
+          "name": "StorSvc",
+          "start": "manual"
+        }
+      ]
+    },
+    {
+      "id": "search-indexing-off",
+      "title": "Desligar a indexação da busca",
+      "description": "Desativa o serviço de indexação (WSearch), que lê o disco em segundo plano para acelerar a busca. A busca do Windows e a do Outlook ficam bem mais lentas e podem deixar de achar conteúdo dentro de arquivos.",
+      "group": "avancado",
+      "evidence": "situacional",
+      "effect": "immediate",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "service",
+          "name": "WSearch",
+          "start": "disabled"
+        }
+      ]
+    },
+    {
+      "id": "taskbar-align-left",
+      "title": "Esquerda",
+      "description": "Alinha os ícones da barra de tarefas à esquerda, como no Windows 10.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAl",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-align",
+      "choice_label": "Alinhamento da barra de tarefas"
+    },
+    {
+      "id": "taskbar-align-center",
+      "title": "Centro",
+      "description": "Centraliza os ícones da barra de tarefas (padrão do Windows 11).",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAl",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-align",
+      "choice_label": "Alinhamento da barra de tarefas"
+    },
+    {
+      "id": "taskbar-search-hidden",
+      "title": "Oculta",
+      "description": "Esconde a pesquisa da barra de tarefas; ela continua acessível pelo menu Iniciar.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-search",
+      "choice_label": "Pesquisa na barra de tarefas"
+    },
+    {
+      "id": "taskbar-search-icon",
+      "title": "Ícone",
+      "description": "Mostra só o ícone da lupa na barra de tarefas.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-search",
+      "choice_label": "Pesquisa na barra de tarefas"
+    },
+    {
+      "id": "taskbar-search-box",
+      "title": "Caixa",
+      "description": "Mostra a caixa de pesquisa completa na barra de tarefas.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "value": {
+            "type": "dword",
+            "data": 2
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-search",
+      "choice_label": "Pesquisa na barra de tarefas"
+    },
+    {
+      "id": "taskbar-taskview-off",
+      "title": "Ocultar o botão Visão de Tarefas",
+      "description": "Remove da barra de tarefas o botão de Visão de Tarefas (áreas de trabalho virtuais). O atalho Win+Tab continua funcionando.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowTaskViewButton",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "barra"
+    },
+    {
+      "id": "taskbar-widgets-off",
+      "title": "Desligar os Widgets",
+      "description": "Desativa o painel de Widgets (notícias e clima) por política e remove o botão da barra de tarefas. Exige administrador.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-newsandinterests",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Dsh",
+          "name": "AllowNewsAndInterests",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "barra"
+    },
+    {
+      "id": "taskbar-end-task",
+      "title": "Botão \"Finalizar tarefa\" na barra",
+      "description": "Adiciona \"Finalizar tarefa\" ao menu de clique direito dos aplicativos na barra de tarefas, para encerrar um programa travado sem abrir o Gerenciador de Tarefas.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
+          "name": "TaskbarEndTask",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "barra"
+    },
+    {
+      "id": "taskbar-clock-seconds",
+      "title": "Segundos no relógio",
+      "description": "Mostra os segundos no relógio da barra de tarefas. Consome um pouco mais de CPU para atualizar a cada segundo.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/taskbar/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowSecondsInSystemClock",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "barra"
+    },
+    {
+      "id": "taskbar-combine-always",
+      "title": "Sempre agrupar",
+      "description": "Junta as janelas do mesmo programa em um só botão da barra de tarefas.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/taskbar/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarGlomLevel",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-combine",
+      "choice_label": "Agrupar botões da barra de tarefas"
+    },
+    {
+      "id": "taskbar-combine-when-full",
+      "title": "Agrupar quando a barra estiver cheia",
+      "description": "Só junta as janelas do mesmo programa quando a barra de tarefas fica cheia.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/taskbar/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarGlomLevel",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-combine",
+      "choice_label": "Agrupar botões da barra de tarefas"
+    },
+    {
+      "id": "taskbar-combine-never",
+      "title": "Nunca agrupar",
+      "description": "Mantém um botão para cada janela, sem agrupar.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/taskbar/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarGlomLevel",
+          "value": {
+            "type": "dword",
+            "data": 2
+          }
+        }
+      ],
+      "area": "barra",
+      "choice": "taskbar-combine",
+      "choice_label": "Agrupar botões da barra de tarefas"
+    },
+    {
+      "id": "start-recommendations-off",
+      "title": "Ocultar recomendações do Iniciar",
+      "description": "Esconde a seção de itens recomendados do menu Iniciar do Windows 11, abrindo espaço para mais aplicativos fixados.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/start/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_IrisRecommendations",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "iniciar"
+    },
+    {
+      "id": "start-bing-off",
+      "title": "Pesquisa do Iniciar sem resultados da web",
+      "description": "Impede que o menu Iniciar envie o que você digita ao Bing e mostre sugestões da web; a pesquisa passa a listar só itens do computador.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-windowsexplorer",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Policies\\Microsoft\\Windows\\Explorer",
+          "name": "DisableSearchBoxSuggestions",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "iniciar"
+    },
+    {
+      "id": "start-layout-default",
+      "title": "Padrão",
+      "description": "Disposição padrão do menu Iniciar do Windows 11.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/start/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_Layout",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "iniciar",
+      "choice": "start-layout",
+      "choice_label": "Disposição do menu Iniciar"
+    },
+    {
+      "id": "start-layout-more-pins",
+      "title": "Mais itens fixados",
+      "description": "Dá mais espaço aos aplicativos fixados no menu Iniciar.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/start/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_Layout",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "iniciar",
+      "choice": "start-layout",
+      "choice_label": "Disposição do menu Iniciar"
+    },
+    {
+      "id": "start-layout-more-recommendations",
+      "title": "Mais recomendações",
+      "description": "Dá mais espaço à seção de recomendados do menu Iniciar.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/start/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_Layout",
+          "value": {
+            "type": "dword",
+            "data": 2
+          }
+        }
+      ],
+      "area": "iniciar",
+      "choice": "start-layout",
+      "choice_label": "Disposição do menu Iniciar"
+    },
+    {
+      "id": "explorer-classic-menu",
+      "title": "Menu de contexto clássico",
+      "description": "Volta ao menu de clique direito completo do Windows 10, sem precisar de \"Mostrar mais opções\".",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32",
+          "name": "",
+          "value": {
+            "type": "string",
+            "data": ""
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "explorer-show-extensions",
+      "title": "Mostrar extensões de arquivos",
+      "description": "Exibe a extensão (.txt, .exe...) no nome dos arquivos, o que ajuda a identificar arquivos suspeitos.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "HideFileExt",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "explorer-show-hidden",
+      "title": "Mostrar arquivos ocultos",
+      "description": "Faz o Explorador de Arquivos mostrar arquivos e pastas ocultos. Arquivos protegidos do sistema continuam escondidos.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Hidden",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "explorer-open-this-pc",
+      "title": "Abrir o Explorador em Este Computador",
+      "description": "O Explorador de Arquivos passa a abrir em \"Este Computador\" em vez de \"Início\".",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "LaunchTo",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "explorer-hide-home",
+      "title": "Ocultar \"Início\" do Explorador",
+      "description": "Tira o item \"Início\" do painel lateral do Explorador de Arquivos.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
+          "name": "System.IsPinnedToNameSpaceTree",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "explorer-hide-gallery",
+      "title": "Ocultar \"Galeria\" do Explorador",
+      "description": "Tira o item \"Galeria\" do painel lateral do Explorador de Arquivos.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+          "name": "System.IsPinnedToNameSpaceTree",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "explorer-compact",
+      "title": "Modo compacto do Explorador",
+      "description": "Reduz o espaçamento entre os itens do Explorador de Arquivos, mostrando mais arquivos na tela.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/configuration/file-explorer/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "UseCompactMode",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "theme-apps-dark",
+      "title": "Escuro",
+      "description": "Usa o tema escuro nos aplicativos do Windows.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "AppsUseLightTheme",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "theme-apps",
+      "choice_label": "Tema dos aplicativos"
+    },
+    {
+      "id": "theme-apps-light",
+      "title": "Claro",
+      "description": "Usa o tema claro nos aplicativos do Windows.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "AppsUseLightTheme",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "theme-apps",
+      "choice_label": "Tema dos aplicativos"
+    },
+    {
+      "id": "theme-system-dark",
+      "title": "Escuro",
+      "description": "Usa o tema escuro na barra de tarefas e no menu Iniciar.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "SystemUsesLightTheme",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "theme-system",
+      "choice_label": "Tema do sistema"
+    },
+    {
+      "id": "theme-system-light",
+      "title": "Claro",
+      "description": "Usa o tema claro na barra de tarefas e no menu Iniciar.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "SystemUsesLightTheme",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "theme-system",
+      "choice_label": "Tema do sistema"
+    },
+    {
+      "id": "lockscreen-off",
+      "title": "Desligar a tela de bloqueio",
+      "description": "Pula a tela de bloqueio e vai direto para a tela de entrada. Exige administrador.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization",
+          "name": "NoLockScreen",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "sistema"
+    },
+    {
+      "id": "logon-blur-off",
+      "title": "Tela de entrada sem desfoque",
+      "description": "Remove o efeito de desfoque (acrílico) do fundo da tela de entrada. Exige administrador.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-logon",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+          "name": "DisableAcrylicBackgroundOnLogon",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "sistema"
+    },
+    {
+      "id": "sticky-keys-shortcut-off",
+      "title": "Desligar o atalho das Teclas de Aderência",
+      "description": "Impede que apertar Shift cinco vezes abra o aviso das Teclas de Aderência durante jogos e digitação.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Accessibility\\StickyKeys",
+          "name": "Flags",
+          "value": {
+            "type": "string",
+            "data": "506"
+          }
+        }
+      ],
+      "area": "sistema"
+    },
+    {
+      "id": "snap-off",
+      "title": "Desligar o encaixe de janelas",
+      "description": "Desativa o encaixe automático de janelas nas bordas da tela (Snap). Arrastar janelas deixa de redimensioná-las.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Desktop",
+          "name": "WindowArrangementActive",
+          "value": {
+            "type": "string",
+            "data": "0"
+          }
+        }
+      ],
+      "area": "sistema"
     }
   ]
 }

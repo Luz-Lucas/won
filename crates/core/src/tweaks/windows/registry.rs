@@ -6,7 +6,8 @@ use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERRO
 use windows_sys::Win32::System::Registry::{
     HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE, KEY_WOW64_64KEY,
     REG_DWORD, REG_OPTION_NON_VOLATILE, REG_QWORD, REG_SZ, REG_VALUE_TYPE, RegCloseKey,
-    RegCreateKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW,
+    RegCreateKeyExW, RegDeleteKeyExW, RegDeleteValueW, RegOpenKeyExW, RegQueryInfoKeyW,
+    RegQueryValueExW, RegSetValueExW,
 };
 
 use super::super::model::{Hive, RegValue};
@@ -219,6 +220,52 @@ pub(super) fn write_value(
                 code => Err(win_err("falha ao apagar o valor do registro", code)),
             }
         }
+    }
+}
+
+/// A chave existe?
+pub(super) fn key_exists(hive: Hive, path: &str) -> Result<bool, String> {
+    Ok(open(hive, path, KEY_QUERY_VALUE)?.is_some())
+}
+
+/// Apaga a chave só se não tiver valores nem subchaves. `Ok(true)` = apagada;
+/// `Ok(false)` = não existe ou não está vazia (nada foi feito).
+pub(super) fn delete_key_if_empty(hive: Hive, path: &str) -> Result<bool, String> {
+    let Some(key) = open(hive, path, KEY_QUERY_VALUE)? else {
+        return Ok(false);
+    };
+    let (mut subkeys, mut values) = (0u32, 0u32);
+    // SAFETY: só os ponteiros de contagem são válidos; os demais opcionais são nulos.
+    let rc = unsafe {
+        RegQueryInfoKeyW(
+            key.0,
+            null_mut(),
+            null_mut(),
+            null(),
+            &mut subkeys,
+            null_mut(),
+            null_mut(),
+            &mut values,
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+        )
+    };
+    if rc != 0 {
+        return Err(win_err("falha ao consultar a chave do registro", rc));
+    }
+    drop(key);
+    if subkeys != 0 || values != 0 {
+        return Ok(false);
+    }
+    let wpath = wide(path);
+    // SAFETY: `wpath` é NUL-terminado; RegDeleteKeyExW recusa chaves com subchaves.
+    let rc = unsafe { RegDeleteKeyExW(root(hive), wpath.as_ptr(), KEY_WOW64_64KEY, 0) };
+    match rc {
+        0 => Ok(true),
+        ERROR_FILE_NOT_FOUND | ERROR_PATH_NOT_FOUND => Ok(false),
+        code => Err(win_err("falha ao apagar a chave do registro", code)),
     }
 }
 

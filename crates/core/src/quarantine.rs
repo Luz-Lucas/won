@@ -71,13 +71,27 @@ struct IndexLock(PathBuf);
 
 const STALE_LOCK: Duration = Duration::from_secs(60);
 
+/// Quantas vezes "acesso negado" é tratado como disputa passageira (~1 s).
+const DENIED_RETRIES: u32 = 40;
+
 impl IndexLock {
     fn acquire(dir: &Path) -> Result<IndexLock> {
         fs::create_dir_all(dir).context("não foi possível criar a pasta de quarentena")?;
         let path = dir.join("index.lock");
+        let mut denied = 0;
         for _ in 0..600 {
             match OpenOptions::new().write(true).create_new(true).open(&path) {
                 Ok(_) => return Ok(IndexLock(path)),
+                // No Windows, um `index.lock` recém-apagado que outro processo
+                // ainda tem aberto fica em exclusão pendente, e criá-lo de novo
+                // dá "acesso negado". Passa em instantes; uma falta real de
+                // permissão continua falhando depois das tentativas.
+                Err(e)
+                    if e.kind() == io::ErrorKind::PermissionDenied && denied < DENIED_RETRIES =>
+                {
+                    denied += 1;
+                    std::thread::sleep(Duration::from_millis(25));
+                }
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                     let stale = fs::metadata(&path)
                         .and_then(|m| m.modified())

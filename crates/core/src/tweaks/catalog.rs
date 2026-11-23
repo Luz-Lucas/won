@@ -1,11 +1,14 @@
 //! Catálogo embutido de ajustes e sua validação.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use super::model::{Action, Hive, Tweak};
+use super::model::{Action, Group, Hive, Tweak};
+
+/// Áreas válidas da página Personalizar.
+pub const AREAS: &[&str] = &["barra", "iniciar", "explorador", "aparencia", "sistema"];
 
 /// Plano de energia "Alto desempenho" (GUID interno do Windows).
 /// Fonte: https://learn.microsoft.com/en-us/windows/win32/power/power-policy-settings
@@ -17,12 +20,97 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
     (Hive::Hkcu, "System\\GameConfigStore"),
     (Hive::Hkcu, "Control Panel\\Mouse"),
     (Hive::Hkcu, "Control Panel\\Desktop"),
+    // Só os três CLSIDs que a página Personalizar mexe (menu clássico, etc.).
+    (
+        Hive::Hkcu,
+        "Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}",
+    ),
+    (
+        Hive::Hkcu,
+        "Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
+    ),
+    (
+        Hive::Hkcu,
+        "Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+    ),
+    (Hive::Hkcu, "Software\\Policies\\Microsoft\\Windows"),
+    (Hive::Hkcu, "Control Panel\\Accessibility"),
+    (Hive::Hklm, "SOFTWARE\\Policies\\Microsoft\\Dsh"),
     (Hive::Hklm, "SOFTWARE\\Policies\\Microsoft\\Windows"),
     (
         Hive::Hklm,
         "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
     ),
+    // Aba Avançado: MMCSS e a chave do kernel (só `GlobalTimerResolutionRequests`).
+    (
+        Hive::Hklm,
+        "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+    ),
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+    ),
+    // Modo "Pausado até…" das Atualizações do Windows.
+    (
+        Hive::Hklm,
+        "SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings",
+    ),
+    // ACK imediato por adaptador (ajuste gerado `nagle-off`).
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
+    ),
+    // Economia de energia/EEE por adaptador (ajuste gerado `nic-…`).
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}",
+    ),
 ];
+
+/// Caminhos (da folha para cima) que o desfazer pode apagar se estiverem vazios:
+/// só abaixo da raiz permitida; a própria raiz só quando é uma chave `{GUID}`.
+pub fn removable_key_chain(hive: Hive, path: &str) -> Vec<String> {
+    let Some(root_len) = allowed_root_segments(hive, path) else {
+        return Vec::new();
+    };
+    let segs: Vec<&str> = path.split('\\').collect();
+    let root_is_guid = segs[root_len - 1].starts_with('{');
+    let min = if root_is_guid { root_len } else { root_len + 1 };
+    (min..=segs.len())
+        .rev()
+        .map(|n| segs[..n].join("\\"))
+        .collect()
+}
+
+/// Chaves que o desfazer pode apagar (folha para cima): só a folha se `created_from` é
+/// `None`; senão até `created_from` inclusive (nunca uma chave que já existia antes).
+pub fn keys_to_remove(hive: Hive, path: &str, created_from: Option<&str>) -> Vec<String> {
+    let chain = removable_key_chain(hive, path);
+    let n = match created_from {
+        None => 1,
+        Some(c) => chain
+            .iter()
+            .position(|k| k.eq_ignore_ascii_case(c))
+            .map_or(1, |i| i + 1),
+    };
+    chain.into_iter().take(n).collect()
+}
+
+fn allowed_root_segments(hive: Hive, path: &str) -> Option<usize> {
+    let lower = path.to_ascii_lowercase();
+    // Chave de teste dos testes `#[ignore]` do backend real.
+    #[cfg(test)]
+    if hive == Hive::Hkcu && lower.starts_with("software\\sentinela-test-") {
+        return Some(2);
+    }
+    ALLOWED_ROOTS.iter().find_map(|(h, root)| {
+        let root = root.to_ascii_lowercase();
+        (*h == hive
+            && (lower == root
+                || (lower.starts_with(&root) && lower.as_bytes().get(root.len()) == Some(&b'\\'))))
+        .then(|| root.split('\\').count())
+    })
+}
 
 /// Serviços que nenhum ajuste pode alterar (segurança, atualização, log).
 pub const FORBIDDEN_SERVICES: &[&str] = &[
@@ -38,6 +126,49 @@ pub const FORBIDDEN_SERVICES: &[&str] = &[
     "CryptSvc",
     "TrustedInstaller",
 ];
+
+/// Serviços de atualização: só os ajustes do grupo `Atualizacoes` podem
+/// mudá-los (§6.5); para qualquer outro grupo são proibidos.
+pub const UPDATE_SERVICES: &[&str] = &["wuauserv", "UsoSvc", "BITS"];
+
+/// Pastas do Agendador cujas tarefas o grupo `Atualizacoes` pode ligar e
+/// desligar (só tarefas diretamente dentro delas, sem subpastas).
+pub const ALLOWED_TASK_FOLDERS: &[&str] = &[
+    "\\Microsoft\\Windows\\UpdateOrchestrator",
+    "\\Microsoft\\Windows\\WindowsUpdate",
+    "\\Microsoft\\Windows\\InstallService",
+    "\\Microsoft\\Windows\\UpdateAssistant",
+    "\\Microsoft\\Windows\\WaaSMedic",
+    "\\Microsoft\\WindowsUpdate",
+];
+
+/// `path` é uma tarefa diretamente dentro de uma pasta permitida?
+pub fn task_allowed(path: &str) -> bool {
+    ALLOWED_TASK_FOLDERS.iter().any(|folder| {
+        path.len() > folder.len()
+            && path[..folder.len()].eq_ignore_ascii_case(folder)
+            && path[folder.len()..]
+                .strip_prefix('\\')
+                .is_some_and(|name| !name.trim().is_empty() && !name.contains('\\') && name != "..")
+    })
+}
+
+/// `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}` (maiúsculas ou minúsculas).
+pub fn is_braced_guid(s: &str) -> bool {
+    let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
+        return false;
+    };
+    let parts: Vec<&str> = inner.split('-').collect();
+    parts.len() == 5
+        && parts
+            .iter()
+            .zip([8, 4, 4, 4, 12])
+            .all(|(p, n)| p.len() == n && p.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+fn is_update_service(name: &str) -> bool {
+    UPDATE_SERVICES.iter().any(|u| u.eq_ignore_ascii_case(name))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
@@ -63,6 +194,15 @@ impl Catalog {
 
     pub fn get(&self, id: &str) -> Option<&Tweak> {
         self.tweaks.iter().find(|t| t.id == id)
+    }
+
+    /// Este catálogo mais ajustes montados em tempo de execução (um por jogo,
+    /// por adaptador, por modo de atualização), validados pelas mesmas regras.
+    pub fn with_generated(&self, extra: Vec<Tweak>) -> Result<Catalog, String> {
+        let mut c = self.clone();
+        c.tweaks.extend(extra);
+        validate(&c)?;
+        Ok(c)
     }
 }
 
@@ -111,6 +251,18 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
     if t.actions.is_empty() {
         return Err(format!("{id}: sem ações"));
     }
+    if let Some(area) = &t.area
+        && !AREAS.contains(&area.as_str())
+    {
+        return Err(format!("{id}: área desconhecida: {area}"));
+    }
+    if t.choice.is_some()
+        && t.choice_label
+            .as_deref()
+            .is_none_or(|l| l.trim().is_empty())
+    {
+        return Err(format!("{id}: choice_label é obrigatório quando há choice"));
+    }
     for a in &t.actions {
         match a {
             Action::Registry {
@@ -119,7 +271,8 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
             | Action::ListEntry {
                 hive, path, name, ..
             } => {
-                if name.is_empty() {
+                // `name: ""` é o valor padrão da chave, só válido em `Registry`.
+                if name.is_empty() && !matches!(a, Action::Registry { .. }) {
                     return Err(format!("{id}: nome de valor vazio"));
                 }
                 if !path_allowed(*hive, path) {
@@ -139,9 +292,12 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
                 }
             }
             Action::Service { name, .. } => {
-                if FORBIDDEN_SERVICES
-                    .iter()
-                    .any(|f| f.eq_ignore_ascii_case(name))
+                let update_ok = is_update_service(name) && t.group == Group::Atualizacoes;
+                if !update_ok
+                    && (is_update_service(name)
+                        || FORBIDDEN_SERVICES
+                            .iter()
+                            .any(|f| f.eq_ignore_ascii_case(name)))
                 {
                     return Err(format!("{id}: serviço proibido: {name}"));
                 }
@@ -152,6 +308,41 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
             Action::PowerPlan { scheme } => {
                 if !valid_guid(scheme) {
                     return Err(format!("{id}: GUID de plano de energia inválido: {scheme}"));
+                }
+            }
+            Action::ScheduledTask { path, .. } => {
+                if t.group != Group::Atualizacoes {
+                    return Err(format!("{id}: tarefa agendada só no grupo Atualizações"));
+                }
+                if !task_allowed(path) {
+                    return Err(format!("{id}: tarefa fora das pastas permitidas: {path}"));
+                }
+                if !t.needs_admin {
+                    return Err(format!("{id}: tarefa agendada exige needs_admin"));
+                }
+            }
+            Action::DnsServers {
+                interface,
+                ipv6,
+                servers,
+            } => {
+                if t.group != Group::Rede {
+                    return Err(format!("{id}: DNS só no grupo Rede"));
+                }
+                if !is_braced_guid(interface) {
+                    return Err(format!("{id}: adaptador inválido: {interface}"));
+                }
+                if !t.needs_admin {
+                    return Err(format!("{id}: DNS exige needs_admin"));
+                }
+                for s in servers {
+                    let family_ok = match s.parse::<std::net::IpAddr>() {
+                        Ok(ip) => ip.is_ipv6() == *ipv6,
+                        Err(_) => false,
+                    };
+                    if !family_ok {
+                        return Err(format!("{id}: servidor DNS inválido: {s}"));
+                    }
                 }
             }
         }
@@ -167,6 +358,59 @@ pub fn validate(c: &Catalog) -> Result<(), String> {
             return Err(format!("{}: id repetido", t.id));
         }
         validate_tweak(t)?;
+    }
+    validate_choices(c)
+}
+
+/// Conjunto de chaves `(hive, caminho, nome)` que o ajuste toca no registro.
+fn key_set(t: &Tweak) -> HashSet<(Hive, String, String)> {
+    t.actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::Registry {
+                hive, path, name, ..
+            }
+            | Action::ListEntry {
+                hive, path, name, ..
+            } => Some((*hive, path.to_ascii_lowercase(), name.to_ascii_lowercase())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Opções do mesmo `choice`: mesma área e mesmas chaves, para o desfazer ser coerente.
+fn validate_choices(c: &Catalog) -> Result<(), String> {
+    let mut first: HashMap<&str, &Tweak> = HashMap::new();
+    for t in &c.tweaks {
+        let Some(ch) = t.choice.as_deref() else {
+            continue;
+        };
+        let Some(f) = first.get(ch) else {
+            first.insert(ch, t);
+            continue;
+        };
+        if f.area != t.area {
+            return Err(format!(
+                "{}: as opções de '{ch}' devem ter a mesma área ({})",
+                t.id, f.id
+            ));
+        }
+        if t.group != f.group {
+            return Err(format!(
+                "{}: as opções de '{ch}' devem ser do mesmo grupo ({})",
+                t.id, f.id
+            ));
+        }
+        // Os modos de atualização mexem em coisas diferentes (políticas, serviços,
+        // tarefas); o motor desfaz o modo anterior inteiro antes de aplicar outro.
+        if t.group != Group::Atualizacoes
+            && (t.actions.len() != f.actions.len() || key_set(t) != key_set(f))
+        {
+            return Err(format!(
+                "{}: as opções de '{ch}' devem ter as mesmas chaves ({})",
+                t.id, f.id
+            ));
+        }
     }
     Ok(())
 }
@@ -189,6 +433,9 @@ mod tests {
             recommended: true,
             source: "https://learn.microsoft.com/".into(),
             actions,
+            choice: None,
+            choice_label: None,
+            area: None,
         }
     }
 
@@ -225,6 +472,178 @@ mod tests {
         let e = validate(&cat(vec![t])).unwrap_err();
         assert!(e.contains(&id), "mensagem sem o id {id}: {e}");
         assert!(e.contains(reason), "esperava '{reason}' em: {e}");
+    }
+
+    fn choice_member(id: &str, name: &str, v: u32) -> Tweak {
+        let mut t = tweak(
+            id,
+            vec![Action::Registry {
+                hive: Hive::Hkcu,
+                path: r"Software\Microsoft\X".into(),
+                name: name.into(),
+                value: Some(RegValue::Dword(v)),
+            }],
+            false,
+        );
+        t.choice = Some("grupo".into());
+        t.choice_label = Some("Grupo".into());
+        t.area = Some("barra".into());
+        t
+    }
+
+    #[test]
+    fn choice_members_with_same_keys_are_valid() {
+        let c = cat(vec![choice_member("a", "V", 1), choice_member("b", "V", 2)]);
+        assert!(validate(&c).is_ok());
+    }
+
+    #[test]
+    fn choice_members_must_share_keys() {
+        let e = validate(&cat(vec![
+            choice_member("a", "V", 1),
+            choice_member("b", "W", 2),
+        ]))
+        .unwrap_err();
+        assert!(e.contains("b") && e.contains("mesmas chaves"), "{e}");
+    }
+
+    #[test]
+    fn choice_members_must_share_area() {
+        let mut b = choice_member("b", "V", 2);
+        b.area = Some("iniciar".into());
+        let e = validate(&cat(vec![choice_member("a", "V", 1), b])).unwrap_err();
+        assert!(e.contains("b") && e.contains("mesma área"), "{e}");
+    }
+
+    #[test]
+    fn choice_requires_label() {
+        let mut a = choice_member("a", "V", 1);
+        a.choice_label = None;
+        assert_rejected(a, "choice_label");
+    }
+
+    #[test]
+    fn unknown_area_is_rejected() {
+        let mut a = tweak("a", ok_action(), false);
+        a.area = Some("lua".into());
+        assert_rejected(a, "área desconhecida");
+    }
+
+    #[test]
+    fn default_value_name_allowed_only_for_registry() {
+        let key = r"Software\Microsoft\X";
+        let reg_default = Action::Registry {
+            hive: Hive::Hkcu,
+            path: key.into(),
+            name: String::new(),
+            value: Some(RegValue::String("".into())),
+        };
+        assert!(validate(&cat(vec![tweak("ok", vec![reg_default], false)])).is_ok());
+        let list_default = Action::ListEntry {
+            hive: Hive::Hkcu,
+            path: key.into(),
+            name: String::new(),
+            key: "k".into(),
+            value: "v".into(),
+        };
+        assert_rejected(
+            tweak("bad", vec![list_default], false),
+            "nome de valor vazio",
+        );
+    }
+
+    #[test]
+    fn explorer_effect_orders_between_immediate_and_relogon() {
+        assert!(Effect::Immediate < Effect::Explorer && Effect::Explorer < Effect::Relogon);
+    }
+
+    #[test]
+    fn only_the_three_known_clsids_are_allowed() {
+        for g in [
+            "{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}",
+            "{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
+            "{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+        ] {
+            let a = reg(
+                Hive::Hkcu,
+                &format!(r"Software\Classes\CLSID\{g}\InprocServer32"),
+            );
+            assert!(
+                validate(&cat(vec![tweak("ok", vec![a], false)])).is_ok(),
+                "{g}"
+            );
+        }
+        let other = reg(
+            Hive::Hkcu,
+            r"Software\Classes\CLSID\{00000000-0000-0000-0000-000000000000}\InprocServer32",
+        );
+        assert_rejected(
+            tweak("other", vec![other], false),
+            "fora das raízes permitidas",
+        );
+        let all = reg(Hive::Hkcu, r"Software\Classes\CLSID");
+        assert_rejected(tweak("all", vec![all], false), "fora das raízes permitidas");
+    }
+
+    #[test]
+    fn keys_to_remove_stops_after_created_from() {
+        let g = r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+        let leaf = format!(r"{g}\InprocServer32");
+        // Diário antigo (sem created_from): só a folha.
+        assert_eq!(keys_to_remove(Hive::Hkcu, &leaf, None), vec![leaf.clone()]);
+        // O motor criou só a folha: o {GUID} que já existia não entra.
+        assert_eq!(
+            keys_to_remove(Hive::Hkcu, &leaf, Some(&leaf)),
+            vec![leaf.clone()]
+        );
+        // O motor criou também o {GUID}: sobe até ele.
+        assert_eq!(
+            keys_to_remove(Hive::Hkcu, &leaf, Some(&g.to_ascii_uppercase())),
+            vec![leaf.clone(), g.to_string()]
+        );
+        // created_from desconhecido: só a folha.
+        assert_eq!(
+            keys_to_remove(Hive::Hkcu, &leaf, Some(r"Software\Classes")),
+            vec![leaf]
+        );
+    }
+
+    #[test]
+    fn removable_chain_stays_inside_the_allowed_root() {
+        // Raiz ampla: nunca a própria raiz.
+        assert_eq!(
+            removable_key_chain(Hive::Hkcu, r"Software\Microsoft\X\Y"),
+            vec![r"Software\Microsoft\X\Y", r"Software\Microsoft\X"]
+        );
+        assert!(removable_key_chain(Hive::Hkcu, r"Software\Microsoft").is_empty());
+        // Raiz {GUID}: a chave do CLSID pode ser apagada, o que está acima nunca.
+        let g = r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+        assert_eq!(
+            removable_key_chain(Hive::Hkcu, &format!(r"{g}\InprocServer32")),
+            vec![format!(r"{g}\InprocServer32"), g.to_string()]
+        );
+        // Fora da raiz: nada.
+        assert!(removable_key_chain(Hive::Hkcu, r"Software\Classes\CLSID").is_empty());
+    }
+
+    #[test]
+    fn classes_clsid_root_allowed() {
+        let a = reg(
+            Hive::Hkcu,
+            r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32",
+        );
+        assert!(validate(&cat(vec![tweak("clsid", vec![a], false)])).is_ok());
+        let other = reg(Hive::Hkcu, r"Software\Classes\Other");
+        assert_rejected(
+            tweak("other", vec![other], false),
+            "fora das raízes permitidas",
+        );
+        let dsh = reg(Hive::Hklm, r"SOFTWARE\Policies\Microsoft\Dsh");
+        assert!(validate(&cat(vec![tweak("dsh", vec![dsh], true)])).is_ok());
+        let acc = reg(Hive::Hkcu, r"Control Panel\Accessibility\X");
+        assert!(validate(&cat(vec![tweak("acc", vec![acc], false)])).is_ok());
+        let pol = reg(Hive::Hkcu, r"Software\Policies\Microsoft\Windows\Explorer");
+        assert!(validate(&cat(vec![tweak("pol", vec![pol], false)])).is_ok());
     }
 
     #[test]
@@ -268,13 +687,10 @@ mod tests {
 
     #[test]
     fn hive_mismatch_is_rejected() {
-        // A raiz Policies\Microsoft\Windows só é permitida em HKLM.
+        // A raiz Policies\Microsoft\Dsh só é permitida em HKLM.
         let t = tweak(
             "hive",
-            vec![reg(
-                Hive::Hkcu,
-                "SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-            )],
+            vec![reg(Hive::Hkcu, "SOFTWARE\\Policies\\Microsoft\\Dsh\\X")],
             false,
         );
         assert_rejected(t, "fora das raízes permitidas");
@@ -468,5 +884,284 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn personalization_catalog_is_valid() {
+        use crate::tweaks::model::{Effect, Group};
+        // (id, área, choice)
+        let table: &[(&str, &str, Option<&str>)] = &[
+            ("taskbar-align-left", "barra", Some("taskbar-align")),
+            ("taskbar-align-center", "barra", Some("taskbar-align")),
+            ("taskbar-search-hidden", "barra", Some("taskbar-search")),
+            ("taskbar-search-icon", "barra", Some("taskbar-search")),
+            ("taskbar-search-box", "barra", Some("taskbar-search")),
+            ("taskbar-taskview-off", "barra", None),
+            ("taskbar-widgets-off", "barra", None),
+            ("taskbar-end-task", "barra", None),
+            ("taskbar-clock-seconds", "barra", None),
+            ("taskbar-combine-always", "barra", Some("taskbar-combine")),
+            (
+                "taskbar-combine-when-full",
+                "barra",
+                Some("taskbar-combine"),
+            ),
+            ("taskbar-combine-never", "barra", Some("taskbar-combine")),
+            ("start-recommendations-off", "iniciar", None),
+            ("start-bing-off", "iniciar", None),
+            ("start-layout-default", "iniciar", Some("start-layout")),
+            ("start-layout-more-pins", "iniciar", Some("start-layout")),
+            (
+                "start-layout-more-recommendations",
+                "iniciar",
+                Some("start-layout"),
+            ),
+            ("explorer-classic-menu", "explorador", None),
+            ("explorer-show-extensions", "explorador", None),
+            ("explorer-show-hidden", "explorador", None),
+            ("explorer-open-this-pc", "explorador", None),
+            ("explorer-hide-home", "explorador", None),
+            ("explorer-hide-gallery", "explorador", None),
+            ("explorer-compact", "explorador", None),
+            ("theme-apps-dark", "aparencia", Some("theme-apps")),
+            ("theme-apps-light", "aparencia", Some("theme-apps")),
+            ("theme-system-dark", "aparencia", Some("theme-system")),
+            ("theme-system-light", "aparencia", Some("theme-system")),
+            ("lockscreen-off", "sistema", None),
+            ("logon-blur-off", "sistema", None),
+            ("sticky-keys-shortcut-off", "sistema", None),
+            ("snap-off", "sistema", None),
+        ];
+        let c = Catalog::embedded();
+        for (id, area, choice) in table {
+            let t = c.get(id).unwrap_or_else(|| panic!("{id} ausente"));
+            assert_eq!(t.group, Group::Personalizacao, "{id}");
+            assert_eq!(t.area.as_deref(), Some(*area), "{id}");
+            assert_eq!(t.choice.as_deref(), *choice, "{id}");
+            assert!(!t.recommended, "{id} não pode ser recomendado");
+        }
+        let mut by_choice: HashMap<&str, Vec<&Tweak>> = HashMap::new();
+        for t in c.tweaks.iter().filter(|t| t.group == Group::Personalizacao) {
+            assert!(t.area.is_some(), "{}", t.id);
+            if let Some(ch) = t.choice.as_deref() {
+                by_choice.entry(ch).or_default().push(t);
+            }
+        }
+        assert_eq!(by_choice.len(), 6);
+        for (ch, opts) in &by_choice {
+            assert!(opts.len() >= 2, "{ch}");
+            for o in opts {
+                assert_eq!(o.actions.len(), opts[0].actions.len(), "{ch}");
+            }
+        }
+        for id in [
+            "explorer-classic-menu",
+            "taskbar-align-left",
+            "taskbar-combine-always",
+        ] {
+            assert_eq!(c.get(id).unwrap().effect, Effect::Explorer, "{id}");
+        }
+        for id in ["taskbar-widgets-off", "lockscreen-off", "logon-blur-off"] {
+            assert!(c.get(id).unwrap().needs_admin, "{id}");
+        }
+    }
+
+    #[test]
+    fn advanced_catalog_is_valid() {
+        use crate::tweaks::model::{Effect, Evidence, Group, StartType};
+        // (id, evidência, admin, efeito)
+        let table: &[(&str, Evidence, bool, Effect)] = &[
+            (
+                "fullscreen-optimizations-off",
+                Evidence::Controverso,
+                false,
+                Effect::Relogon,
+            ),
+            (
+                "mmcss-responsiveness",
+                Evidence::Situacional,
+                true,
+                Effect::Reboot,
+            ),
+            (
+                "timer-resolution-global",
+                Evidence::Controverso,
+                true,
+                Effect::Reboot,
+            ),
+            (
+                "services-manual-extra",
+                Evidence::Situacional,
+                true,
+                Effect::Reboot,
+            ),
+            (
+                "search-indexing-off",
+                Evidence::Situacional,
+                true,
+                Effect::Immediate,
+            ),
+        ];
+        let c = Catalog::embedded();
+        for (id, evidence, admin, effect) in table {
+            let t = c.get(id).unwrap_or_else(|| panic!("{id} ausente"));
+            assert_eq!(t.group, Group::Avancado, "{id}");
+            assert_eq!(t.evidence, *evidence, "{id}");
+            assert_eq!(t.needs_admin, *admin, "{id}");
+            assert_eq!(t.effect, *effect, "{id}");
+            assert!(!t.recommended, "{id} não pode ser recomendado");
+        }
+        assert!(c.get("timer-resolution-global").unwrap().laptop_warning);
+        for t in &c.tweaks {
+            // Avançado nunca é recomendado; controverso só existe no Avançado.
+            if t.group == Group::Avancado {
+                assert!(!t.recommended, "{}", t.id);
+                assert_ne!(t.evidence, Evidence::Comprovado, "{}", t.id);
+            }
+            if t.evidence == Evidence::Controverso {
+                assert_eq!(t.group, Group::Avancado, "{}", t.id);
+            }
+        }
+        // Os serviços extras só vão para Manual: nada desativado.
+        let extra = c.get("services-manual-extra").unwrap();
+        for a in &extra.actions {
+            assert!(
+                matches!(
+                    a,
+                    Action::Service {
+                        start: StartType::Manual,
+                        ..
+                    }
+                ),
+                "{a:?}"
+            );
+        }
+    }
+
+    fn sample_tweak(id: &str) -> Tweak {
+        tweak(id, vec![reg(Hive::Hkcu, "Software\\Microsoft\\X")], false)
+    }
+
+    fn update_tweak(id: &str, actions: Vec<Action>) -> Tweak {
+        let mut t = sample_tweak(id);
+        t.group = Group::Atualizacoes;
+        t.needs_admin = true;
+        t.actions = actions;
+        t
+    }
+
+    fn task_action(path: &str) -> Action {
+        Action::ScheduledTask {
+            path: path.into(),
+            enabled: false,
+        }
+    }
+
+    #[test]
+    fn task_folder_outside_allowlist_rejected() {
+        let ok = update_tweak(
+            "wu-a",
+            vec![task_action(
+                "\\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan",
+            )],
+        );
+        assert!(validate_tweak(&ok).is_ok(), "{:?}", validate_tweak(&ok));
+        for bad in [
+            "\\Microsoft\\Windows\\Defrag\\ScheduledDefrag",
+            "\\Microsoft\\Windows\\UpdateOrchestrator\\Sub\\Task",
+            "\\Microsoft\\Windows\\UpdateOrchestrator\\",
+            "\\Microsoft\\Windows\\UpdateOrchestrator\\..\\Defrag",
+            "Microsoft\\Windows\\UpdateOrchestrator\\Sem barra inicial",
+        ] {
+            let t = update_tweak("wu-b", vec![task_action(bad)]);
+            assert!(validate_tweak(&t).is_err(), "{bad} deveria ser recusada");
+        }
+        // Tarefa só no grupo Atualizações e sempre com administrador.
+        let mut other = ok.clone();
+        other.group = Group::Jogos;
+        assert!(validate_tweak(&other).is_err());
+        let mut no_admin = ok;
+        no_admin.needs_admin = false;
+        assert!(validate_tweak(&no_admin).is_err());
+    }
+
+    #[test]
+    fn update_services_only_in_update_group() {
+        for name in ["wuauserv", "UsoSvc", "BITS"] {
+            let svc = Action::Service {
+                name: name.into(),
+                start: StartType::Disabled,
+            };
+            assert!(
+                validate_tweak(&update_tweak("wu-a", vec![svc.clone()])).is_ok(),
+                "{name}"
+            );
+            let mut t = update_tweak("x", vec![svc]);
+            t.group = Group::SegundoPlano;
+            assert!(validate_tweak(&t).is_err(), "{name} fora do grupo");
+        }
+        // O resto da lista proibida continua proibido também no grupo Atualizações.
+        for name in ["WaaSMedicSvc", "WinDefend"] {
+            let svc = Action::Service {
+                name: name.into(),
+                start: StartType::Disabled,
+            };
+            assert!(
+                validate_tweak(&update_tweak("wu-a", vec![svc])).is_err(),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn generated_catalog_is_validated() {
+        let base = Catalog { tweaks: vec![] };
+        let ok = sample_tweak("gpu-1a2b3c4d");
+        let g = base.with_generated(vec![ok.clone()]).unwrap();
+        assert!(g.get("gpu-1a2b3c4d").is_some());
+        // Raiz fora da lista, id repetido e id inválido são recusados.
+        let mut bad = sample_tweak("gpu-bad");
+        bad.actions = vec![Action::Registry {
+            hive: Hive::Hkcu,
+            path: "Software\\Valve\\Steam".into(),
+            name: "x".into(),
+            value: None,
+        }];
+        assert!(base.with_generated(vec![bad]).is_err());
+        assert!(g.with_generated(vec![ok]).is_err());
+        assert!(base.with_generated(vec![sample_tweak("GPU X")]).is_err());
+        // Opções do grupo Atualizações podem ter chaves diferentes entre si.
+        let mut a = update_tweak("wu-a", vec![task_action("\\Microsoft\\WindowsUpdate\\T")]);
+        let mut b = update_tweak(
+            "wu-b",
+            vec![Action::Registry {
+                hive: Hive::Hklm,
+                path: "SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate".into(),
+                name: "DeferFeatureUpdates".into(),
+                value: None,
+            }],
+        );
+        for t in [&mut a, &mut b] {
+            t.choice = Some("windows-update".into());
+            t.choice_label = Some("Atualizações do Windows".into());
+        }
+        assert!(base.with_generated(vec![a, b]).is_ok());
+    }
+
+    #[test]
+    fn allowed_roots_cover_advanced() {
+        assert!(path_allowed(
+            Hive::Hklm,
+            "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile"
+        ));
+        assert!(path_allowed(
+            Hive::Hklm,
+            "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel"
+        ));
+        // Só a chave do kernel: o resto do Session Manager continua fora.
+        assert!(!path_allowed(
+            Hive::Hklm,
+            "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management"
+        ));
     }
 }

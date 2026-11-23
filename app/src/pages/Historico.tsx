@@ -12,9 +12,10 @@ const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 const OTHER_ACCOUNT =
   "Esta janela está em outra conta do Windows. O histórico e os ajustes do usuário mostrados aqui são dessa conta.";
 
-/** HKLM e serviços exigem administrador para desfazer. */
+/** HKLM, serviços e DNS de adaptador exigem administrador para desfazer. */
 const needsAdmin = (a: JournalAction) =>
   a.action?.kind === "service" ||
+  a.action?.kind === "dns_servers" ||
   ((a.action?.kind === "registry" || a.action?.kind === "list_entry") &&
     a.action.hive === "HKLM");
 

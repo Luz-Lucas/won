@@ -9,9 +9,19 @@ import type {
   TweaksPage,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import GpuPerGame from "../components/GpuPerGame";
+import StartupList from "../components/StartupList";
 import { useJob } from "../jobs";
 
-type Profile = "recomendado" | "personalizado";
+type Profile = "recomendado" | "fps" | "personalizado";
+
+type Tab = "principais" | "avancado";
+
+const EVIDENCE_LABEL: Record<TweakItem["tweak"]["evidence"], string> = {
+  comprovado: "Comprovado",
+  situacional: "Situacional",
+  controverso: "Controverso",
+};
 
 const GROUPS: { id: TweakGroup; label: string }[] = [
   { id: "jogos", label: "Jogos" },
@@ -67,11 +77,29 @@ const recommendedIds = (p: TweaksPage) =>
       .map((i) => i.tweak.id),
   );
 
+/** "FPS competitivo": Recomendado + os situacionais da aba Avançado (nunca os controversos). */
+const fpsIds = (p: TweaksPage) => {
+  const ids = recommendedIds(p);
+  for (const i of p.tweaks)
+    if (
+      i.tweak.group === "avancado" &&
+      i.tweak.evidence === "situacional" &&
+      selectable(i) &&
+      i.view.status !== "applied"
+    )
+      ids.add(i.tweak.id);
+  return ids;
+};
+
+const profileIds = (profile: Profile, p: TweaksPage) =>
+  profile === "fps" ? fpsIds(p) : recommendedIds(p);
+
 export default function Jogos() {
   const [data, setData] = useState<TweaksPage | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>("recomendado");
   const profileRef = useRef<Profile>("recomendado");
+  const [tab, setTab] = useState<Tab>("principais");
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [relaunchError, setRelaunchError] = useState<string | null>(null);
@@ -88,8 +116,8 @@ export default function Jogos() {
         // Reaplica o perfil ativo aos dados novos; no personalizado, só
         // descarta o que deixou de ser selecionável.
         setChecked((old) =>
-          profileRef.current === "recomendado"
-            ? recommendedIds(p)
+          profileRef.current !== "personalizado"
+            ? profileIds(profileRef.current, p)
             : new Set(
                 p.tweaks
                   .filter(
@@ -136,7 +164,9 @@ export default function Jogos() {
   const chooseProfile = (p: Profile) => {
     profileRef.current = p;
     setProfile(p);
-    if (p === "recomendado" && data) setChecked(recommendedIds(data));
+    if (p !== "personalizado" && data) setChecked(profileIds(p, data));
+    // Mostra o que o perfil acrescentou na aba Avançado.
+    if (p === "fps") setTab("avancado");
   };
 
   const toggle = (id: string) => {
@@ -170,6 +200,42 @@ export default function Jogos() {
     started && job.state === "done" && job.result && "effect" in job.result
       ? job.result
       : null;
+
+  /** Uma linha da lista; na aba Avançado mostra também a explicação inteira. */
+  const renderRow = (i: TweakItem, details: boolean) => {
+    const t = i.tweak;
+    return (
+      <li key={t.id} className="clean-row">
+        <div className="clean-head">
+          <label className="clean-check">
+            <input
+              type="checkbox"
+              checked={checked.has(t.id)}
+              disabled={!selectable(i) || running}
+              onChange={() => toggle(t.id)}
+            />
+            <span>{t.title}</span>
+          </label>
+          <span className="tweak-badge">{EVIDENCE_LABEL[t.evidence]}</span>
+          <span className="muted">{STATUS[i.view.status]}</span>
+          {t.needs_admin && <span className="tweak-badge">Requer administrador</span>}
+          {EFFECT_LABEL[t.effect] && (
+            <span className="tweak-badge">{EFFECT_LABEL[t.effect]}</span>
+          )}
+        </div>
+        {details && <p className="muted clean-warning">{t.description}</p>}
+        {i.view.blocked &&
+          !(t.needs_admin && i.view.blocked === "requer administrador") && (
+            <p className="muted clean-warning">{i.view.blocked}</p>
+          )}
+        {data?.laptop && t.laptop_warning && (
+          <p className="muted clean-warning">
+            Em notebook, gasta mais bateria e esquenta mais.
+          </p>
+        )}
+      </li>
+    );
+  };
 
   return (
     <section className="page">
@@ -230,6 +296,7 @@ export default function Jogos() {
               {(
                 [
                   ["recomendado", "Recomendado"],
+                  ["fps", "FPS competitivo"],
                   ["personalizado", "Personalizado"],
                 ] as const
               ).map(([id, label]) => (
@@ -245,58 +312,49 @@ export default function Jogos() {
                 </button>
               ))}
             </div>
-            {GROUPS.map(({ id, label }) => {
-              const rows = items.filter((i) => i.tweak.group === id);
-              if (rows.length === 0) return null;
-              return (
-                <div key={id}>
-                  <h2>{label}</h2>
-                  <ul className="clean-list">
-                    {rows.map((i) => {
-                      const t = i.tweak;
-                      return (
-                        <li key={t.id} className="clean-row">
-                          <div className="clean-head">
-                            <label className="clean-check">
-                              <input
-                                type="checkbox"
-                                checked={checked.has(t.id)}
-                                disabled={!selectable(i) || running}
-                                onChange={() => toggle(t.id)}
-                              />
-                              <span>{t.title}</span>
-                            </label>
-                            {t.evidence === "comprovado" && (
-                              <span className="tweak-badge">Comprovado</span>
-                            )}
-                            <span className="muted">{STATUS[i.view.status]}</span>
-                            {t.needs_admin && (
-                              <span className="tweak-badge">
-                                Requer administrador
-                              </span>
-                            )}
-                            {EFFECT_LABEL[t.effect] && (
-                              <span className="tweak-badge">
-                                {EFFECT_LABEL[t.effect]}
-                              </span>
-                            )}
-                          </div>
-                          {i.view.blocked &&
-                            !(t.needs_admin && i.view.blocked === "requer administrador") && (
-                            <p className="muted clean-warning">{i.view.blocked}</p>
-                          )}
-                          {data.laptop && t.laptop_warning && (
-                            <p className="muted clean-warning">
-                              Em notebook, gasta mais bateria e esquenta mais.
-                            </p>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              );
-            })}
+            <div className="tweak-profiles" role="tablist" aria-label="Lista">
+              {(
+                [
+                  ["principais", "Principais"],
+                  ["avancado", "Avançado"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  className="btn"
+                  aria-selected={tab === id}
+                  onClick={() => setTab(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {tab === "principais" &&
+              GROUPS.map(({ id, label }) => {
+                const rows = items.filter((i) => i.tweak.group === id);
+                if (rows.length === 0) return null;
+                return (
+                  <div key={id}>
+                    <h2>{label}</h2>
+                    <ul className="clean-list">{rows.map((i) => renderRow(i, false))}</ul>
+                  </div>
+                );
+              })}
+            {tab === "avancado" && (
+              <div role="tabpanel" aria-label="Avançado">
+                <p className="muted">
+                  Ajustes com ganho pequeno ou que dependem do jogo, e alguns que pioram outras
+                  coisas. Leia a explicação de cada um. Os controversos nunca entram em perfil.
+                </p>
+                <ul className="clean-list">
+                  {items
+                    .filter((i) => i.tweak.group === "avancado")
+                    .map((i) => renderRow(i, true))}
+                </ul>
+              </div>
+            )}
             <div className="clean-footer">
               <span>{`${chosen.length} selecionada(s)`}</span>
               <button
@@ -331,6 +389,8 @@ export default function Jogos() {
         O Sentinela não desativa Defender, Windows Update, firewall nem outras
         proteções para ganhar FPS.
       </p>
+      <GpuPerGame />
+      <StartupList />
       {confirming && (
         <ConfirmDialog
           title={`Aplicar ${chosen.length} otimização(ões)?`}

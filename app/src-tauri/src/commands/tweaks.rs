@@ -8,7 +8,7 @@ use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::tweaks::{
     ApplyReport, Catalog, ItemResult, Journal, JournalEntry, SystemBackend, Tweak, TweakStatus,
     TweakView, UndoReport, WindowsBackend, create_restore_point, current_user_sid,
-    default_journal_path, is_laptop, undo, undo_all, view,
+    default_journal_path, full_catalog, is_laptop, undo, undo_all, view,
 };
 use serde::Serialize;
 use std::ffi::OsString;
@@ -151,6 +151,17 @@ pub fn applied_count(cat: &Catalog, b: &dyn SystemBackend) -> usize {
         .count()
 }
 
+/// O cartão "Otimização" do Início: aplicados e total entre os recomendados
+/// (personalização e aba Avançado não são otimizações a cumprir).
+pub fn optimization_progress(cat: &Catalog, b: &dyn SystemBackend) -> (usize, usize) {
+    let recommended: Vec<&Tweak> = cat.tweaks.iter().filter(|t| t.recommended).collect();
+    let applied = recommended
+        .iter()
+        .filter(|t| view(t, b).status == TweakStatus::Applied)
+        .count();
+    (applied, recommended.len())
+}
+
 fn validate_apply(ids: &[String], cat: &Catalog) -> Result<(), String> {
     if ids.is_empty() {
         return Err("Nenhuma otimização selecionada.".into());
@@ -217,6 +228,27 @@ fn dedupe(ids: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+/// Só ids de uma lista de opções (`choice`) passam por `tweaks_apply_choice`.
+fn validate_choice(id: &str, cat: &Catalog) -> Result<(), String> {
+    match cat.get(id) {
+        None => Err(format!("otimização desconhecida: {id}")),
+        Some(t) if t.choice.is_none() => Err(format!("não é uma opção de lista: {id}")),
+        Some(_) => Ok(()),
+    }
+}
+
+const EXPLORER_OTHER_ACCOUNT: &str =
+    "Esta janela está em outra conta do Windows; reinicie o Explorer pela janela normal.";
+
+/// O Explorer reiniciado é o desta conta; numa janela de outra conta, não.
+fn explorer_allowed(hkcu_allowed: bool) -> Result<(), String> {
+    if hkcu_allowed {
+        Ok(())
+    } else {
+        Err(EXPLORER_OTHER_ACCOUNT.into())
+    }
+}
+
 fn validate_undo(ids: &[String]) -> Result<(), String> {
     if ids.is_empty() {
         return Err("Nenhuma otimização selecionada.".into());
@@ -251,7 +283,7 @@ pub async fn tweaks_list(state: State<'_, TweaksState>) -> Result<TweaksPage, St
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         build_page(
-            Catalog::embedded(),
+            &full_catalog(),
             state.backend().as_ref(),
             &default_journal_path(),
             is_laptop(),
@@ -270,7 +302,7 @@ pub fn tweaks_apply(
     jobs: State<'_, Arc<JobRegistry>>,
     state: State<'_, TweaksState>,
 ) -> Result<JobId, String> {
-    validate_apply(&ids, Catalog::embedded())?;
+    validate_apply(&ids, &full_catalog())?;
     let ids = dedupe(ids);
     let state = state.inner().clone();
     spawn_job(
@@ -281,7 +313,7 @@ pub fn tweaks_apply(
             let backend = state.backend();
             let report = run_apply(
                 &ids,
-                Catalog::embedded(),
+                &full_catalog(),
                 backend.as_ref(),
                 &default_journal_path(),
                 &state.restore_done,
@@ -291,6 +323,48 @@ pub fn tweaks_apply(
             Ok(report)
         },
     )
+}
+
+/// Aplica uma opção de lista; o motor desfaz antes a outra opção do mesmo grupo
+/// que o Sentinela tiver aplicado (`apply` roteia ids com `choice` por `apply_choice`).
+#[tauri::command]
+pub fn tweaks_apply_choice(
+    id: String,
+    app: AppHandle,
+    jobs: State<'_, Arc<JobRegistry>>,
+    state: State<'_, TweaksState>,
+) -> Result<JobId, String> {
+    validate_choice(&id, &full_catalog())?;
+    let state = state.inner().clone();
+    spawn_job(
+        jobs.inner().clone(),
+        Arc::new(TauriSink(app)),
+        JobKind::Tweaks,
+        move |_, _, _| {
+            let backend = state.backend();
+            let report = run_apply(
+                std::slice::from_ref(&id),
+                &full_catalog(),
+                backend.as_ref(),
+                &default_journal_path(),
+                &state.restore_done,
+                &create_restore_point,
+            );
+            log_applied(&report);
+            Ok(report)
+        },
+    )
+}
+
+/// Reinicia o Explorer, só por clique do usuário (fecha as janelas de pastas).
+#[tauri::command]
+pub async fn restart_explorer(state: State<'_, TweaksState>) -> Result<(), String> {
+    explorer_allowed(state.hkcu_allowed)?;
+    tauri::async_runtime::spawn_blocking(sentinela_core::tweaks::restart_explorer)
+        .await
+        .map_err(|_| "Não foi possível reiniciar o Explorer.".to_string())??;
+    log_activity("Explorer reiniciado");
+    Ok(())
 }
 
 #[tauri::command]
@@ -379,6 +453,9 @@ mod tests {
                 recommended: false,
                 source: "https://example.com".into(),
                 actions: vec![reg()],
+                choice: None,
+                choice_label: None,
+                area: None,
             }],
         }
     }
@@ -402,6 +479,31 @@ mod tests {
             "otimização desconhecida: zzz"
         );
         assert!(validate_apply(&["t1".into()], &cat()).is_ok());
+    }
+
+    #[test]
+    fn apply_choice_rejects_non_choice_id() {
+        let mut c = cat();
+        let mut opt = c.tweaks[0].clone();
+        opt.id = "opt".into();
+        opt.choice = Some("grupo".into());
+        opt.choice_label = Some("Grupo".into());
+        c.tweaks.push(opt);
+        assert_eq!(
+            validate_choice("t1", &c).unwrap_err(),
+            "não é uma opção de lista: t1"
+        );
+        assert_eq!(
+            validate_choice("zzz", &c).unwrap_err(),
+            "otimização desconhecida: zzz"
+        );
+        assert!(validate_choice("opt", &c).is_ok());
+    }
+
+    #[test]
+    fn explorer_restart_refused_in_other_account() {
+        assert!(explorer_allowed(true).is_ok());
+        assert_eq!(explorer_allowed(false).unwrap_err(), EXPLORER_OTHER_ACCOUNT);
     }
 
     #[test]
@@ -602,5 +704,32 @@ mod tests {
         let page = build_page(&c, &b, &jp, false, true, false).unwrap();
         assert!(page.tweaks[0].in_journal);
         assert_eq!(page.journal_count, 1);
+    }
+
+    #[test]
+    fn home_progress_counts_only_recommended() {
+        let mut c = cat();
+        let mut rec = c.tweaks[0].clone();
+        rec.id = "rec".into();
+        rec.recommended = true;
+        c.tweaks.push(rec);
+        let b = MemoryBackend::new();
+        assert_eq!(optimization_progress(&c, &b), (0, 1));
+        // `t1` (não recomendado) aplicado não conta; `rec` toca a mesma chave e conta.
+        b.set(
+            &reg(),
+            Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        );
+        assert_eq!(optimization_progress(&c, &b), (1, 1));
+        assert_eq!(
+            optimization_progress(Catalog::embedded(), &b).1,
+            Catalog::embedded()
+                .tweaks
+                .iter()
+                .filter(|t| t.recommended)
+                .count()
+        );
     }
 }

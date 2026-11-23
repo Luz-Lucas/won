@@ -2,11 +2,12 @@
 //!
 //! Camada fina: a lógica de negócio vive em `sentinela_core`.
 
-use crate::commands::tweaks::{FOR_SID_ARG, SID_UNKNOWN, TweaksState, applied_count};
+use crate::commands::tweaks::{FOR_SID_ARG, SID_UNKNOWN, TweaksState, optimization_progress};
 use crate::jobs::{JobId, JobKind, JobRegistry};
 use sentinela_core::activity::{self, ActivityEntry};
 use sentinela_core::status::{self, DbStatus};
-use sentinela_core::tweaks::{Catalog, current_user_sid};
+use sentinela_core::tweaks::{Catalog, Journal, current_user_sid, default_journal_path};
+use sentinela_core::updates::{self, Mode};
 use sentinela_core::{clean, quarantine, signatures};
 use serde::Serialize;
 use std::ffi::OsString;
@@ -28,18 +29,40 @@ pub struct SystemStatus {
     pub activity: Vec<ActivityEntry>,
     pub tweaks_applied: usize,
     pub tweaks_total: usize,
+    /// Modo de Atualizações do Windows (só pelo diário: rápido).
+    pub updates_mode: Mode,
+    /// Dias desde que o modo foi aplicado.
+    pub updates_days: Option<u64>,
+    /// Modo suspenso por "Atualizar agora", se houver.
+    pub updates_suspended: Option<Mode>,
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 fn collect_status(tweaks: &TweaksState) -> SystemStatus {
-    let cat = Catalog::embedded();
+    let (tweaks_applied, tweaks_total) =
+        optimization_progress(Catalog::embedded(), tweaks.backend().as_ref());
+    let journal = Journal::read_for_list(&default_journal_path()).unwrap_or_default();
+    let (updates_mode, since) = updates::mode_from_journal(&journal);
     SystemStatus {
+        updates_mode,
+        updates_days: since
+            .as_deref()
+            .and_then(|s| updates::days_since(s, now_secs())),
+        updates_suspended: updates::load_suspended(&updates::default_suspended_path())
+            .map(|s| s.mode),
         version: env!("CARGO_PKG_VERSION").to_string(),
         elevated: clean::platform::is_elevated(),
         db: status::db_status(&signatures::default_db_dir()),
         quarantine_count: quarantine::list(&quarantine::default_quarantine_dir()).len(),
         activity: activity::recent(&activity::default_activity_path(), RECENT_ACTIVITY),
-        tweaks_applied: applied_count(cat, tweaks.backend().as_ref()),
-        tweaks_total: cat.tweaks.len(),
+        tweaks_applied,
+        tweaks_total,
     }
 }
 

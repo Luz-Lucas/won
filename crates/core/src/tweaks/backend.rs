@@ -1,10 +1,11 @@
 //! Acesso ao sistema abstraído: o motor só fala com `SystemBackend`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use super::catalog::keys_to_remove;
 use super::model::{Action, Hive, RegValue, StartType};
 
 /// Plano de energia "Equilibrado" (padrão do Windows).
@@ -27,6 +28,13 @@ pub enum Snapshot {
     PowerPlan {
         scheme: String,
     },
+    ScheduledTask {
+        enabled: bool,
+    },
+    /// Servidores DNS fixos; vazio = automático (DHCP).
+    DnsServers {
+        servers: Vec<String>,
+    },
     /// Ex.: plano de energia inexistente.
     Unavailable {
         reason: String,
@@ -44,6 +52,38 @@ pub trait SystemBackend: Send + Sync {
     fn scheme_name(&self, _guid: &str) -> Option<String> {
         None
     }
+    /// A chave do registro da ação existe? (`true` para ações sem chave.)
+    fn key_exists(&self, _action: &Action) -> Result<bool, String> {
+        Ok(true)
+    }
+    /// Apaga a chave da ação se estiver vazia (sem valores nem subchaves) e sobe pelos
+    /// pais vazios até `created_from` inclusive (`None`: só a chave da ação). Nunca
+    /// apaga acima da raiz permitida nem uma chave que não esteja vazia.
+    fn delete_key_if_empty(
+        &self,
+        _action: &Action,
+        _created_from: Option<&str>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// Hive e caminho da chave de uma ação de registro.
+pub fn reg_key(action: &Action) -> Option<(Hive, &str)> {
+    match action {
+        Action::Registry { hive, path, .. } | Action::ListEntry { hive, path, .. } => {
+            Some((*hive, path.as_str()))
+        }
+        _ => None,
+    }
+}
+
+/// O snapshot guarda um valor (logo a chave precisa existir)?
+fn has_value(s: &Snapshot) -> bool {
+    matches!(
+        s,
+        Snapshot::Registry { value: Some(_) } | Snapshot::ListEntry { value: Some(_) }
+    )
 }
 
 /// O estado que a ação quer.
@@ -58,6 +98,10 @@ pub fn target_of(action: &Action) -> Snapshot {
         Action::Service { start, .. } => Snapshot::Service { start: *start },
         Action::PowerPlan { scheme } => Snapshot::PowerPlan {
             scheme: scheme.clone(),
+        },
+        Action::ScheduledTask { enabled, .. } => Snapshot::ScheduledTask { enabled: *enabled },
+        Action::DnsServers { servers, .. } => Snapshot::DnsServers {
+            servers: servers.clone(),
         },
     }
 }
@@ -83,6 +127,10 @@ fn action_key(action: &Action) -> String {
         } => format!("list:{}\\{path}\\{name}\\{key}", hive_name(*hive)),
         Action::Service { name, .. } => format!("svc:{name}"),
         Action::PowerPlan { .. } => "power".to_string(),
+        Action::ScheduledTask { path, .. } => format!("task:{path}"),
+        Action::DnsServers {
+            interface, ipv6, ..
+        } => format!("dns:{interface}:{}", if *ipv6 { "v6" } else { "v4" }),
     }
 }
 
@@ -96,12 +144,22 @@ fn default_snapshot(action: &Action) -> Snapshot {
         Action::PowerPlan { .. } => Snapshot::PowerPlan {
             scheme: BALANCED_SCHEME.to_string(),
         },
+        Action::ScheduledTask { .. } => Snapshot::Unavailable {
+            reason: "tarefa não existe".to_string(),
+        },
+        Action::DnsServers { .. } => Snapshot::DnsServers {
+            servers: Vec::new(),
+        },
     }
 }
 
 struct MemoryState {
     values: HashMap<String, Snapshot>,
     failing: HashMap<String, String>,
+    /// Chaves existentes (hive, caminho em minúsculas).
+    keys: HashSet<(Hive, String)>,
+    /// Chave de cada entrada de `values`.
+    paths: HashMap<String, (Hive, String)>,
     elevated: bool,
     hkcu_allowed: bool,
 }
@@ -109,6 +167,48 @@ struct MemoryState {
 /// Backend em memória, para testes.
 pub struct MemoryBackend {
     state: Mutex<MemoryState>,
+}
+
+impl MemoryState {
+    fn add_key(&mut self, hive: Hive, path: &str) {
+        let lower = path.to_ascii_lowercase();
+        let mut acc = String::new();
+        for seg in lower.split('\\') {
+            if !acc.is_empty() {
+                acc.push('\\');
+            }
+            acc.push_str(seg);
+            self.keys.insert((hive, acc.clone()));
+        }
+    }
+
+    /// Grava o snapshot; valor presente cria a chave.
+    fn put(&mut self, action: &Action, s: Snapshot) {
+        let k = action_key(action);
+        if let Some((h, p)) = reg_key(action) {
+            if has_value(&s) {
+                self.add_key(h, p);
+            }
+            self.paths.insert(k.clone(), (h, p.to_ascii_lowercase()));
+        }
+        self.values.insert(k, s);
+    }
+
+    fn is_empty_key(&self, hive: Hive, lower: &str) -> bool {
+        let prefix = format!("{lower}\\");
+        let has_sub = self
+            .keys
+            .iter()
+            .any(|(h, p)| *h == hive && p.starts_with(&prefix));
+        let has_val = self.values.iter().any(|(k, s)| {
+            has_value(s)
+                && self
+                    .paths
+                    .get(k)
+                    .is_some_and(|(h, p)| *h == hive && p == lower)
+        });
+        !has_sub && !has_val
+    }
 }
 
 impl Default for MemoryBackend {
@@ -123,6 +223,8 @@ impl MemoryBackend {
             state: Mutex::new(MemoryState {
                 values: HashMap::new(),
                 failing: HashMap::new(),
+                keys: HashSet::new(),
+                paths: HashMap::new(),
                 elevated: true,
                 hkcu_allowed: true,
             }),
@@ -134,7 +236,12 @@ impl MemoryBackend {
     }
 
     pub fn set(&self, action: &Action, s: Snapshot) {
-        self.lock().values.insert(action_key(action), s);
+        self.lock().put(action, s);
+    }
+
+    /// Cria a chave (e os pais) sem valor algum.
+    pub fn create_key(&self, hive: Hive, path: &str) {
+        self.lock().add_key(hive, path);
     }
 
     pub fn set_unavailable(&self, action: &Action, reason: &str) {
@@ -181,7 +288,33 @@ impl SystemBackend for MemoryBackend {
         if let Some(msg) = st.failing.get(&key) {
             return Err(msg.clone());
         }
-        st.values.insert(key, target.clone());
+        st.put(action, target.clone());
+        Ok(())
+    }
+
+    fn key_exists(&self, action: &Action) -> Result<bool, String> {
+        Ok(match reg_key(action) {
+            Some((h, p)) => self.lock().keys.contains(&(h, p.to_ascii_lowercase())),
+            None => true,
+        })
+    }
+
+    fn delete_key_if_empty(
+        &self,
+        action: &Action,
+        created_from: Option<&str>,
+    ) -> Result<(), String> {
+        let Some((hive, path)) = reg_key(action) else {
+            return Ok(());
+        };
+        let mut st = self.lock();
+        for p in keys_to_remove(hive, path, created_from) {
+            let lp = p.to_ascii_lowercase();
+            if !st.is_empty_key(hive, &lp) {
+                break;
+            }
+            st.keys.remove(&(hive, lp));
+        }
         Ok(())
     }
 

@@ -45,9 +45,10 @@ pub fn run() {
         .setup(|app| {
             app.manage(Arc::new(JobRegistry::new()));
             app.manage(commands::apps::AppsState::system());
-            app.manage(commands::tweaks::TweaksState::new(
-                commands::tweaks::startup_hkcu_allowed(),
-            ));
+            let tweaks_state =
+                commands::tweaks::TweaksState::new(commands::tweaks::startup_hkcu_allowed());
+            commands::updates::spawn_defender_watch(tweaks_state.clone());
+            app.manage(tweaks_state);
             app.manage(SettingsState::load(default_settings_path()));
             if let Err(e) = tray::setup(app.handle()) {
                 eprintln!("Sentinela: sem ícone na bandeja: {e}");
@@ -117,9 +118,32 @@ pub fn run() {
             commands::apps::apps_upgrade,
             commands::tweaks::tweaks_list,
             commands::tweaks::tweaks_apply,
+            commands::tweaks::tweaks_apply_choice,
+            commands::tweaks::restart_explorer,
             commands::tweaks::tweaks_undo,
             commands::tweaks::tweaks_undo_all,
             commands::tweaks::tweaks_journal,
+            commands::startup::startup_list,
+            commands::startup::startup_set_enabled,
+            commands::games::games_list,
+            commands::games::games_gpu_set,
+            commands::games::games_add,
+            commands::games::games_remove,
+            commands::updates::updates_status,
+            commands::updates::updates_mode,
+            commands::updates::updates_preview,
+            commands::updates::updates_set_mode,
+            commands::updates::updates_update_now,
+            commands::updates::updates_resume,
+            commands::net::net_page,
+            commands::net::net_target_add,
+            commands::net::net_target_remove,
+            commands::net::net_measure,
+            commands::net::net_trace,
+            commands::net::net_bufferbloat,
+            commands::net::net_dns_bench,
+            commands::net::net_dns_preview,
+            commands::net::net_dns_apply,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela");

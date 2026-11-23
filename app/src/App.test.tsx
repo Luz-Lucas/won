@@ -58,6 +58,9 @@ const status = (over: Partial<SystemStatus> = {}): SystemStatus => ({
   ],
   tweaks_applied: 0,
   tweaks_total: 0,
+  updates_mode: "default",
+  updates_days: null,
+  updates_suspended: null,
   ...over,
 });
 
@@ -171,17 +174,28 @@ describe("App", () => {
     await waitFor(() => expect(statusCalls()).toBe(before + 1));
   });
 
-  it("sidebar_has_aplicativos_after_limpeza", async () => {
+  it("sidebar_has_rede", async () => {
     render(<App />);
     const nav = within(screen.getByRole("navigation", { name: "Principal" }));
     expect(
-      nav.getAllByRole("button").slice(0, 8).map((b) => b.textContent),
-    ).toEqual(["Início", "Jogos", "Limpeza", "Aplicativos", "Segurança", "Disco", "Histórico", "Ajustes"]);
+      nav.getAllByRole("button").slice(0, 10).map((b) => b.textContent),
+    ).toEqual([
+      "Início",
+      "Jogos",
+      "Limpeza",
+      "Aplicativos",
+      "Personalizar",
+      "Rede",
+      "Segurança",
+      "Disco",
+      "Histórico",
+      "Ajustes",
+    ]);
   });
 
-  it("mostra as oito páginas e troca de página", async () => {
+  it("mostra as dez páginas e troca de página", async () => {
     render(<App />);
-    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Segurança", "Disco", "Histórico", "Ajustes"])
+    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Personalizar", "Rede", "Segurança", "Disco", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(

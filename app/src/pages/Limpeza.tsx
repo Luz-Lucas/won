@@ -12,6 +12,11 @@ const NAMES: Record<string, string> = {
   "browser-cache": "Cache de navegadores",
   "recycle-bin": "Lixeira",
   "windows-update": "Cache do Windows Update",
+  "shader-cache": "Cache de shaders",
+  "launcher-cache": "Cache de launchers",
+  "thumbnail-cache": "Cache de miniaturas",
+  "delivery-optimization": "Cache da Otimização de Entrega",
+  "windows-logs": "Logs do Windows",
 };
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
