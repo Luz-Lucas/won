@@ -14,7 +14,7 @@ export default function ProgressBar({
       </p>
     );
   }
-  if (progress.phase === "apps") {
+  if (progress.phase === "apps" || progress.phase === "net") {
     const pct = progress.total > 0 ? Math.floor((progress.index / progress.total) * 100) : 0;
     return (
       <div className="progress">

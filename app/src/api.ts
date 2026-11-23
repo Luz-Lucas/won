@@ -41,7 +41,15 @@ export const systemStatus = () => invoke<SystemStatus>("system_status");
 export const relaunchElevated = () => invoke<void>("relaunch_elevated");
 export const jobCancel = (id: number) => invoke<boolean>("job_cancel", { id });
 
-export type JobKind = "scan" | "clean" | "find_large" | "find_dupes" | "update" | "tweaks" | "apps";
+export type JobKind =
+  | "scan"
+  | "clean"
+  | "find_large"
+  | "find_dupes"
+  | "update"
+  | "tweaks"
+  | "apps"
+  | "net";
 
 /** Id do job deste tipo que segue rodando no backend, se houver. */
 export const jobRunning = (kind: JobKind) =>
@@ -182,7 +190,8 @@ export type TweakGroup =
   | "visual"
   | "personalizacao"
   | "avancado"
-  | "atualizacoes";
+  | "atualizacoes"
+  | "rede";
 export type TweakEvidence = "comprovado" | "situacional" | "controverso";
 export type TweakEffect = "immediate" | "explorer" | "relogon" | "reboot";
 export type TweakStatus = "applied" | "not_applied" | "partial" | "unavailable";
@@ -210,7 +219,8 @@ export type TweakAction =
     }
   | { kind: "service"; name: string; start: "automatic" | "manual" | "disabled" }
   | { kind: "power_plan"; scheme: string }
-  | { kind: "scheduled_task"; path: string; enabled: boolean };
+  | { kind: "scheduled_task"; path: string; enabled: boolean }
+  | { kind: "dns_servers"; interface: string; ipv6: boolean; servers: string[] };
 
 export type TweakArea = "barra" | "iniciar" | "explorador" | "aparencia" | "sistema";
 
@@ -289,6 +299,7 @@ export type JournalSnapshot =
   | { kind: "service"; start: "automatic" | "manual" | "disabled" }
   | { kind: "power_plan"; scheme: string }
   | { kind: "scheduled_task"; enabled: boolean }
+  | { kind: "dns_servers"; servers: string[] }
   | { kind: "unavailable"; reason: string };
 
 export interface JournalAction {
@@ -496,3 +507,131 @@ export const appsPage = () => invoke<AppsPage>("apps_page");
 export const appsPageRefresh = () => invoke<AppsPage>("apps_page_refresh");
 export const appsInstall = (ids: string[]) => invoke<number>("apps_install", { ids });
 export const appsUpgrade = (ids: string[]) => invoke<number>("apps_upgrade", { ids });
+
+export interface NetTarget {
+  name: string;
+  host: string;
+  port: number | null;
+}
+
+export interface NetTargetItem extends NetTarget {
+  /** `host`, `host:porta` ou `[IPv6]:porta`. */
+  label: string;
+  /** Acrescentado pelo usuário (pode remover). */
+  user: boolean;
+}
+
+export interface Measurement {
+  target: NetTarget;
+  addr: string;
+  sent: number;
+  received: number;
+  loss_pct: number;
+  min_ms: number | null;
+  avg_ms: number | null;
+  median_ms: number | null;
+  max_ms: number | null;
+  jitter_ms: number | null;
+  error: string | null;
+}
+
+export interface Hop {
+  ttl: number;
+  addr: string | null;
+  rtts_ms: (number | null)[];
+  segment: "home" | "isp";
+}
+
+export interface Trace {
+  target: NetTarget;
+  addr: string;
+  hops: Hop[];
+  reached: boolean;
+  /** TTL do salto em que o atraso começa. */
+  delay_start: number | null;
+  error: string | null;
+}
+
+export type BloatGrade = "good" | "moderate" | "high";
+
+export interface BufferbloatResult {
+  idle: Measurement;
+  loaded: Measurement;
+  increase_ms: number | null;
+  grade: BloatGrade | null;
+  download_mbps: number | null;
+  diagnosis: string;
+}
+
+export interface DnsRow {
+  name: string;
+  addr: string;
+  median_ms: number | null;
+  answered: number;
+  sent: number;
+  current: boolean;
+  resolver: string | null;
+}
+
+export interface DnsReport {
+  rows: DnsRow[];
+  /** Id do DNS público mais rápido. */
+  best: string | null;
+  keep_current: boolean;
+  advice: string;
+}
+
+export type NetResult =
+  | { op: "measure"; results: Measurement[] }
+  | { op: "trace"; trace: Trace }
+  | { op: "bufferbloat"; result: BufferbloatResult }
+  | { op: "dns"; report: DnsReport };
+
+export interface NetAdapter {
+  guid: string;
+  name: string;
+  wifi: boolean;
+  has_ipv6: boolean;
+  dns: string[];
+}
+
+export interface WifiStatus {
+  ssid: string;
+  signal_pct: number;
+  channel: number | null;
+}
+
+export interface NetHistoryEntry {
+  at: string;
+  kind: "latency" | "trace" | "bufferbloat" | "dns";
+  target: string;
+  summary: string;
+}
+
+export interface NetPage {
+  targets: NetTargetItem[];
+  adapters: NetAdapter[];
+  wifi: WifiStatus | null;
+  wifi_notice: string | null;
+  history: NetHistoryEntry[];
+  elevated: boolean;
+}
+
+export interface DnsPreview {
+  adapter: string;
+  changes: TweakChange[];
+}
+
+export const netPage = () => invoke<NetPage>("net_page");
+export const netTargetAdd = (spec: string) => invoke<NetPage>("net_target_add", { spec });
+export const netTargetRemove = (label: string) =>
+  invoke<NetPage>("net_target_remove", { label });
+/** Mede todos os destinos (`label` null) ou só um. */
+export const netMeasure = (label: string | null) => invoke<number>("net_measure", { label });
+export const netTrace = (label: string) => invoke<number>("net_trace", { label });
+export const netBufferbloat = () => invoke<number>("net_bufferbloat");
+export const netDnsBench = () => invoke<number>("net_dns_bench");
+export const netDnsPreview = (resolver: string) =>
+  invoke<DnsPreview[]>("net_dns_preview", { resolver });
+export const netDnsApply = (resolver: string) =>
+  invoke<TweakItemResult[]>("net_dns_apply", { resolver });

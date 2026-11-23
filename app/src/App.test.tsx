@@ -174,17 +174,18 @@ describe("App", () => {
     await waitFor(() => expect(statusCalls()).toBe(before + 1));
   });
 
-  it("sidebar_has_personalizar_after_aplicativos", async () => {
+  it("sidebar_has_rede", async () => {
     render(<App />);
     const nav = within(screen.getByRole("navigation", { name: "Principal" }));
     expect(
-      nav.getAllByRole("button").slice(0, 9).map((b) => b.textContent),
+      nav.getAllByRole("button").slice(0, 10).map((b) => b.textContent),
     ).toEqual([
       "Início",
       "Jogos",
       "Limpeza",
       "Aplicativos",
       "Personalizar",
+      "Rede",
       "Segurança",
       "Disco",
       "Histórico",
@@ -192,9 +193,9 @@ describe("App", () => {
     ]);
   });
 
-  it("mostra as nove páginas e troca de página", async () => {
+  it("mostra as dez páginas e troca de página", async () => {
     render(<App />);
-    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Personalizar", "Segurança", "Disco", "Histórico", "Ajustes"])
+    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Personalizar", "Rede", "Segurança", "Disco", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(

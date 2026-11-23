@@ -7,6 +7,7 @@ export type Page =
   | "limpeza"
   | "aplicativos"
   | "personalizar"
+  | "rede"
   | "seguranca"
   | "disco"
   | "historico"
@@ -18,6 +19,7 @@ const ITEMS: { page: Page; label: string }[] = [
   { page: "limpeza", label: "Limpeza" },
   { page: "aplicativos", label: "Aplicativos" },
   { page: "personalizar", label: "Personalizar" },
+  { page: "rede", label: "Rede" },
   { page: "seguranca", label: "Segurança" },
   { page: "disco", label: "Disco" },
   { page: "historico", label: "Histórico" },

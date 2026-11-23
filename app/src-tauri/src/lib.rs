@@ -135,6 +135,15 @@ pub fn run() {
             commands::updates::updates_set_mode,
             commands::updates::updates_update_now,
             commands::updates::updates_resume,
+            commands::net::net_page,
+            commands::net::net_target_add,
+            commands::net::net_target_remove,
+            commands::net::net_measure,
+            commands::net::net_trace,
+            commands::net::net_bufferbloat,
+            commands::net::net_dns_bench,
+            commands::net::net_dns_preview,
+            commands::net::net_dns_apply,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela");

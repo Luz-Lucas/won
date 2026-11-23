@@ -24,6 +24,7 @@ pub enum JobKind {
     Update,
     Tweaks,
     Apps,
+    Net,
 }
 
 pub trait Sink: Send + Sync {

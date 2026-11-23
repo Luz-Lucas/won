@@ -592,3 +592,38 @@ body {
   display: flex;
   gap: var(--sp-2);
 }
+
+/* Página Rede */
+.net-table {
+  width: 100%;
+  margin: 0 0 var(--sp-3);
+  border-collapse: collapse;
+  font-size: var(--fs-md);
+}
+
+.net-table th,
+.net-table td {
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.net-table th {
+  color: var(--text-dim);
+  font-weight: normal;
+}
+
+.net-table td .btn + .btn {
+  margin-left: var(--sp-2);
+}
+
+.net-table td:nth-child(n + 2):not(:last-child) {
+  font-family: var(--font-mono);
+}
+
+.net-history {
+  margin: 0;
+  padding-left: var(--sp-4);
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}
