@@ -154,7 +154,7 @@ pub fn net_measure(
         JobKind::Net,
         move |id, cancel, sink| {
             let total = list.len();
-            let results = session::measure_targets(&list, cancel, |i, t| {
+            let results = session::measure_targets(&list, session::PROBES, cancel, |i, t| {
                 sink.emit(
                     "job:progress",
                     json!({ "job": id, "phase": "net", "index": i, "total": total, "current": t.label() }),

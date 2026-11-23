@@ -765,3 +765,89 @@ fn apps_upgrade_requires_ids_or_all() {
         .assert()
         .code(2);
 }
+
+fn net_cmd(history: &Path) -> Command {
+    let mut cmd = Command::cargo_bin("sentinela").unwrap();
+    cmd.env("SENTINELA_NET_HISTORY", history);
+    cmd
+}
+
+#[test]
+fn net_test_against_local_tcp_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let history = dir.path().join("net-history.json");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || for _ in listener.incoming() {});
+    let out = net_cmd(&history)
+        .args([
+            "net",
+            "test",
+            &format!("127.0.0.1:{port}"),
+            "--count",
+            "3",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let v = json_of(&out);
+    assert_eq!(v[0]["received"], 3);
+    assert_eq!(v[0]["loss_pct"], 0.0);
+    assert!(v[0]["avg_ms"].is_number());
+    // A medição entra no histórico.
+    let h: serde_json::Value = serde_json::from_slice(&fs::read(&history).unwrap()).unwrap();
+    assert_eq!(h[0]["kind"], "latency");
+    assert_eq!(h[0]["target"], format!("127.0.0.1:{port}"));
+}
+
+#[test]
+fn net_test_invalid_target_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    net_cmd(&dir.path().join("h.json"))
+        .args(["net", "test", "a.com:99999"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn net_trace_unknown_host_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    let history = dir.path().join("h.json");
+    net_cmd(&history)
+        .args(["net", "trace", "nao-existe.invalid"])
+        .assert()
+        .code(2);
+    assert!(!history.exists());
+}
+
+#[test]
+fn net_history_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let history = dir.path().join("h.json");
+    net_cmd(&history)
+        .args(["net", "history"])
+        .assert()
+        .success()
+        .stdout(contains("Nenhuma medição ainda."));
+    fs::write(
+        &history,
+        r#"[{"at":"2026-11-23T12:00:00Z","kind":"dns","target":"DNS","summary":"mais rápido: Google (5,0 ms)"}]"#,
+    )
+    .unwrap();
+    net_cmd(&history)
+        .args(["net", "history"])
+        .assert()
+        .success()
+        .stdout(contains("mais rápido: Google (5,0 ms)"));
+}
+
+#[test]
+fn net_dns_help() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["net", "dns", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Só mede").and(contains("não muda o ping")));
+}

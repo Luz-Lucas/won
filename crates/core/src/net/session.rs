@@ -120,9 +120,11 @@ pub fn find_target(list: &[Target], key: &str) -> Option<Target> {
         .cloned()
 }
 
-/// Mede cada destino em sequência; `on_target(i, destino)` antes de cada um.
+/// Mede cada destino em sequência (`count` sondas); `on_target(i, destino)`
+/// antes de cada um.
 pub fn measure_targets(
     list: &[Target],
+    count: u32,
     cancel: &AtomicBool,
     mut on_target: impl FnMut(usize, &Target),
 ) -> Vec<Measurement> {
@@ -135,7 +137,7 @@ pub fn measure_targets(
         out.push(measure(
             prober(),
             t,
-            PROBES,
+            count.max(1),
             PROBE_INTERVAL,
             PROBE_TIMEOUT,
             cancel,

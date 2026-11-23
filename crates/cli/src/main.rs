@@ -1,6 +1,7 @@
 mod apps;
 mod cli;
 mod games;
+mod net;
 mod progress;
 mod report;
 mod startup;

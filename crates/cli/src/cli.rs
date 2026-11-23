@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 
 use crate::apps::{self, AppsCommand};
 use crate::games::{self, GamesCommand};
+use crate::net::{self, NetCommand};
 use crate::progress::{self, TerminalProgress};
 use crate::report::{self, human_bytes};
 use crate::startup::{self, StartupCommand};
@@ -136,6 +137,11 @@ enum Command {
         #[command(subcommand)]
         action: GamesCommand,
     },
+    /// Latência, rota, bufferbloat e DNS (só mede)
+    Net {
+        #[command(subcommand)]
+        action: NetCommand,
+    },
     /// Mostra versão, banco de assinaturas e privilégios
     Info,
 }
@@ -215,6 +221,7 @@ fn dispatch(command: Command) -> Result<i32> {
         Command::Startup { action } => startup::run(action),
         Command::Updates { action } => updates::run(action),
         Command::Games { action } => games::run(action),
+        Command::Net { action } => net::run(action),
         Command::Info => cmd_info(),
     }
 }

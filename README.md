@@ -19,6 +19,7 @@ A janela do Sentinela tem estas páginas, na barra lateral:
 - **Limpeza**: simula a limpeza e mostra, por categoria, o que seria apagado e o espaço liberado. Nada é apagado antes de você confirmar; categorias desmarcadas são mantidas.
 - **Aplicativos**: instala e atualiza aplicativos do catálogo pelo winget.
 - **Personalizar**: barra de tarefas, menu Iniciar, Explorador, tema e sistema, com interruptores e listas de opções. Cada mudança mostra a prévia, pede confirmação e pode ser desfeita pelo Histórico. Mudanças que só aparecem com o Explorer reiniciado oferecem o botão "Reiniciar Explorer"; o Sentinela nunca o reinicia sozinho.
+- **Rede**: mede latência, *jitter* e perda até o roteador, a Cloudflare e os servidores que você acrescentar; rastreia a rota separando sua casa do provedor e mostra onde o atraso começa; testa o *bufferbloat*; compara o DNS atual com DNS públicos e, se outro for mais rápido, aplica com prévia (desfaz pelo Histórico); desliga a economia de energia do adaptador de rede; mostra o sinal do Wi‑Fi. A rota até o servidor do jogo é do provedor: o Sentinela mede e ajusta só o que é do computador.
 - **Segurança**: verifica pastas ou o computador inteiro (com cancelamento) e lista o que encontrou, sem mover nem apagar nada; também lista os itens que o `sentinela full` colocou em quarentena e permite restaurá-los, sempre depois de confirmar.
 - **Disco**: lista os maiores arquivos e os duplicados de uma pasta. Só lista; nunca apaga.
 - **Histórico**: as otimizações e personalizações aplicadas, com desfazer.
@@ -46,6 +47,7 @@ sentinela apps list | install <id>... | upgrade (<id>... | --all)
 sentinela startup list | enable <id> | disable <id>
 sentinela updates status | mode <modo> [--until AAAA-MM-DD]
 sentinela games list | gpu (on | off) <id>
+sentinela net test [<destino>...] | trace <destino> | bufferbloat | dns | history
 sentinela info
 ```
 
@@ -245,6 +247,23 @@ sentinela games gpu (on | off) <id> [--yes]
 - `list` mostra os jogos da Steam (todas as bibliotecas), da Epic, da Riot e os adicionados na janela ("Adicionar jogo…"), um por executável, com `GPU+` quando a preferência de alto desempenho está ligada. Em jogos Unreal, o executável é o `*-Win64-Shipping.exe`, o processo que de fato usa a placa de vídeo. Só lê o sistema.
 - `gpu on` grava a mesma preferência que Configurações → Sistema → Tela → Gráficos ("Alto desempenho"); `gpu off` volta ao que era antes, inclusive para um jogo que já foi desinstalado. Pergunta `[s/N]` (`--yes` pula); não exige administrador.
 - Id desconhecido encerra com código `2`. Com `--json`, `list` devolve `{ id, name, source, exe, high_performance }`.
+
+### `net`: rede (só mede)
+
+```
+sentinela net test [<destino>...] [--count <N>] [--json]
+sentinela net trace <destino> [--json]
+sentinela net bufferbloat [--json]
+sentinela net dns [--json]
+sentinela net history [--json]
+```
+
+- `test` mede latência média, *jitter* e perda (20 sondas por destino; `--count` muda). Sem destino, mede o roteador, a Cloudflare e os destinos acrescentados na página Rede. Destino com porta (`servidor:27015`) é medido pelo tempo de conexão TCP, para servidores que não respondem a ping.
+- `trace` mostra a rota salto a salto, separando a rede de casa do provedor (CGNAT conta como provedor), e marca o salto em que o atraso começa quando o aumento se mantém até o fim da rota.
+- `bufferbloat` mede o atraso até o roteador parado e de novo com um download da Cloudflare ocupando a conexão por cerca de 15 segundos (baixa algumas centenas de MB numa conexão rápida). "Alto" pede SQM/QoS no roteador.
+- `dns` compara o DNS em uso com Cloudflare, Google, Quad9, AdGuard e OpenDNS e diz se vale trocar; **não muda nada**. Trocar o DNS (e os ajustes de adaptador) fica na página Rede, com prévia, e se desfaz pelo Histórico. O DNS não muda o ping dentro do jogo.
+- Cada medição entra no histórico (o mesmo da página Rede, últimas 200). A rota até o servidor do jogo é decidida pelo provedor e pelas redes no caminho: o Sentinela mede e ajusta só o que é do computador.
+- Destino inválido ou que não resolve encerra com código `2`.
 
 ### `apps`: aplicativos via winget
 
