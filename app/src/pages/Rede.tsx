@@ -31,6 +31,7 @@ import type {
   UndoReport,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Routes from "../components/Routes";
 import { humanDate } from "../format";
 import { useJob } from "../jobs";
 
@@ -51,6 +52,7 @@ const HISTORY_KIND: Record<NetHistoryEntry["kind"], string> = {
   trace: "Rota",
   bufferbloat: "Bufferbloat",
   dns: "DNS",
+  route: "Rotas",
 };
 
 const ADMIN = "requer administrador";
@@ -71,7 +73,7 @@ const applied = (i: TweakItem) => i.view.status === "applied";
 const usable = (i: TweakItem) => i.view.blocked === null && i.view.status !== "unavailable";
 
 type Pending =
-  | { kind: "dns"; resolver: string; name: string; preview: DnsPreview[] }
+  | { kind: "dns"; resolver: string; name: string; doh: boolean; preview: DnsPreview[] }
   | { kind: "on"; item: TweakItem }
   | { kind: "off"; item: TweakItem };
 
@@ -88,6 +90,7 @@ export default function Rede() {
   const [dnsResults, setDnsResults] = useState<TweakItemResult[] | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
+  const [doh, setDoh] = useState(false);
   const net = useJob<NetResult>("net");
   const tweakJob = useJob<ApplyReport | UndoReport>("tweaks");
   const [tweakStarted, setTweakStarted] = useState(false);
@@ -119,7 +122,7 @@ export default function Rede() {
       });
     else if (r.op === "trace") setTrace(r.trace);
     else if (r.op === "bufferbloat") setBloat(r.result);
-    else setDns(r.report);
+    else if (r.op === "dns") setDns(r.report);
     netPage().then(setPage, () => {});
   }, [net.state, net.result]);
 
@@ -160,8 +163,9 @@ export default function Rede() {
     const row = dns?.rows.find((r) => r.resolver === resolver && !r.current);
     setActionError(null);
     try {
-      const preview = await netDnsPreview(resolver);
-      setPending({ kind: "dns", resolver, name: row?.name ?? resolver, preview });
+      const encrypt = doh && dohOffered(resolver);
+      const preview = await netDnsPreview(resolver, encrypt);
+      setPending({ kind: "dns", resolver, name: row?.name ?? resolver, doh: encrypt, preview });
     } catch (e) {
       setActionError(errorText(e));
     }
@@ -175,7 +179,7 @@ export default function Rede() {
       setBusy(true);
       setDnsResults(null);
       try {
-        setDnsResults(await netDnsApply(p.resolver));
+        setDnsResults(await netDnsApply(p.resolver, p.doh));
         setPage(await netPage());
       } catch (e) {
         setActionError(errorText(e));
@@ -193,6 +197,12 @@ export default function Rede() {
     relaunchElevated().catch((e) => setActionError(errorText(e)));
   };
 
+  /** O Windows conhece o modelo de DNS sobre HTTPS deste resolvedor. */
+  const dohOffered = (resolver: string) => {
+    const addr = dns?.rows.find((r) => r.resolver === resolver)?.addr;
+    return addr !== undefined && (page?.doh_known ?? []).includes(addr);
+  };
+
   const progress = net.progress?.phase === "net" ? net.progress : null;
   const onWifi = page?.adapters.some((a) => a.wifi) ?? false;
   const tweakReport =
@@ -203,7 +213,7 @@ export default function Rede() {
     if (pending.kind === "dns")
       return (
         <ConfirmDialog
-          title={`Usar o DNS ${pending.name}?`}
+          title={`Usar o DNS ${pending.name}${pending.doh ? " criptografado" : ""}?`}
           confirmLabel="Aplicar"
           onConfirm={() => void confirm()}
           onCancel={() => setPending(null)}
@@ -218,6 +228,12 @@ export default function Rede() {
               </ul>
             </div>
           ))}
+          {pending.doh && (
+            <p>
+              Com DNS sobre HTTPS, as consultas vão criptografadas; se o servidor não responder
+              por HTTPS, os nomes deixam de abrir até desfazer.
+            </p>
+          )}
           <p>Para voltar ao DNS anterior, desfaça pelo Histórico.</p>
         </ConfirmDialog>
       );
@@ -412,6 +428,8 @@ export default function Rede() {
             </div>
           )}
 
+          <Routes targets={page.targets} />
+
           <h2>Bufferbloat</h2>
           <p className="muted">
             Mede o atraso até o roteador parado e de novo com um download ocupando a conexão
@@ -486,6 +504,16 @@ export default function Rede() {
                         Reiniciar como administrador
                       </button>
                     </div>
+                  )}
+                  {dohOffered(dns.best) && (
+                    <label className="clean-check">
+                      <input
+                        type="checkbox"
+                        checked={doh}
+                        onChange={(e) => setDoh(e.target.checked)}
+                      />
+                      <span>Criptografar (DNS sobre HTTPS)</span>
+                    </label>
                   )}
                   <button
                     type="button"

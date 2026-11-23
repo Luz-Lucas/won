@@ -13,6 +13,8 @@ pub enum Kind {
     Trace,
     Bufferbloat,
     Dns,
+    /// Comparação de rotas.
+    Route,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

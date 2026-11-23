@@ -851,3 +851,48 @@ fn net_dns_help() {
         .success()
         .stdout(contains("Só mede").and(contains("não muda o ping")));
 }
+
+#[test]
+fn net_routes_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    net_cmd(&dir.path().join("h.json"))
+        .args(["net", "routes", "--json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("["));
+}
+
+#[test]
+fn net_compare_help() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["net", "compare", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("--route").and(contains("--rounds")));
+}
+
+#[test]
+fn net_route_unknown_tunnel_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    net_cmd(&dir.path().join("h.json"))
+        .args(["net", "route", "wg:nao-existe-sentinela", "on"])
+        .assert()
+        .code(2)
+        .stderr(contains("rota desconhecida"));
+}
+
+#[test]
+fn net_compare_unknown_route_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    net_cmd(&dir.path().join("h.json"))
+        .args([
+            "net",
+            "compare",
+            "127.0.0.1",
+            "--route",
+            "wg:nao-existe-sentinela",
+        ])
+        .assert()
+        .code(2);
+}

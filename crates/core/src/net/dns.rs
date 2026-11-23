@@ -192,6 +192,12 @@ pub fn candidates(current: &[IpAddr]) -> Vec<(String, IpAddr)> {
     out
 }
 
+/// O Windows sabe criptografar (DNS sobre HTTPS) os dois servidores IPv4
+/// deste resolvedor? `known` vem de `DohWellKnownServers`.
+pub fn doh_supported(r: &Resolver, known: &[String]) -> bool {
+    r.v4.iter().all(|ip| known.iter().any(|k| k == ip))
+}
+
 /// Adaptador alvo do DNS: `{GUID}`, nome e se tem IPv6 global.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AdapterRef {
@@ -211,22 +217,29 @@ pub fn dns_tweak_id(guid: &str) -> String {
 
 /// Ajuste gerado: o resolvedor escolhido como DNS fixo do adaptador (IPv4, e
 /// IPv6 quando o adaptador tem endereço IPv6 global).
-pub fn dns_tweak(adapter: &AdapterRef, r: &Resolver) -> Tweak {
+pub fn dns_tweak(adapter: &AdapterRef, r: &Resolver, doh: bool) -> Tweak {
     let mut actions = vec![Action::DnsServers {
         interface: adapter.guid.clone(),
         ipv6: false,
         servers: r.v4.iter().map(|s| s.to_string()).collect(),
+        doh,
     }];
     if adapter.has_ipv6 {
         actions.push(Action::DnsServers {
             interface: adapter.guid.clone(),
             ipv6: true,
             servers: r.v6.iter().map(|s| s.to_string()).collect(),
+            doh,
         });
     }
     Tweak {
         id: dns_tweak_id(&adapter.guid),
-        title: format!("DNS {} no adaptador {}", r.name, adapter.name),
+        title: format!(
+            "DNS {}{} no adaptador {}",
+            r.name,
+            if doh { " criptografado" } else { "" },
+            adapter.name
+        ),
         description: "Usa este DNS público no adaptador. Abre sites e conecta em servidores um pouco mais rápido quando ele responde mais rápido que o do provedor; não muda o ping dentro do jogo.".into(),
         group: Group::Rede,
         evidence: Evidence::Comprovado,
@@ -371,6 +384,7 @@ mod tests {
             interface: GUID.into(),
             ipv6: false,
             servers: vec![],
+            doh: false,
         }
     }
 
@@ -379,12 +393,13 @@ mod tests {
             interface: GUID.into(),
             ipv6: true,
             servers: vec![],
+            doh: false,
         }
     }
 
     fn servers(b: &MemoryBackend, a: &Action) -> Vec<String> {
         match b.get(a) {
-            Snapshot::DnsServers { servers } => servers,
+            Snapshot::DnsServers { servers, .. } => servers,
             other => panic!("{other:?}"),
         }
     }
@@ -394,7 +409,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let jp = d.path().join("journal.json");
         let b = MemoryBackend::new();
-        let t = dns_tweak(&adapter(true), resolver("cloudflare").unwrap());
+        let t = dns_tweak(&adapter(true), resolver("cloudflare").unwrap(), false);
         assert_eq!(t.id, "dns-0a5c8bb6");
         let r = apply_resolver(t.clone(), &b, &jp).unwrap();
         assert!(r.ok && r.changed, "{r:?}");
@@ -417,12 +432,13 @@ mod tests {
             &v4_action(),
             Snapshot::DnsServers {
                 servers: vec!["192.168.0.1".into()],
+                doh: false,
             },
         );
-        let google = dns_tweak(&adapter(false), resolver("google").unwrap());
+        let google = dns_tweak(&adapter(false), resolver("google").unwrap(), false);
         assert!(apply_resolver(google, &b, &jp).unwrap().ok);
         // Troca para outro resolvedor: o diário guarda só o original da máquina.
-        let cf = dns_tweak(&adapter(false), resolver("cloudflare").unwrap());
+        let cf = dns_tweak(&adapter(false), resolver("cloudflare").unwrap(), false);
         assert!(apply_resolver(cf.clone(), &b, &jp).unwrap().ok);
         assert_eq!(servers(&b, &v4_action()), vec!["1.1.1.1", "1.0.0.1"]);
         let j = Journal::read_for_list(&jp).unwrap();
@@ -432,6 +448,69 @@ mod tests {
         assert_eq!(servers(&b, &v4_action()), vec!["192.168.0.1"]);
         // Sem IPv6 global, o IPv6 não é tocado.
         assert!(servers(&b, &v6_action()).is_empty());
+    }
+
+    #[test]
+    fn doh_round_trip_in_memory() {
+        let d = tempfile::tempdir().unwrap();
+        let jp = d.path().join("journal.json");
+        let b = MemoryBackend::new();
+        b.set(
+            &v4_action(),
+            Snapshot::DnsServers {
+                servers: vec!["192.168.0.1".into()],
+                doh: false,
+            },
+        );
+        let t = dns_tweak(&adapter(false), resolver("cloudflare").unwrap(), true);
+        assert!(t.title.contains("criptografado"));
+        assert!(apply_resolver(t.clone(), &b, &jp).unwrap().ok);
+        assert_eq!(
+            b.get(&v4_action()),
+            Snapshot::DnsServers {
+                servers: vec!["1.1.1.1".into(), "1.0.0.1".into()],
+                doh: true,
+            }
+        );
+        // Trocar para sem DoH desfaz antes: o diário segue com o original.
+        let plain = dns_tweak(&adapter(false), resolver("cloudflare").unwrap(), false);
+        assert!(apply_resolver(plain.clone(), &b, &jp).unwrap().ok);
+        assert_eq!(
+            b.get(&v4_action()),
+            Snapshot::DnsServers {
+                servers: vec!["1.1.1.1".into(), "1.0.0.1".into()],
+                doh: false,
+            }
+        );
+        assert!(undo(&[plain.id], &b, &jp).results[0].ok);
+        assert_eq!(
+            b.get(&v4_action()),
+            Snapshot::DnsServers {
+                servers: vec!["192.168.0.1".into()],
+                doh: false,
+            }
+        );
+    }
+
+    #[test]
+    fn doh_offered_only_for_known_servers() {
+        let known: Vec<String> = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert!(doh_supported(resolver("cloudflare").unwrap(), &known));
+        assert!(doh_supported(resolver("google").unwrap(), &known));
+        assert!(!doh_supported(resolver("adguard").unwrap(), &known));
+        assert!(!doh_supported(resolver("google").unwrap(), &[]));
+        // DoH sem servidor fixo não passa na validação.
+        let mut t = dns_tweak(&adapter(false), &RESOLVERS[0], true);
+        t.actions = vec![Action::DnsServers {
+            interface: GUID.into(),
+            ipv6: false,
+            servers: vec![],
+            doh: true,
+        }];
+        assert!(Catalog { tweaks: vec![] }.with_generated(vec![t]).is_err());
     }
 
     /// Só leitura: DNS fixo de cada adaptador ligado e uma medição real.
@@ -448,6 +527,7 @@ mod tests {
                     interface: a.guid.clone(),
                     ipv6: v6,
                     servers: vec![],
+                    doh: false,
                 };
                 println!("{} v6={v6}: {:?}", a.name, b.read(&act));
             }
@@ -469,24 +549,26 @@ mod tests {
     fn dns_action_validation() {
         let base = Catalog { tweaks: vec![] };
         assert!(
-            base.with_generated(vec![dns_tweak(&adapter(true), &RESOLVERS[0])])
+            base.with_generated(vec![dns_tweak(&adapter(true), &RESOLVERS[0], false)])
                 .is_ok()
         );
-        let mut wrong_family = dns_tweak(&adapter(false), &RESOLVERS[0]);
+        let mut wrong_family = dns_tweak(&adapter(false), &RESOLVERS[0], false);
         wrong_family.actions = vec![Action::DnsServers {
             interface: GUID.into(),
             ipv6: false,
             servers: vec!["2606:4700:4700::1111".into()],
+            doh: false,
         }];
         assert!(base.with_generated(vec![wrong_family]).is_err());
-        let mut bad_guid = dns_tweak(&adapter(false), &RESOLVERS[0]);
+        let mut bad_guid = dns_tweak(&adapter(false), &RESOLVERS[0], false);
         bad_guid.actions = vec![Action::DnsServers {
             interface: "Ethernet".into(),
             ipv6: false,
             servers: vec!["1.1.1.1".into()],
+            doh: false,
         }];
         assert!(base.with_generated(vec![bad_guid]).is_err());
-        let mut other_group = dns_tweak(&adapter(false), &RESOLVERS[0]);
+        let mut other_group = dns_tweak(&adapter(false), &RESOLVERS[0], false);
         other_group.group = Group::Jogos;
         assert!(base.with_generated(vec![other_group]).is_err());
         for r in RESOLVERS {

@@ -381,19 +381,34 @@ export interface GameItem {
   /** Ligado fora do Sentinela (Configurações → Gráficos). */
   external: boolean;
   blocked: string | null;
+  /** Prioridade de rede (QoS, DSCP 46). */
+  qos: GameSwitch;
+}
+
+export interface GameSwitch {
+  /** Id do ajuste gerado (`qos-…`). */
+  id: string;
+  enabled: boolean;
+  in_journal: boolean;
+  external: boolean;
+  blocked: string | null;
 }
 
 export interface GamesPage {
   games: GameItem[];
   /** No Histórico, mas o jogo não é mais encontrado. */
-  missing: { id: string; title: string }[];
+  missing: { id: string; title: string; kind: "gpu" | "qos" }[];
   gpus: number;
   warnings: string[];
+  elevated: boolean;
 }
 
 export const gamesList = () => invoke<GamesPage>("games_list");
 export const gamesGpuSet = (id: string, enabled: boolean) =>
   invoke<GamesPage>("games_gpu_set", { id, enabled });
+/** Prioridade de rede (QoS); exige administrador. */
+export const gamesQosSet = (id: string, enabled: boolean) =>
+  invoke<GamesPage>("games_qos_set", { id, enabled });
 export const gamesAdd = (path: string) => invoke<GamesPage>("games_add", { path });
 export const gamesRemove = (path: string) =>
   invoke<GamesPage>("games_remove", { path });
@@ -585,7 +600,8 @@ export type NetResult =
   | { op: "measure"; results: Measurement[] }
   | { op: "trace"; trace: Trace }
   | { op: "bufferbloat"; result: BufferbloatResult }
-  | { op: "dns"; report: DnsReport };
+  | { op: "dns"; report: DnsReport }
+  | { op: "compare"; comparison: Comparison };
 
 export interface NetAdapter {
   guid: string;
@@ -603,7 +619,7 @@ export interface WifiStatus {
 
 export interface NetHistoryEntry {
   at: string;
-  kind: "latency" | "trace" | "bufferbloat" | "dns";
+  kind: "latency" | "trace" | "bufferbloat" | "dns" | "route";
   target: string;
   summary: string;
 }
@@ -615,6 +631,8 @@ export interface NetPage {
   wifi_notice: string | null;
   history: NetHistoryEntry[];
   elevated: boolean;
+  /** Servidores que o Windows sabe criptografar (DNS sobre HTTPS). */
+  doh_known: string[];
 }
 
 export interface DnsPreview {
@@ -631,7 +649,71 @@ export const netMeasure = (label: string | null) => invoke<number>("net_measure"
 export const netTrace = (label: string) => invoke<number>("net_trace", { label });
 export const netBufferbloat = () => invoke<number>("net_bufferbloat");
 export const netDnsBench = () => invoke<number>("net_dns_bench");
-export const netDnsPreview = (resolver: string) =>
-  invoke<DnsPreview[]>("net_dns_preview", { resolver });
-export const netDnsApply = (resolver: string) =>
-  invoke<TweakItemResult[]>("net_dns_apply", { resolver });
+export const netDnsPreview = (resolver: string, doh: boolean) =>
+  invoke<DnsPreview[]>("net_dns_preview", { resolver, doh });
+export const netDnsApply = (resolver: string, doh: boolean) =>
+  invoke<TweakItemResult[]>("net_dns_apply", { resolver, doh });
+
+export type RouteKind = "warp" | "wireguard" | "paid";
+
+export interface NetRoute {
+  /** `warp`, `wg:{nome}` ou `paid:{id}`. */
+  id: string;
+  name: string;
+  kind: RouteKind;
+  /** Ligada agora (null: não deu para saber). */
+  on: boolean | null;
+  /** O Sentinela liga e desliga (serviços pagos: não). */
+  controllable: boolean;
+  note: string | null;
+}
+
+export interface TunnelInfo {
+  name: string;
+  address: string | null;
+  endpoint: string | null;
+}
+
+export interface GameRouteItem {
+  key: string;
+  name: string;
+  route: string | null;
+}
+
+export interface RoutesPage {
+  routes: NetRoute[];
+  tunnels: TunnelInfo[];
+  games: GameRouteItem[];
+  wifi_hold: boolean;
+  elevated: boolean;
+}
+
+export interface CompareRow {
+  /** `normal` ou o id da rota. */
+  id: string;
+  name: string;
+  measurement: Measurement;
+}
+
+export interface Comparison {
+  target: NetTarget;
+  rows: CompareRow[];
+  best: string | null;
+  advice: string;
+  errors: string[];
+  interrupted: boolean;
+}
+
+export const netRoutesPage = () => invoke<RoutesPage>("net_routes_page");
+export const netTunnelImport = (name: string, path: string) =>
+  invoke<RoutesPage>("net_tunnel_import", { name, path });
+export const netTunnelRemove = (name: string) =>
+  invoke<RoutesPage>("net_tunnel_remove", { name });
+export const netRouteSet = (id: string, on: boolean) =>
+  invoke<RoutesPage>("net_route_set", { id, on });
+export const netGameRouteSet = (key: string, route: string | null) =>
+  invoke<RoutesPage>("net_game_route_set", { key, route });
+export const netWifiHoldSet = (on: boolean) => invoke<RoutesPage>("net_wifi_hold_set", { on });
+/** Compara a conexão atual com as rotas `ids` até o destino `label` (job "net"). */
+export const netCompare = (label: string, ids: string[]) =>
+  invoke<number>("net_compare", { label, ids });

@@ -34,6 +34,9 @@ pub enum Snapshot {
     /// Servidores DNS fixos; vazio = automático (DHCP).
     DnsServers {
         servers: Vec<String>,
+        /// DNS sobre HTTPS ligado nesses servidores.
+        #[serde(default)]
+        doh: bool,
     },
     /// Ex.: plano de energia inexistente.
     Unavailable {
@@ -100,8 +103,9 @@ pub fn target_of(action: &Action) -> Snapshot {
             scheme: scheme.clone(),
         },
         Action::ScheduledTask { enabled, .. } => Snapshot::ScheduledTask { enabled: *enabled },
-        Action::DnsServers { servers, .. } => Snapshot::DnsServers {
+        Action::DnsServers { servers, doh, .. } => Snapshot::DnsServers {
             servers: servers.clone(),
+            doh: *doh,
         },
     }
 }
@@ -149,6 +153,7 @@ fn default_snapshot(action: &Action) -> Snapshot {
         },
         Action::DnsServers { .. } => Snapshot::DnsServers {
             servers: Vec::new(),
+            doh: false,
         },
     }
 }

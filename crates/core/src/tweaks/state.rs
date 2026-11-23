@@ -76,8 +76,13 @@ pub fn snapshot_text(s: &Snapshot) -> String {
         Snapshot::PowerPlan { scheme } => plan_name(scheme),
         Snapshot::ScheduledTask { enabled: true } => "Ligada".to_string(),
         Snapshot::ScheduledTask { enabled: false } => "Desligada".to_string(),
-        Snapshot::DnsServers { servers } if servers.is_empty() => "automático (DHCP)".to_string(),
-        Snapshot::DnsServers { servers } => servers.join(", "),
+        Snapshot::DnsServers { servers, .. } if servers.is_empty() => {
+            "automático (DHCP)".to_string()
+        }
+        Snapshot::DnsServers { servers, doh: true } => {
+            format!("{} (criptografado, DNS sobre HTTPS)", servers.join(", "))
+        }
+        Snapshot::DnsServers { servers, .. } => servers.join(", "),
         Snapshot::Unavailable { reason } => format!("indisponível ({reason})"),
     }
 }

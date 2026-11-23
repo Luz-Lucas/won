@@ -7,6 +7,7 @@ use crate::jobs::{JobId, JobKind, JobRegistry, spawn_job};
 use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::net::bufferbloat::BufferbloatResult;
 use sentinela_core::net::history::{self, Entry, Kind};
+use sentinela_core::net::routes::Comparison;
 use sentinela_core::net::session::{self, AdapterInfo, DnsPreview, DnsReport};
 use sentinela_core::net::trace::Trace;
 use sentinela_core::net::wifi::WifiStatus;
@@ -39,6 +40,8 @@ pub struct NetPage {
     pub wifi_notice: Option<String>,
     pub history: Vec<Entry>,
     pub elevated: bool,
+    /// Servidores que o Windows sabe criptografar (DNS sobre HTTPS).
+    pub doh_known: Vec<String>,
 }
 
 /// Resultado de um job de rede (um por vez).
@@ -49,6 +52,7 @@ pub enum NetResult {
     Trace { trace: Trace },
     Bufferbloat { result: Box<BufferbloatResult> },
     Dns { report: DnsReport },
+    Compare { comparison: Box<Comparison> },
 }
 
 pub fn target_items(all: &[Target], user: &[Target]) -> Vec<TargetItem> {
@@ -74,6 +78,7 @@ fn build_page(targets_path: &Path, history_path: &Path, elevated: bool) -> NetPa
         wifi_notice,
         history: history::load(history_path),
         elevated,
+        doh_known: session::doh_known(),
     }
 }
 
@@ -125,7 +130,7 @@ pub async fn net_target_remove(
     .await
 }
 
-fn find(label: &str) -> Result<Target, String> {
+pub(crate) fn find(label: &str) -> Result<Target, String> {
     session::find_target(
         &session::all_targets(&targets::default_targets_path()),
         label,
@@ -133,7 +138,7 @@ fn find(label: &str) -> Result<Target, String> {
     .ok_or_else(|| format!("destino desconhecido: {label}"))
 }
 
-fn record(entries: Vec<Entry>) {
+pub(crate) fn record(entries: Vec<Entry>) {
     session::record(&history::default_history_path(), entries);
 }
 
@@ -230,6 +235,7 @@ pub fn net_dns_bench(app: AppHandle, jobs: State<'_, Arc<JobRegistry>>) -> Resul
 #[tauri::command]
 pub async fn net_dns_preview(
     resolver: String,
+    doh: bool,
     state: State<'_, TweaksState>,
 ) -> Result<Vec<DnsPreview>, String> {
     let state = state.inner().clone();
@@ -237,6 +243,7 @@ pub async fn net_dns_preview(
         session::dns_preview(
             &resolver,
             &session::routed_adapters(),
+            doh,
             state.backend().as_ref(),
         )
     })
@@ -252,6 +259,7 @@ pub fn dns_activity_text(resolver: &str) -> String {
 #[tauri::command]
 pub async fn net_dns_apply(
     resolver: String,
+    doh: bool,
     state: State<'_, TweaksState>,
 ) -> Result<Vec<ItemResult>, String> {
     let state = state.inner().clone();
@@ -263,6 +271,7 @@ pub async fn net_dns_apply(
         let results = session::apply_dns(
             &resolver,
             &session::routed_adapters(),
+            doh,
             b.as_ref(),
             &default_journal_path(),
         )?;

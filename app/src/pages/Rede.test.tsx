@@ -8,6 +8,8 @@ import { JobsProvider } from "../jobs";
 
 const render = (ui: React.ReactElement) => rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
+vi.mock("../components/Routes", () => ({ default: () => null }));
+
 vi.mock("../api", () => ({
   netPage: vi.fn(),
   netTargetAdd: vi.fn(),
@@ -51,6 +53,7 @@ const netPage = (over: Partial<NetPage> = {}): NetPage => ({
   wifi_notice: null,
   history: [],
   elevated: true,
+  doh_known: ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"],
   ...over,
 });
 
@@ -260,8 +263,54 @@ describe("Rede", () => {
       within(dialog).getByText("DNS do adaptador {A} (IPv4): automático (DHCP) → 8.8.8.8, 8.8.4.4"),
     ).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Aplicar" }));
-    await waitFor(() => expect(api.netDnsApply).toHaveBeenCalledWith("google"));
+    await waitFor(() => expect(api.netDnsApply).toHaveBeenCalledWith("google", false));
     expect(await screen.findByText("DNS aplicado. Desfaça pelo Histórico.")).toBeInTheDocument();
+  });
+
+  it("dns_apply_with_doh", async () => {
+    vi.mocked(api.netDnsBench).mockResolvedValue(7);
+    vi.mocked(api.netDnsPreview).mockResolvedValue([{ adapter: "Ethernet", changes: [] }]);
+    vi.mocked(api.netDnsApply).mockResolvedValue([
+      { tweak_id: "dns-a", ok: true, changed: true, message: "aplicada" },
+    ]);
+    render(<Rede />);
+    await userEvent.click(await screen.findByRole("button", { name: "Medir DNS" }));
+    await finish({
+      op: "dns",
+      report: {
+        rows: [
+          { name: "Google", addr: "8.8.8.8", median_ms: 5, answered: 9, sent: 9, current: false, resolver: "google" },
+        ],
+        best: "google",
+        keep_current: false,
+        advice: "Google respondeu mais rápido.",
+      },
+    });
+    await userEvent.click(screen.getByLabelText("Criptografar (DNS sobre HTTPS)"));
+    await userEvent.click(screen.getByRole("button", { name: "Usar o mais rápido" }));
+    expect(api.netDnsPreview).toHaveBeenCalledWith("google", true);
+    const dialog = await screen.findByRole("dialog", { name: "Usar o DNS Google criptografado?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Aplicar" }));
+    await waitFor(() => expect(api.netDnsApply).toHaveBeenCalledWith("google", true));
+  });
+
+  it("no DoH option for a server Windows cannot encrypt", async () => {
+    vi.mocked(api.netDnsBench).mockResolvedValue(7);
+    render(<Rede />);
+    await userEvent.click(await screen.findByRole("button", { name: "Medir DNS" }));
+    await finish({
+      op: "dns",
+      report: {
+        rows: [
+          { name: "AdGuard", addr: "94.140.14.14", median_ms: 5, answered: 9, sent: 9, current: false, resolver: "adguard" },
+        ],
+        best: "adguard",
+        keep_current: false,
+        advice: "AdGuard respondeu mais rápido.",
+      },
+    });
+    expect(screen.getByRole("button", { name: "Usar o mais rápido" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Criptografar (DNS sobre HTTPS)")).toBeNull();
   });
 
   it("keeps the current DNS when it is the fastest", async () => {

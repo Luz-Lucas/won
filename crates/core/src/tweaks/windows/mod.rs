@@ -7,7 +7,7 @@ mod dns;
 mod network;
 mod power;
 mod registry;
-mod service;
+pub(crate) mod service;
 mod tasks;
 
 pub use network::configured_interfaces;
@@ -122,9 +122,10 @@ impl SystemBackend for WindowsBackend {
             }),
             Action::DnsServers {
                 interface, ipv6, ..
-            } => Ok(Snapshot::DnsServers {
-                servers: dns::read_servers(interface, *ipv6)?,
-            }),
+            } => {
+                let (servers, doh) = dns::read_servers(interface, *ipv6)?;
+                Ok(Snapshot::DnsServers { servers, doh })
+            }
         }
     }
 
@@ -166,8 +167,8 @@ impl SystemBackend for WindowsBackend {
                 Action::DnsServers {
                     interface, ipv6, ..
                 },
-                Snapshot::DnsServers { servers },
-            ) => dns::write_servers(interface, *ipv6, servers),
+                Snapshot::DnsServers { servers, doh },
+            ) => dns::write_servers(interface, *ipv6, servers, *doh),
             _ => Err("estado incompatível com a ação".to_string()),
         }
     }

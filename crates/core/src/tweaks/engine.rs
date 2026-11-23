@@ -1221,6 +1221,7 @@ mod tests {
                     }
                     Action::DnsServers { .. } => Snapshot::DnsServers {
                         servers: vec!["192.0.2.53".into()],
+                        doh: false,
                     },
                 };
                 assert_ne!(s, target);

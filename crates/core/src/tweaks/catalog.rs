@@ -60,6 +60,12 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
         Hive::Hklm,
         "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
     ),
+    // QoS por jogo (`qos-…`) e o "Do not use NLA" compartilhado (`qos-allow-local`).
+    (Hive::Hklm, "SOFTWARE\\Policies\\Microsoft\\Windows\\QoS"),
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\QoS",
+    ),
     // Economia de energia/EEE por adaptador (ajuste gerado `nic-…`).
     (
         Hive::Hklm,
@@ -325,9 +331,13 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
                 interface,
                 ipv6,
                 servers,
+                doh,
             } => {
                 if t.group != Group::Rede {
                     return Err(format!("{id}: DNS só no grupo Rede"));
+                }
+                if *doh && servers.is_empty() {
+                    return Err(format!("{id}: DNS sobre HTTPS exige servidores fixos"));
                 }
                 if !is_braced_guid(interface) {
                     return Err(format!("{id}: adaptador inválido: {interface}"));

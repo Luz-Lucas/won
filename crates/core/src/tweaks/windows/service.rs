@@ -53,6 +53,26 @@ fn open_service(name: &str, access: u32) -> Result<Option<ScHandle>, String> {
     Ok(Some(ScHandle(svc)))
 }
 
+/// O serviço está rodando? `Ok(None)` quando ele não existe.
+pub(crate) fn running(name: &str) -> Result<Option<bool>, String> {
+    use windows_sys::Win32::System::Services::{
+        QueryServiceStatus, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START_PENDING,
+        SERVICE_STATUS,
+    };
+    let Some(svc) = open_service(name, SERVICE_QUERY_STATUS)? else {
+        return Ok(None);
+    };
+    let mut st = SERVICE_STATUS::default();
+    // SAFETY: `svc` é válido e `st` é um ponteiro de saída válido.
+    if unsafe { QueryServiceStatus(svc.0, &mut st) } == 0 {
+        return Err(win_err("não foi possível ler o serviço", last_error()));
+    }
+    Ok(Some(matches!(
+        st.dwCurrentState,
+        SERVICE_RUNNING | SERVICE_START_PENDING
+    )))
+}
+
 fn from_raw(start: u32) -> Result<StartType, String> {
     match start {
         SERVICE_AUTO_START => Ok(StartType::Automatic),
