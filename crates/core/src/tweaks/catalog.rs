@@ -60,6 +60,11 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
         Hive::Hklm,
         "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces",
     ),
+    // Economia de energia/EEE por adaptador (ajuste gerado `nic-…`).
+    (
+        Hive::Hklm,
+        "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}",
+    ),
 ];
 
 /// Caminhos (da folha para cima) que o desfazer pode apagar se estiverem vazios:

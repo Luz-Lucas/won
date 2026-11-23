@@ -57,7 +57,13 @@ pub fn nagle_tweak(guids: &[String]) -> Option<Tweak> {
 #[cfg(windows)]
 pub fn system_generated() -> Vec<Tweak> {
     let guids = super::windows::configured_interfaces();
-    nagle_tweak(&guids).into_iter().collect()
+    let mut out: Vec<Tweak> = nagle_tweak(&guids).into_iter().collect();
+    out.extend(
+        crate::net::adapter::system_nics()
+            .iter()
+            .filter_map(crate::net::adapter::nic_tweak),
+    );
+    out
 }
 
 #[cfg(not(windows))]

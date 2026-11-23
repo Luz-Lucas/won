@@ -329,6 +329,62 @@ pub fn adapters() -> Vec<Adapter> {
     out
 }
 
+/// A conexão principal (adaptadores ligados com gateway) é só por Wi‑Fi?
+pub fn primary_is_wifi() -> bool {
+    let routed: Vec<Adapter> = adapters()
+        .into_iter()
+        .filter(|a| a.up && !a.gateways.is_empty())
+        .collect();
+    !routed.is_empty() && routed.iter().all(|a| a.if_type == 71)
+}
+
+fn reg_get(path: &str, name: &str, flags: u32, buf: &mut [u8]) -> Option<usize> {
+    use windows_sys::Win32::System::Registry::{HKEY_LOCAL_MACHINE, RegGetValueW};
+    let wide = |s: &str| {
+        s.encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>()
+    };
+    let (wpath, wname) = (wide(path), wide(name));
+    let mut size = buf.len() as u32;
+    // SAFETY: `wpath` e `wname` são NUL-terminados; `buf` tem `size` bytes.
+    let rc = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            wpath.as_ptr(),
+            wname.as_ptr(),
+            flags,
+            null_mut(),
+            buf.as_mut_ptr().cast(),
+            &mut size,
+        )
+    };
+    (rc == 0).then_some(size as usize)
+}
+
+/// REG_SZ em HKLM, ou `None` se não existe.
+pub(crate) fn reg_sz(path: &str, name: &str) -> Option<String> {
+    use windows_sys::Win32::System::Registry::RRF_RT_REG_SZ;
+    let mut buf = vec![0u8; 1024];
+    let n = reg_get(path, name, RRF_RT_REG_SZ, &mut buf)?;
+    let units: Vec<u16> = buf[..n]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
+        .take_while(|&u| u != 0)
+        .collect();
+    Some(String::from_utf16_lossy(&units))
+}
+
+/// REG_DWORD em HKLM, ou `None` se não existe.
+pub(crate) fn reg_dword(path: &str, name: &str) -> Option<u32> {
+    use windows_sys::Win32::System::Registry::RRF_RT_REG_DWORD;
+    let mut buf = [0u8; 4];
+    reg_get(path, name, RRF_RT_REG_DWORD, &mut buf)?;
+    Some(u32::from_le_bytes(buf))
+}
+
 /// Gateways (roteadores) dos adaptadores ligados, IPv4 primeiro, sem repetir.
 pub fn default_gateways() -> Vec<IpAddr> {
     let mut g: Vec<IpAddr> = adapters()
