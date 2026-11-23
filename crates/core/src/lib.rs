@@ -16,4 +16,5 @@ pub mod startup;
 pub mod status;
 pub mod tweaks;
 pub mod updater;
+pub mod updates;
 pub mod walker;

@@ -50,6 +50,11 @@ pub const ALLOWED_ROOTS: &[(Hive, &str)] = &[
         Hive::Hklm,
         "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
     ),
+    // Modo "Pausado até…" das Atualizações do Windows.
+    (
+        Hive::Hklm,
+        "SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings",
+    ),
     // ACK imediato por adaptador (ajuste gerado `nagle-off`).
     (
         Hive::Hklm,
