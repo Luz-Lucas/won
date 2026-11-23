@@ -1,6 +1,6 @@
 # Sentinela — Fase N1: rede (medição, rota, bufferbloat, DNS, adaptador) — Plano de implementação
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Uma página **Rede** que mede antes de mudar qualquer coisa: latência, *jitter* e perda até o roteador, DNS públicos e destinos do usuário; rota salto a salto mostrando onde o atraso começa; teste de *bufferbloat*; histórico para comparar antes e depois; DNS mais rápido medido na própria máquina e aplicado por adaptador (com desfazer); e os ajustes locais de adaptador, mais o estado do Wi‑Fi.
 
@@ -39,9 +39,9 @@
 - `measure(prober, target, count, interval) -> Measurement { sent, received, loss_pct, min, avg, max, jitter }`; *jitter* = média das diferenças absolutas entre respostas consecutivas.
 - Histórico: `%LOCALAPPDATA%\Sentinela\net-history.json`, até 200 entradas (`{ at, kind, target, resumo }`), mais recentes primeiro.
 
-- [ ] **Step 1: Testes que falham:** `stats_mean_jitter_and_loss`, `no_reply_is_not_zero_ms`, `tcp_prober_against_local_server`, `tcp_prober_refused_is_error`, `user_targets_parse_host_and_port`, `history_caps_and_orders`. `#[ignore]`: ICMP real até o gateway.
-- [ ] **Step 2–4:** FAIL → implementar → PASS.
-- [ ] **Step 5: Commit** — `feat(core): network latency, jitter and loss measurement`
+- [x] **Step 1: Testes que falham:** `stats_mean_jitter_and_loss`, `no_reply_is_not_zero_ms`, `tcp_prober_against_local_server`, `tcp_prober_refused_is_error`, `user_targets_parse_host_and_port`, `history_caps_and_orders`. `#[ignore]`: ICMP real até o gateway.
+- [x] **Step 2–4:** FAIL → implementar → PASS.
+- [x] **Step 5: Commit** — `feat(core): network latency, jitter and loss measurement`
 
 ### Task 2: Rota (traceroute) e *bufferbloat*
 
@@ -51,9 +51,9 @@
 - `where_delay_starts(hops)`: o primeiro salto cuja latência mínima sobe mais de 20 ms em relação ao anterior que respondeu **e** se mantém nos saltos seguintes (um salto isolado lento é roteador que despriorizou o ICMP, não atraso real).
 - *Bufferbloat*: latência ao roteador parado (10 sondas) × durante um download de teste (`https://speed.cloudflare.com/__down?bytes=25000000`, blocos de 25 MB em sequência — pedidos maiores recebem 403 —, por até 15 s, cancelável). Diagnóstico pelo aumento da mediana: até 30 ms "bom"; até 100 ms "moderado"; acima "alto: ative o SQM/QoS no roteador".
 
-- [ ] **Step 1: Testes que falham:** `trace_classifies_home_and_isp`, `delay_start_ignores_isolated_slow_hop`, `delay_start_ignores_timeouts`, `bufferbloat_grades`, `bufferbloat_without_baseline_reply_is_unknown`. `#[ignore]`: traceroute real até `1.1.1.1`.
-- [ ] **Step 2–4:** FAIL → implementar → PASS.
-- [ ] **Step 5: Commit** — `feat(core): traceroute with delay start and bufferbloat test`
+- [x] **Step 1: Testes que falham:** `trace_classifies_home_and_isp`, `delay_start_ignores_isolated_slow_hop`, `delay_start_ignores_timeouts`, `bufferbloat_grades`, `bufferbloat_without_baseline_reply_is_unknown`. `#[ignore]`: traceroute real até `1.1.1.1`.
+- [x] **Step 2–4:** FAIL → implementar → PASS.
+- [x] **Step 5: Commit** — `feat(core): traceroute with delay start and bufferbloat test`
 
 ### Task 3: DNS mais rápido
 
@@ -64,9 +64,9 @@
 - Grupo novo `Rede`. Ajuste gerado `dns-{iface}` com IPv4 (e IPv6 quando houver) do resolvedor escolhido.
 - *Decisão:* o DNS sobre HTTPS do Windows fica para a N2 — a configuração por servidor ainda precisa ser conferida build a build, e o ganho não é de latência.
 
-- [ ] **Step 1: Testes que falham:** `dns_query_and_response_roundtrip`, `benchmark_against_fake_resolvers` (UDP local, um lento e um que não responde), `dns_apply_and_undo_restores_dhcp`, `dns_apply_and_undo_restores_static`, `dns_action_validation`. `#[ignore]`: leitura real do DNS dos adaptadores.
-- [ ] **Step 2–4:** FAIL → implementar → PASS.
-- [ ] **Step 5: Commit** — `feat: measure DNS resolvers and apply the fastest per adapter`
+- [x] **Step 1: Testes que falham:** `dns_query_and_response_roundtrip`, `benchmark_against_fake_resolvers` (UDP local, um lento e um que não responde), `dns_apply_and_undo_restores_dhcp`, `dns_apply_and_undo_restores_static`, `dns_action_validation`. `#[ignore]`: leitura real do DNS dos adaptadores.
+- [x] **Step 2–4:** FAIL → implementar → PASS.
+- [x] **Step 5: Commit** — `feat: measure DNS resolvers and apply the fastest per adapter`
 
 ### Task 4: Ajustes de adaptador e Wi‑Fi
 
@@ -75,9 +75,9 @@
 - Ajuste gerado `nic-{iface}` (situacional, admin, reboot) por adaptador físico, só com as palavras-chave que o driver tem em `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}\NNNN` (ligado pelo `NetCfgInstanceId`): `*EEE` = "0" (Energy-Efficient Ethernet), `*InterruptModeration` = "0", `PnPCapabilities` = 24 (o Windows não desliga o adaptador para economizar energia). Os valores das palavras-chave padronizadas são REG_SZ. "Green Ethernet" é de cada fabricante (sem palavra-chave padrão) e fica de fora.
 - Wi‑Fi (`WlanQueryInterface`): se a conexão ativa é Wi‑Fi, SSID, sinal (%) e canal; aviso "Jogar pelo cabo é mais estável que pelo Wi‑Fi".
 
-- [ ] **Step 1: Testes que falham:** `nic_tweak_only_existing_keywords`, `nic_tweak_skips_virtual_adapters`, `wifi_channel_from_frequency`. `#[ignore]`: leitura real dos adaptadores e do Wi‑Fi.
-- [ ] **Step 2–4:** FAIL → implementar → PASS.
-- [ ] **Step 5: Commit** — `feat(core): network adapter tweaks and Wi-Fi status`
+- [x] **Step 1: Testes que falham:** `nic_tweak_only_existing_keywords`, `nic_tweak_skips_virtual_adapters`, `wifi_channel_from_frequency`. `#[ignore]`: leitura real dos adaptadores e do Wi‑Fi.
+- [x] **Step 2–4:** FAIL → implementar → PASS.
+- [x] **Step 5: Commit** — `feat(core): network adapter tweaks and Wi-Fi status`
 
 ### Task 5: Página Rede
 
@@ -87,9 +87,9 @@
 - Seções: **Medir** (destinos com latência média, *jitter*, perda; "Adicionar destino"; "Rastrear rota" por destino, com a tabela de saltos, a divisão casa/provedor e "o atraso começa aqui"), **Bufferbloat** (botão, resultado e diagnóstico), **DNS** (medir, tabela ordenada, "Usar o mais rápido" com prévia por adaptador, desfazer pelo Histórico; aviso de que afeta nomes, não o ping), **Adaptador** (interruptores dos ajustes gerados, como na Personalizar) e **Wi‑Fi** (estado e aviso), **Histórico** (últimas medições).
 - Texto fixo no topo: "A rota até o servidor do jogo é decidida pelo seu provedor e pelas redes no caminho. O Sentinela mede, ajusta o que é do seu computador e mostra o antes e depois."
 
-- [ ] **Step 1: Testes que falham** (Vitest): `measure_runs_as_job_and_shows_results`, `trace_marks_delay_start`, `bufferbloat_shows_grade`, `dns_apply_asks_confirmation_with_preview`, `adapter_switch_asks_confirmation`, `wifi_notice`, `sidebar_has_rede`.
-- [ ] **Step 2–4:** FAIL → implementar → PASS.
-- [ ] **Step 5: Commit** — `feat(gui): network page`
+- [x] **Step 1: Testes que falham** (Vitest): `measure_runs_as_job_and_shows_results`, `trace_marks_delay_start`, `bufferbloat_shows_grade`, `dns_apply_asks_confirmation_with_preview`, `adapter_switch_asks_confirmation`, `wifi_notice`, `sidebar_has_rede`.
+- [x] **Step 2–4:** FAIL → implementar → PASS.
+- [x] **Step 5: Commit** — `feat(gui): network page`
 
 ### Task 6: CLI e roteiro manual
 
@@ -97,7 +97,7 @@
 
 - `sentinela net test [<destino>...] [--count N] [--json]`, `net trace <destino> [--json]`, `net bufferbloat [--json]`, `net dns [--json]` (só mede), `net history [--json]`.
 
-- [ ] **Step 1: Testes que falham** (sem internet e sem mudar nada): `net_test_against_local_tcp_target`, `net_trace_unknown_host_exits_2`, `net_history_runs`, `net_dns_help`.
-- [ ] **Step 2–4:** FAIL → implementar → PASS.
-- [ ] **Step 5:** Roteiro manual: medição por cabo e por Wi‑Fi, rota com o atraso no Wi‑Fi × no provedor, *bufferbloat* com e sem SQM, DNS aplicado e desfeito (DHCP e fixo), ajustes de adaptador e reinício.
-- [ ] **Step 6: Commit** — `feat(cli): net commands; docs for phase N1`
+- [x] **Step 1: Testes que falham** (sem internet e sem mudar nada): `net_test_against_local_tcp_target`, `net_trace_unknown_host_exits_2`, `net_history_runs`, `net_dns_help`.
+- [x] **Step 2–4:** FAIL → implementar → PASS.
+- [x] **Step 5:** Roteiro manual: medição por cabo e por Wi‑Fi, rota com o atraso no Wi‑Fi × no provedor, *bufferbloat* com e sem SQM, DNS aplicado e desfeito (DHCP e fixo), ajustes de adaptador e reinício.
+- [x] **Step 6: Commit** — `feat(cli): net commands; docs for phase N1`
