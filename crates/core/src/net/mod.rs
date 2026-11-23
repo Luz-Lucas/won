@@ -11,6 +11,7 @@ pub mod bufferbloat;
 pub mod dns;
 pub mod history;
 pub mod probe;
+pub mod routes;
 pub mod session;
 pub mod stats;
 pub mod targets;

@@ -7,7 +7,7 @@ mod dns;
 mod network;
 mod power;
 mod registry;
-mod service;
+pub(crate) mod service;
 mod tasks;
 
 pub use network::configured_interfaces;

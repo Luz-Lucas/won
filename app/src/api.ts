@@ -618,7 +618,7 @@ export interface WifiStatus {
 
 export interface NetHistoryEntry {
   at: string;
-  kind: "latency" | "trace" | "bufferbloat" | "dns";
+  kind: "latency" | "trace" | "bufferbloat" | "dns" | "route";
   target: string;
   summary: string;
 }

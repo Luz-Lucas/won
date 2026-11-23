@@ -14,6 +14,7 @@ use crate::tweaks::{Action, Effect, Evidence, Group, Hive, Tweak};
 pub mod epic;
 pub mod qos;
 pub mod riot;
+pub mod running;
 pub mod steam;
 #[cfg(windows)]
 pub mod windows;

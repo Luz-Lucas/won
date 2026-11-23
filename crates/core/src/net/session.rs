@@ -380,6 +380,57 @@ pub fn record(path: &Path, entries: Vec<Entry>) {
     }
 }
 
+/// As rotas alternativas desta máquina (WARP, túneis, serviços pagos).
+#[cfg(windows)]
+pub fn list_routes(elevated: bool) -> Vec<super::routes::Route> {
+    use super::routes::RouteBackend;
+    super::routes::windows::SystemRoutes::new(elevated).routes()
+}
+
+#[cfg(not(windows))]
+pub fn list_routes(_elevated: bool) -> Vec<super::routes::Route> {
+    Vec::new()
+}
+
+/// Compara a conexão atual com as rotas `ids` (as controláveis) até `target`.
+#[cfg(windows)]
+pub fn run_compare(
+    target: &Target,
+    ids: &[String],
+    elevated: bool,
+    opts: super::routes::CompareOptions,
+    cancel: &AtomicBool,
+    on_step: impl FnMut(usize, usize, &str),
+) -> super::routes::Comparison {
+    use super::routes::RouteBackend;
+    let backend = super::routes::windows::SystemRoutes::new(elevated);
+    let chosen: Vec<super::routes::Route> = backend
+        .routes()
+        .into_iter()
+        .filter(|r| r.controllable && ids.contains(&r.id))
+        .collect();
+    super::routes::compare(&backend, prober(), target, &chosen, opts, cancel, on_step)
+}
+
+#[cfg(not(windows))]
+pub fn run_compare(
+    target: &Target,
+    _ids: &[String],
+    _elevated: bool,
+    _opts: super::routes::CompareOptions,
+    _cancel: &AtomicBool,
+    _on_step: impl FnMut(usize, usize, &str),
+) -> super::routes::Comparison {
+    super::routes::Comparison {
+        target: target.clone(),
+        rows: Vec::new(),
+        best: None,
+        advice: "Comparar rotas só funciona no Windows.".into(),
+        errors: Vec::new(),
+        interrupted: false,
+    }
+}
+
 /// Servidores que o Windows sabe criptografar (DNS sobre HTTPS).
 #[cfg(windows)]
 pub fn doh_known() -> Vec<String> {

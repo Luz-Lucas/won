@@ -259,6 +259,7 @@ fn kind_text(k: &Kind) -> &'static str {
         Kind::Trace => "rota",
         Kind::Bufferbloat => "bufferbloat",
         Kind::Dns => "DNS",
+        Kind::Route => "rotas",
     }
 }
 

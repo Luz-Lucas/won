@@ -51,6 +51,7 @@ const HISTORY_KIND: Record<NetHistoryEntry["kind"], string> = {
   trace: "Rota",
   bufferbloat: "Bufferbloat",
   dns: "DNS",
+  route: "Rotas",
 };
 
 const ADMIN = "requer administrador";
