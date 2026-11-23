@@ -8,6 +8,8 @@ import { JobsProvider } from "../jobs";
 
 const render = (ui: React.ReactElement) => rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
+vi.mock("../components/Routes", () => ({ default: () => null }));
+
 vi.mock("../api", () => ({
   netPage: vi.fn(),
   netTargetAdd: vi.fn(),

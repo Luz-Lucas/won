@@ -3,6 +3,7 @@ pub mod clean;
 pub mod disk;
 pub mod games;
 pub mod net;
+pub mod routes;
 pub mod scan;
 pub mod settings;
 pub mod signatures;

@@ -7,6 +7,7 @@ use crate::jobs::{JobId, JobKind, JobRegistry, spawn_job};
 use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::net::bufferbloat::BufferbloatResult;
 use sentinela_core::net::history::{self, Entry, Kind};
+use sentinela_core::net::routes::Comparison;
 use sentinela_core::net::session::{self, AdapterInfo, DnsPreview, DnsReport};
 use sentinela_core::net::trace::Trace;
 use sentinela_core::net::wifi::WifiStatus;
@@ -51,6 +52,7 @@ pub enum NetResult {
     Trace { trace: Trace },
     Bufferbloat { result: Box<BufferbloatResult> },
     Dns { report: DnsReport },
+    Compare { comparison: Box<Comparison> },
 }
 
 pub fn target_items(all: &[Target], user: &[Target]) -> Vec<TargetItem> {
@@ -128,7 +130,7 @@ pub async fn net_target_remove(
     .await
 }
 
-fn find(label: &str) -> Result<Target, String> {
+pub(crate) fn find(label: &str) -> Result<Target, String> {
     session::find_target(
         &session::all_targets(&targets::default_targets_path()),
         label,
@@ -136,7 +138,7 @@ fn find(label: &str) -> Result<Target, String> {
     .ok_or_else(|| format!("destino desconhecido: {label}"))
 }
 
-fn record(entries: Vec<Entry>) {
+pub(crate) fn record(entries: Vec<Entry>) {
     session::record(&history::default_history_path(), entries);
 }
 

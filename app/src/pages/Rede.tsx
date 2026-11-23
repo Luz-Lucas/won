@@ -31,6 +31,7 @@ import type {
   UndoReport,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Routes from "../components/Routes";
 import { humanDate } from "../format";
 import { useJob } from "../jobs";
 
@@ -121,7 +122,7 @@ export default function Rede() {
       });
     else if (r.op === "trace") setTrace(r.trace);
     else if (r.op === "bufferbloat") setBloat(r.result);
-    else setDns(r.report);
+    else if (r.op === "dns") setDns(r.report);
     netPage().then(setPage, () => {});
   }, [net.state, net.result]);
 
@@ -426,6 +427,8 @@ export default function Rede() {
               )}
             </div>
           )}
+
+          <Routes targets={page.targets} />
 
           <h2>Bufferbloat</h2>
           <p className="muted">

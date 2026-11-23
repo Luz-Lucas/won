@@ -147,6 +147,13 @@ pub fn run() {
             commands::net::net_dns_bench,
             commands::net::net_dns_preview,
             commands::net::net_dns_apply,
+            commands::routes::net_routes_page,
+            commands::routes::net_tunnel_import,
+            commands::routes::net_tunnel_remove,
+            commands::routes::net_route_set,
+            commands::routes::net_game_route_set,
+            commands::routes::net_wifi_hold_set,
+            commands::routes::net_compare,
         ])
         .build(tauri::generate_context!())
         .expect("erro ao iniciar o Sentinela")
