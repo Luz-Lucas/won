@@ -126,7 +126,7 @@ Os modos são um `choice` gerado (`windows-update`) do grupo `Atualizacoes`, tod
 
 **Files:** `app/src/pages/Inicio.tsx`, `app/src/pages/Aplicativos.tsx`, `app/src-tauri/src/commands/updates.rs` (+ testes).
 
-- **Início:** em Bloqueado ou Pausado, cartão "Atualizações do Windows: bloqueadas há N dias" (a partir do `applied_at` do modo no diário) com o botão **"Atualizar agora"**.
+- **Início:** em Bloqueado ou Pausado, cartão "Atualizações do Windows: bloqueadas há N dias" (a partir do `applied_at` do modo no diário) com o botão **"Atualizar agora"**. *Decisão na implementação:* o Início lê só o diário (`mode_from_journal`), sem consultar serviços e tarefas: no modo Bloqueado essa leitura leva segundos e o Início recarrega a cada operação. A conferência completa (estado "Parcial") fica na seção de Ajustes. A página Aplicativos usa o mesmo atalho (`updates_mode`).
 - **Atualizar agora:** desfaz o modo (com confirmação), abre `ms-settings:windowsupdate` e mostra "Atualizações liberadas temporariamente" com **"Voltar a {modo}"**. Detectar o fim da instalação de forma confiável não é possível sem ficar consultando o serviço; nesta fase a volta é por esse botão, e o Início lembra a cada abertura enquanto o modo estiver suspenso. Divergência do §6.5 registrada.
 - **Aplicativos:** com o modo Bloqueado ativo, aviso no topo de que instalações da Microsoft Store e alguns instaladores podem falhar, com o mesmo "Atualizar agora".
 

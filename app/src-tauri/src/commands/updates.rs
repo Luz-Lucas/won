@@ -204,6 +204,16 @@ pub async fn updates_status(state: State<'_, TweaksState>) -> Result<UpdatesPage
     blocking(move || page_now(&state)).await
 }
 
+/// Só o modo, pelo diário (sem ler serviços e tarefas): para avisos rápidos.
+#[tauri::command]
+pub async fn updates_mode() -> Result<Mode, String> {
+    blocking(|| {
+        let journal = Journal::read_for_list(&default_journal_path())?;
+        Ok(updates::mode_from_journal(&journal).0)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn updates_preview(
     mode: Mode,

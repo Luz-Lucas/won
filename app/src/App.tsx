@@ -79,7 +79,12 @@ function Shell() {
       <Sidebar current={page} onNavigate={setPage} elevated={status?.elevated} />
       <main className="content">
         {page === "inicio" && (
-          <Inicio status={status} error={statusError} onNavigate={setPage} />
+          <Inicio
+            status={status}
+            error={statusError}
+            onNavigate={setPage}
+            onChanged={refreshStatus}
+          />
         )}
         {page === "jogos" && <Jogos />}
         {page === "limpeza" && <Limpeza />}

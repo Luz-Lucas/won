@@ -30,6 +30,11 @@ export interface SystemStatus {
   activity: ActivityEntry[];
   tweaks_applied: number;
   tweaks_total: number;
+  updates_mode: UpdateMode;
+  /** Dias desde que o modo de atualização foi aplicado. */
+  updates_days: number | null;
+  /** Modo suspenso por "Atualizar agora". */
+  updates_suspended: UpdateMode | null;
 }
 
 export const systemStatus = () => invoke<SystemStatus>("system_status");
@@ -412,6 +417,8 @@ export interface UpdatesPage {
 }
 
 export const updatesStatus = () => invoke<UpdatesPage>("updates_status");
+/** Só o modo atual (rápido, pelo diário). */
+export const updatesMode = () => invoke<UpdateMode>("updates_mode");
 export const updatesPreview = (mode: UpdateMode, until: string | null) =>
   invoke<TweakChange[]>("updates_preview", { mode, until });
 export const updatesSetMode = (mode: UpdateMode, until: string | null) =>

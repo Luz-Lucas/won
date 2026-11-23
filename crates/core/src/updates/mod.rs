@@ -260,6 +260,18 @@ fn active_entry(journal: &Journal) -> Option<&JournalEntry> {
         .find(|e| Mode::from_tweak_id(&e.tweak_id).is_some())
 }
 
+/// Modo ativo e desde quando, só pelo diário (sem ler o sistema: rápido o
+/// bastante para a página Início).
+pub fn mode_from_journal(journal: &Journal) -> (Mode, Option<String>) {
+    match active_entry(journal) {
+        Some(e) => (
+            Mode::from_tweak_id(&e.tweak_id).unwrap_or(Mode::Default),
+            Some(e.applied_at.clone()),
+        ),
+        None => (Mode::Default, None),
+    }
+}
+
 pub fn current(journal: &Journal, b: &dyn SystemBackend) -> ModeState {
     let Some(entry) = active_entry(journal) else {
         return ModeState {

@@ -65,6 +65,9 @@ const status = (over: Partial<SystemStatus["db"]> = {}): SystemStatus => ({
   activity: [],
   tweaks_applied: 0,
   tweaks_total: 0,
+  updates_mode: "default",
+  updates_days: null,
+  updates_suspended: null,
 });
 
 const summary = (over: Partial<UpdateSummary> = {}): UpdateSummary => ({

@@ -130,6 +130,7 @@ pub fn run() {
             commands::games::games_add,
             commands::games::games_remove,
             commands::updates::updates_status,
+            commands::updates::updates_mode,
             commands::updates::updates_preview,
             commands::updates::updates_set_mode,
             commands::updates::updates_update_now,
