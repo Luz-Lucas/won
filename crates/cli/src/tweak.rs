@@ -70,7 +70,7 @@ pub fn run(cmd: TweakCommand) -> Result<i32> {
 }
 
 /// `SENTINELA_TWEAKS_JOURNAL` (quando definida e não vazia) ou o caminho padrão.
-fn journal_path() -> PathBuf {
+pub(crate) fn journal_path() -> PathBuf {
     match std::env::var_os("SENTINELA_TWEAKS_JOURNAL") {
         Some(p) if !p.is_empty() => PathBuf::from(p),
         _ => default_journal_path(),

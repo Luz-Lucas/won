@@ -7,10 +7,12 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 
 use crate::apps::{self, AppsCommand};
+use crate::games::{self, GamesCommand};
 use crate::progress::{self, TerminalProgress};
 use crate::report::{self, human_bytes};
 use crate::startup::{self, StartupCommand};
 use crate::tweak::{self, TweakCommand};
+use crate::updates::{self, UpdatesCommand};
 use sentinela_core::clean::category::Env;
 use sentinela_core::clean::{self, CleanReport, platform};
 use sentinela_core::full::{self, FullOptions};
@@ -124,6 +126,16 @@ enum Command {
         #[command(subcommand)]
         action: StartupCommand,
     },
+    /// Modos de Atualizações do Windows (padrão, só segurança, pausado, bloqueado)
+    Updates {
+        #[command(subcommand)]
+        action: UpdatesCommand,
+    },
+    /// Jogos detectados e GPU de alto desempenho por jogo
+    Games {
+        #[command(subcommand)]
+        action: GamesCommand,
+    },
     /// Mostra versão, banco de assinaturas e privilégios
     Info,
 }
@@ -201,6 +213,8 @@ fn dispatch(command: Command) -> Result<i32> {
         Command::Tweak { action } => tweak::run(action),
         Command::Apps { action } => apps::run(action),
         Command::Startup { action } => startup::run(action),
+        Command::Updates { action } => updates::run(action),
+        Command::Games { action } => games::run(action),
         Command::Info => cmd_info(),
     }
 }
