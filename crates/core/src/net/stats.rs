@@ -18,6 +18,8 @@ pub struct Measurement {
     /// `None` quando nada respondeu: nunca "0 ms".
     pub min_ms: Option<f64>,
     pub avg_ms: Option<f64>,
+    /// Mediana: resiste a uma sonda isolada muito lenta.
+    pub median_ms: Option<f64>,
     pub max_ms: Option<f64>,
     /// Média das diferenças entre respostas seguidas; precisa de duas respostas.
     pub jitter_ms: Option<f64>,
@@ -48,7 +50,18 @@ pub fn summarize(
     };
     let jitter_ms = (ok.len() >= 2)
         .then(|| ok.windows(2).map(|w| (w[1] - w[0]).abs()).sum::<f64>() / (ok.len() - 1) as f64);
+    let median_ms = (!ok.is_empty()).then(|| {
+        let mut s = ok.clone();
+        s.sort_by(f64::total_cmp);
+        let mid = s.len() / 2;
+        if s.len() % 2 == 0 {
+            (s[mid - 1] + s[mid]) / 2.0
+        } else {
+            s[mid]
+        }
+    });
     Measurement {
+        median_ms,
         target,
         addr,
         sent,
@@ -114,6 +127,8 @@ mod tests {
         assert_eq!(m.min_ms, Some(10.0));
         assert_eq!(m.max_ms, Some(30.0));
         assert!((m.avg_ms.unwrap() - 19.0).abs() < 1e-9);
+        // Respostas 10, 20, 16, 30 → mediana (16 + 20) / 2.
+        assert_eq!(m.median_ms, Some(18.0));
         // |20-10| + |16-20| + |30-16| = 28, em 3 intervalos (a perda não conta).
         assert!((m.jitter_ms.unwrap() - 28.0 / 3.0).abs() < 1e-9);
         assert_eq!(m.error.as_deref(), Some("sem resposta"));

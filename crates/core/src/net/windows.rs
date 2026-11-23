@@ -186,6 +186,28 @@ impl Prober for SystemProber {
     }
 }
 
+/// Saltos da rota: ICMP com TTL limitado; o roteador do salto responde com
+/// "TTL expirado" e o destino com eco normal.
+pub struct SystemHopProber;
+
+impl super::trace::HopProber for SystemHopProber {
+    fn hop(
+        &self,
+        addr: IpAddr,
+        ttl: u8,
+        timeout: Duration,
+    ) -> Result<(IpAddr, bool, Duration), String> {
+        let r = icmp_echo(addr, Some(ttl), timeout)?;
+        if r.reached() {
+            Ok((r.from, true, r.rtt))
+        } else if r.ttl_expired() {
+            Ok((r.from, false, r.rtt))
+        } else {
+            Err(status_text(r.status))
+        }
+    }
+}
+
 /// Um adaptador de rede como o Windows o vê agora.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Adapter {
@@ -330,6 +352,24 @@ mod tests {
         let r = icmp_echo("127.0.0.1".parse().unwrap(), None, Duration::from_secs(2)).unwrap();
         assert!(r.reached());
         assert_eq!(r.from, "127.0.0.1".parse::<IpAddr>().unwrap());
+    }
+
+    /// Precisa de internet: rota real até 1.1.1.1.
+    #[test]
+    #[ignore]
+    fn real_traceroute() {
+        let t = super::super::trace::trace(
+            &SystemHopProber,
+            &super::super::parse_target("1.1.1.1").unwrap(),
+            20,
+            2,
+            Duration::from_secs(1),
+            &std::sync::atomic::AtomicBool::new(false),
+        );
+        for h in &t.hops {
+            println!("{} {:?} {:?} {:?}", h.ttl, h.addr, h.rtts_ms, h.segment);
+        }
+        println!("chegou={} atraso começa em {:?}", t.reached, t.delay_start);
     }
 
     /// Só leitura: adaptadores, gateways e uma medição real até o roteador.

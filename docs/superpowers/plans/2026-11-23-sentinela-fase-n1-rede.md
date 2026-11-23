@@ -47,9 +47,9 @@
 
 **Files:** `crates/core/src/net/{trace,bufferbloat}.rs`.
 
-- Traceroute próprio por ICMP com TTL crescente (`IcmpSendEcho2` com `IP_OPTION_INFORMATION.Ttl`), até 30 saltos, 3 sondas por salto. `Hop { ttl, addr, rtts }`. Classificação: saltos com endereço privado ou CGNAT (`10/8`, `172.16/12`, `192.168/16`, `100.64/10`) antes do primeiro público = **rede de casa**; o resto = **provedor e além** (sem consulta externa de dono do endereço).
+- Traceroute próprio por ICMP com TTL crescente (`IcmpSendEcho2` com `IP_OPTION_INFORMATION.Ttl`), até 30 saltos, 3 sondas por salto. `Hop { ttl, addr, rtts }`. Classificação: saltos com endereço privado comum (`10/8`, `172.16/12`, `192.168/16`, link-local, `fc00::/7`) antes do primeiro salto CGNAT ou público = **rede de casa**; o resto = **provedor e além** (sem consulta externa de dono do endereço). *Decisão na implementação:* o CGNAT (`100.64/10`) conta como provedor, não como casa — é comum no Brasil e o endereço é do provedor; na rota real desta máquina, os saltos `10.100.x` aparecem depois do primeiro público e ficam corretamente como provedor.
 - `where_delay_starts(hops)`: o primeiro salto cuja latência mínima sobe mais de 20 ms em relação ao anterior que respondeu **e** se mantém nos saltos seguintes (um salto isolado lento é roteador que despriorizou o ICMP, não atraso real).
-- *Bufferbloat*: latência ao roteador parado (10 sondas) × durante um download de teste (`https://speed.cloudflare.com/__down?bytes=…`, por até 15 s, cancelável). Diagnóstico pelo aumento da mediana: até 30 ms "bom"; até 100 ms "moderado"; acima "alto: ative o SQM/QoS no roteador".
+- *Bufferbloat*: latência ao roteador parado (10 sondas) × durante um download de teste (`https://speed.cloudflare.com/__down?bytes=25000000`, blocos de 25 MB em sequência — pedidos maiores recebem 403 —, por até 15 s, cancelável). Diagnóstico pelo aumento da mediana: até 30 ms "bom"; até 100 ms "moderado"; acima "alto: ative o SQM/QoS no roteador".
 
 - [ ] **Step 1: Testes que falham:** `trace_classifies_home_and_isp`, `delay_start_ignores_isolated_slow_hop`, `delay_start_ignores_timeouts`, `bufferbloat_grades`, `bufferbloat_without_baseline_reply_is_unknown`. `#[ignore]`: traceroute real até `1.1.1.1`.
 - [ ] **Step 2–4:** FAIL → implementar → PASS.

@@ -6,10 +6,12 @@ use std::net::{IpAddr, ToSocketAddrs};
 
 use serde::{Deserialize, Serialize};
 
+pub mod bufferbloat;
 pub mod history;
 pub mod probe;
 pub mod stats;
 pub mod targets;
+pub mod trace;
 #[cfg(windows)]
 pub mod windows;
 
