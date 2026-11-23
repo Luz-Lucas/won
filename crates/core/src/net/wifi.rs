@@ -144,6 +144,118 @@ pub fn current() -> Option<WifiStatus> {
     out
 }
 
+/// Segura a varredura em segundo plano e liga o modo de streaming de mídia
+/// nas interfaces Wi‑Fi conectadas enquanto o *handle* da WLAN fica aberto.
+/// Soltar (ou o app fechar) fecha o *handle* e o Windows desfaz os dois.
+#[cfg(windows)]
+#[derive(Default)]
+pub struct SystemWifiHold {
+    handle: Option<windows_sys::Win32::Foundation::HANDLE>,
+}
+
+// SAFETY: o handle da WLAN pode ser usado e fechado de qualquer thread.
+#[cfg(windows)]
+unsafe impl Send for SystemWifiHold {}
+
+#[cfg(windows)]
+impl SystemWifiHold {
+    fn release(&mut self) {
+        if let Some(h) = self.handle.take() {
+            // SAFETY: aberto por WlanOpenHandle e fechado uma vez.
+            unsafe {
+                windows_sys::Win32::NetworkManagement::WiFi::WlanCloseHandle(h, std::ptr::null())
+            };
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for SystemWifiHold {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
+
+#[cfg(windows)]
+impl super::game_session::WifiHold for SystemWifiHold {
+    fn hold(&mut self, on: bool) -> Result<(), String> {
+        use std::ptr::{null, null_mut};
+        use windows_sys::Win32::Foundation::HANDLE;
+        use windows_sys::Win32::NetworkManagement::WiFi::{
+            WLAN_INTERFACE_INFO, WLAN_INTERFACE_INFO_LIST, WlanCloseHandle, WlanEnumInterfaces,
+            WlanFreeMemory, WlanOpenHandle, WlanSetInterface, wlan_interface_state_connected,
+            wlan_intf_opcode_background_scan_enabled, wlan_intf_opcode_media_streaming_mode,
+        };
+        if !on {
+            self.release();
+            return Ok(());
+        }
+        if self.handle.is_some() {
+            return Ok(());
+        }
+        let mut version = 0u32;
+        let mut handle: HANDLE = null_mut();
+        // SAFETY: ponteiros de saída válidos.
+        if unsafe { WlanOpenHandle(2, null(), &mut version, &mut handle) } != 0 {
+            return Err("serviço de Wi‑Fi indisponível".into());
+        }
+        let mut list: *mut WLAN_INTERFACE_INFO_LIST = null_mut();
+        // SAFETY: `list` recebe memória do Wi‑Fi, liberada abaixo.
+        if unsafe { WlanEnumInterfaces(handle, null(), &mut list) } != 0 || list.is_null() {
+            // SAFETY: aberto acima.
+            unsafe { WlanCloseHandle(handle, null()) };
+            return Err("não foi possível listar as interfaces Wi‑Fi".into());
+        }
+        // SAFETY: `list` válido; os itens seguem o cabeçalho.
+        let count = unsafe { (*list).dwNumberOfItems } as usize;
+        let first =
+            unsafe { std::ptr::addr_of!((*list).InterfaceInfo) as *const WLAN_INTERFACE_INFO };
+        let (off, on_flag): (i32, i32) = (0, 1);
+        let mut applied = 0;
+        for i in 0..count {
+            // SAFETY: `i < count`.
+            let info = unsafe { &*first.add(i) };
+            if info.isState != wlan_interface_state_connected {
+                continue;
+            }
+            // SAFETY: dados BOOL de 4 bytes, como a API pede para os dois códigos.
+            let a = unsafe {
+                WlanSetInterface(
+                    handle,
+                    &info.InterfaceGuid,
+                    wlan_intf_opcode_background_scan_enabled,
+                    4,
+                    (&off as *const i32).cast(),
+                    null(),
+                )
+            };
+            // SAFETY: idem.
+            let b = unsafe {
+                WlanSetInterface(
+                    handle,
+                    &info.InterfaceGuid,
+                    wlan_intf_opcode_media_streaming_mode,
+                    4,
+                    (&on_flag as *const i32).cast(),
+                    null(),
+                )
+            };
+            if a == 0 || b == 0 {
+                applied += 1;
+            }
+        }
+        // SAFETY: memória do Wi‑Fi.
+        unsafe { WlanFreeMemory(list.cast()) };
+        if applied == 0 {
+            // SAFETY: aberto acima.
+            unsafe { WlanCloseHandle(handle, null()) };
+            return Err("nenhuma interface Wi‑Fi conectada aceitou".into());
+        }
+        self.handle = Some(handle);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

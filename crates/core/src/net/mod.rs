@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub mod adapter;
 pub mod bufferbloat;
 pub mod dns;
+pub mod game_session;
 pub mod history;
 pub mod probe;
 pub mod routes;

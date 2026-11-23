@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod game_watch;
 pub mod jobs;
 pub mod tray;
 
@@ -54,6 +55,7 @@ pub fn run() {
                 eprintln!("Sentinela: sem ícone na bandeja: {e}");
             }
             sync_autostart(app.handle());
+            app.manage(game_watch::GameWatch::start(app.handle().clone()));
             // A janela nasce escondida (tauri.conf) e aparece quando o frontend
             // avisa que carregou; só o início automático a mantém escondida.
             let tray_ok = app.state::<SettingsState>().tray_ok.load(Ordering::Relaxed);
@@ -146,6 +148,14 @@ pub fn run() {
             commands::net::net_dns_preview,
             commands::net::net_dns_apply,
         ])
-        .run(tauri::generate_context!())
-        .expect("erro ao iniciar o Sentinela");
+        .build(tauri::generate_context!())
+        .expect("erro ao iniciar o Sentinela")
+        .run(|app, event| {
+            // Ao sair, a vigia desliga a rota e solta o Wi‑Fi que ligou.
+            if let tauri::RunEvent::Exit = event
+                && let Some(w) = app.try_state::<game_watch::GameWatch>()
+            {
+                w.shutdown();
+            }
+        });
 }
