@@ -28,6 +28,9 @@ pub enum Snapshot {
     PowerPlan {
         scheme: String,
     },
+    ScheduledTask {
+        enabled: bool,
+    },
     /// Ex.: plano de energia inexistente.
     Unavailable {
         reason: String,
@@ -92,6 +95,7 @@ pub fn target_of(action: &Action) -> Snapshot {
         Action::PowerPlan { scheme } => Snapshot::PowerPlan {
             scheme: scheme.clone(),
         },
+        Action::ScheduledTask { enabled, .. } => Snapshot::ScheduledTask { enabled: *enabled },
     }
 }
 
@@ -116,6 +120,7 @@ fn action_key(action: &Action) -> String {
         } => format!("list:{}\\{path}\\{name}\\{key}", hive_name(*hive)),
         Action::Service { name, .. } => format!("svc:{name}"),
         Action::PowerPlan { .. } => "power".to_string(),
+        Action::ScheduledTask { path, .. } => format!("task:{path}"),
     }
 }
 
@@ -128,6 +133,9 @@ fn default_snapshot(action: &Action) -> Snapshot {
         },
         Action::PowerPlan { .. } => Snapshot::PowerPlan {
             scheme: BALANCED_SCHEME.to_string(),
+        },
+        Action::ScheduledTask { .. } => Snapshot::Unavailable {
+            reason: "tarefa não existe".to_string(),
         },
     }
 }

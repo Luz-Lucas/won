@@ -8,7 +8,7 @@ use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::tweaks::{
     ApplyReport, Catalog, ItemResult, Journal, JournalEntry, SystemBackend, Tweak, TweakStatus,
     TweakView, UndoReport, WindowsBackend, create_restore_point, current_user_sid,
-    default_journal_path, is_laptop, undo, undo_all, view,
+    default_journal_path, full_catalog, is_laptop, undo, undo_all, view,
 };
 use serde::Serialize;
 use std::ffi::OsString;
@@ -151,6 +151,17 @@ pub fn applied_count(cat: &Catalog, b: &dyn SystemBackend) -> usize {
         .count()
 }
 
+/// O cartão "Otimização" do Início: aplicados e total entre os recomendados
+/// (personalização e aba Avançado não são otimizações a cumprir).
+pub fn optimization_progress(cat: &Catalog, b: &dyn SystemBackend) -> (usize, usize) {
+    let recommended: Vec<&Tweak> = cat.tweaks.iter().filter(|t| t.recommended).collect();
+    let applied = recommended
+        .iter()
+        .filter(|t| view(t, b).status == TweakStatus::Applied)
+        .count();
+    (applied, recommended.len())
+}
+
 fn validate_apply(ids: &[String], cat: &Catalog) -> Result<(), String> {
     if ids.is_empty() {
         return Err("Nenhuma otimização selecionada.".into());
@@ -272,7 +283,7 @@ pub async fn tweaks_list(state: State<'_, TweaksState>) -> Result<TweaksPage, St
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         build_page(
-            Catalog::embedded(),
+            &full_catalog(),
             state.backend().as_ref(),
             &default_journal_path(),
             is_laptop(),
@@ -291,7 +302,7 @@ pub fn tweaks_apply(
     jobs: State<'_, Arc<JobRegistry>>,
     state: State<'_, TweaksState>,
 ) -> Result<JobId, String> {
-    validate_apply(&ids, Catalog::embedded())?;
+    validate_apply(&ids, &full_catalog())?;
     let ids = dedupe(ids);
     let state = state.inner().clone();
     spawn_job(
@@ -302,7 +313,7 @@ pub fn tweaks_apply(
             let backend = state.backend();
             let report = run_apply(
                 &ids,
-                Catalog::embedded(),
+                &full_catalog(),
                 backend.as_ref(),
                 &default_journal_path(),
                 &state.restore_done,
@@ -323,7 +334,7 @@ pub fn tweaks_apply_choice(
     jobs: State<'_, Arc<JobRegistry>>,
     state: State<'_, TweaksState>,
 ) -> Result<JobId, String> {
-    validate_choice(&id, Catalog::embedded())?;
+    validate_choice(&id, &full_catalog())?;
     let state = state.inner().clone();
     spawn_job(
         jobs.inner().clone(),
@@ -333,7 +344,7 @@ pub fn tweaks_apply_choice(
             let backend = state.backend();
             let report = run_apply(
                 std::slice::from_ref(&id),
-                Catalog::embedded(),
+                &full_catalog(),
                 backend.as_ref(),
                 &default_journal_path(),
                 &state.restore_done,
@@ -693,5 +704,32 @@ mod tests {
         let page = build_page(&c, &b, &jp, false, true, false).unwrap();
         assert!(page.tweaks[0].in_journal);
         assert_eq!(page.journal_count, 1);
+    }
+
+    #[test]
+    fn home_progress_counts_only_recommended() {
+        let mut c = cat();
+        let mut rec = c.tweaks[0].clone();
+        rec.id = "rec".into();
+        rec.recommended = true;
+        c.tweaks.push(rec);
+        let b = MemoryBackend::new();
+        assert_eq!(optimization_progress(&c, &b), (0, 1));
+        // `t1` (não recomendado) aplicado não conta; `rec` toca a mesma chave e conta.
+        b.set(
+            &reg(),
+            Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        );
+        assert_eq!(optimization_progress(&c, &b), (1, 1));
+        assert_eq!(
+            optimization_progress(Catalog::embedded(), &b).1,
+            Catalog::embedded()
+                .tweaks
+                .iter()
+                .filter(|t| t.recommended)
+                .count()
+        );
     }
 }

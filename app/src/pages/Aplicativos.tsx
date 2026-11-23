@@ -11,6 +11,7 @@ import {
 import type { AppItem, AppOutcome, AppsPage } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ProgressBar from "../components/ProgressBar";
+import UpdatesBlockedNotice from "../components/UpdatesBlockedNotice";
 import { useJob } from "../jobs";
 
 type Action = "install" | "upgrade";
@@ -160,6 +161,7 @@ export default function Aplicativos() {
   return (
     <section className="page">
       <h1>Aplicativos</h1>
+      <UpdatesBlockedNotice />
       {data && (
         <div className="apps-recheck">
           <button type="button" className="btn" disabled={running || checking} onClick={() => load(true)}>

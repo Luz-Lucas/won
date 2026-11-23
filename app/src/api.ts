@@ -30,6 +30,11 @@ export interface SystemStatus {
   activity: ActivityEntry[];
   tweaks_applied: number;
   tweaks_total: number;
+  updates_mode: UpdateMode;
+  /** Dias desde que o modo de atualização foi aplicado. */
+  updates_days: number | null;
+  /** Modo suspenso por "Atualizar agora". */
+  updates_suspended: UpdateMode | null;
 }
 
 export const systemStatus = () => invoke<SystemStatus>("system_status");
@@ -175,7 +180,9 @@ export type TweakGroup =
   | "segundo_plano"
   | "privacidade"
   | "visual"
-  | "personalizacao";
+  | "personalizacao"
+  | "avancado"
+  | "atualizacoes";
 export type TweakEvidence = "comprovado" | "situacional" | "controverso";
 export type TweakEffect = "immediate" | "explorer" | "relogon" | "reboot";
 export type TweakStatus = "applied" | "not_applied" | "partial" | "unavailable";
@@ -202,7 +209,8 @@ export type TweakAction =
       value: string;
     }
   | { kind: "service"; name: string; start: "automatic" | "manual" | "disabled" }
-  | { kind: "power_plan"; scheme: string };
+  | { kind: "power_plan"; scheme: string }
+  | { kind: "scheduled_task"; path: string; enabled: boolean };
 
 export type TweakArea = "barra" | "iniciar" | "explorador" | "aparencia" | "sistema";
 
@@ -280,6 +288,7 @@ export type JournalSnapshot =
   | { kind: "list_entry"; value: string | null }
   | { kind: "service"; start: "automatic" | "manual" | "disabled" }
   | { kind: "power_plan"; scheme: string }
+  | { kind: "scheduled_task"; enabled: boolean }
   | { kind: "unavailable"; reason: string };
 
 export interface JournalAction {
@@ -345,6 +354,78 @@ export const startupList = () => invoke<StartupPage>("startup_list");
 /** Liga ou desliga e devolve a lista atualizada. */
 export const startupSetEnabled = (id: string, enabled: boolean) =>
   invoke<StartupPage>("startup_set_enabled", { id, enabled });
+
+export type GameSource = "steam" | "epic" | "riot" | "manual";
+
+export interface GameItem {
+  /** Id do ajuste gerado (`gpu-…`). */
+  id: string;
+  name: string;
+  source: GameSource;
+  exe: string;
+  exe_exists: boolean;
+  /** "Alto desempenho" gravado agora. */
+  enabled: boolean;
+  in_journal: boolean;
+  /** Ligado fora do Sentinela (Configurações → Gráficos). */
+  external: boolean;
+  blocked: string | null;
+}
+
+export interface GamesPage {
+  games: GameItem[];
+  /** No Histórico, mas o jogo não é mais encontrado. */
+  missing: { id: string; title: string }[];
+  gpus: number;
+  warnings: string[];
+}
+
+export const gamesList = () => invoke<GamesPage>("games_list");
+export const gamesGpuSet = (id: string, enabled: boolean) =>
+  invoke<GamesPage>("games_gpu_set", { id, enabled });
+export const gamesAdd = (path: string) => invoke<GamesPage>("games_add", { path });
+export const gamesRemove = (path: string) =>
+  invoke<GamesPage>("games_remove", { path });
+
+export type UpdateMode = "default" | "security" | "paused" | "blocked";
+
+export interface UpdateModeState {
+  mode: UpdateMode;
+  /** Quando o modo foi aplicado (RFC 3339). */
+  since: string | null;
+  /** AAAA-MM-DD do fim da pausa. */
+  paused_until: string | null;
+  /** O que o Windows desfez sozinho ("Parcial"). */
+  reverted: string[];
+}
+
+export interface DefenderState {
+  last_attempt: number | null;
+  last_ok: number | null;
+  last_error: string | null;
+}
+
+export interface UpdatesPage {
+  state: UpdateModeState;
+  days: number | null;
+  elevated: boolean;
+  /** Ex.: "Windows 11 25H2". */
+  version: string | null;
+  /** Modo suspenso por "Atualizar agora". */
+  suspended: { mode: UpdateMode; until: string | null } | null;
+  defender: DefenderState;
+}
+
+export const updatesStatus = () => invoke<UpdatesPage>("updates_status");
+/** Só o modo atual (rápido, pelo diário). */
+export const updatesMode = () => invoke<UpdateMode>("updates_mode");
+export const updatesPreview = (mode: UpdateMode, until: string | null) =>
+  invoke<TweakChange[]>("updates_preview", { mode, until });
+export const updatesSetMode = (mode: UpdateMode, until: string | null) =>
+  invoke<UpdatesPage>("updates_set_mode", { mode, until });
+/** Volta ao Padrão, guarda o modo e abre o Windows Update. */
+export const updatesUpdateNow = () => invoke<UpdatesPage>("updates_update_now");
+export const updatesResume = () => invoke<UpdatesPage>("updates_resume");
 
 export interface SettingsView {
   start_with_windows: boolean;

@@ -15,6 +15,8 @@ vi.mock("../api", () => ({
   appsUpgrade: vi.fn(),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),
+  updatesMode: vi.fn().mockResolvedValue("default"),
+  updatesUpdateNow: vi.fn(),
   STORE_APP_INSTALLER_URL: "ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1",
 }));
 

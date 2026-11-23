@@ -13,7 +13,7 @@ use super::backend::{Snapshot, SystemBackend, reg_key, target_of};
 use super::catalog::Catalog;
 use super::catalog::removable_key_chain;
 use super::journal::{Journal, JournalAction, JournalEntry, JournalLock, LOCK_BUSY, LockError};
-use super::model::{Action, Effect, Tweak};
+use super::model::{Action, Effect, Group, Tweak};
 use super::state::{TweakStatus, describe, is_hkcu, view};
 
 /// Espera máxima pela trava do diário.
@@ -145,20 +145,36 @@ fn mark_done(journal: &mut Journal, tweak_id: &str, action: &Action) {
 }
 
 /// Aplica as ações de um ajuste que ainda não estão no alvo. `Ok(true)` se escreveu algo.
+/// Aplica as ações do ajuste. `Ok((escreveu, pulados))`: `pulados` são as ações de
+/// melhor esforço (`Action::best_effort`) que falharam sem interromper o resto;
+/// nenhuma delas fica no diário se o sistema não mudou.
 fn apply_one(
     t: &Tweak,
     b: &dyn SystemBackend,
     journal: &mut Journal,
     path: &Path,
-) -> Result<bool, String> {
+) -> Result<(bool, Vec<String>), String> {
     let mut wrote = false;
+    let mut skipped = Vec::new();
     for action in &t.actions {
+        let skip = |e: &str| format!("{}: {e}", describe(action));
         let target = target_of(action);
-        let before = b.read(action)?;
+        let before = match b.read(action) {
+            Ok(s) => s,
+            Err(e) if action.best_effort() => {
+                skipped.push(skip(&e));
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
         if before == target {
             continue;
         }
         if let Snapshot::Unavailable { reason } = &before {
+            if action.best_effort() {
+                skipped.push(skip(reason));
+                continue;
+            }
             return Err(format!("indisponível: {reason}"));
         }
 
@@ -188,11 +204,15 @@ fn apply_one(
                     _ => mark_done(journal, &t.id, action),
                 }
                 let _ = journal.save(path);
+                if action.best_effort() {
+                    skipped.push(skip(&e));
+                    continue;
+                }
                 return Err(e);
             }
         }
     }
-    Ok(wrote)
+    Ok((wrote, skipped))
 }
 
 /// Depois de restaurar "não existia", apaga a chave que o motor criou se ficou vazia.
@@ -291,9 +311,12 @@ fn apply_ids(
                 })
                 .map(|e| e.tweak_id.clone())
                 .collect();
+            // Nos modos de atualização, o Windows religar algo por conta própria é
+            // esperado: não impede trocar de modo (o valor atual é mantido e avisado).
+            let updates = t.group == Group::Atualizacoes;
             if !others.is_empty() {
                 // Nada é escrito se alguma opção atual foi alterada depois.
-                if let Err(msg) = undo_precheck(&others, b, journal) {
+                if !updates && let Err(msg) = undo_precheck(&others, b, journal) {
                     results.push(item(id, false, msg));
                     continue;
                 }
@@ -306,7 +329,10 @@ fn apply_ids(
                         }
                     }
                 }
-                if let Some(bad) = undone.iter().find(|u| !u.ok) {
+                if let Some(bad) = undone
+                    .iter()
+                    .find(|u| !u.ok && !(updates && u.message.starts_with("mantida")))
+                {
                     let msg = if bad.message.starts_with("mantida") {
                         bad.message.clone()
                     } else {
@@ -324,11 +350,22 @@ fn apply_ids(
             TweakStatus::Applied => item(id, true, "já estava aplicada"),
             TweakStatus::NotApplied | TweakStatus::Partial => {
                 match apply_one(t, b, journal, journal_path) {
-                    Ok(true) => {
+                    Ok((wrote, skipped)) if !skipped.is_empty() => {
+                        if wrote {
+                            effect = effect.max(t.effect);
+                        }
+                        let msg =
+                            format!("aplicada em parte; não alterado: {}", skipped.join("; "));
+                        ItemResult {
+                            changed: wrote,
+                            ..item(id, false, msg)
+                        }
+                    }
+                    Ok((true, _)) => {
                         effect = effect.max(t.effect);
                         changed_item(id, true, "aplicada")
                     }
-                    Ok(false) => item(id, true, "aplicada"),
+                    Ok((false, _)) => item(id, true, "aplicada"),
                     Err(msg) => {
                         let mut m = format!("falhou: {msg}");
                         if undone_wrote {
@@ -1179,6 +1216,9 @@ mod tests {
                     Action::PowerPlan { .. } => Snapshot::PowerPlan {
                         scheme: "381b4222-f694-41f0-9685-ff5bb260df2e".into(),
                     },
+                    Action::ScheduledTask { enabled, .. } => {
+                        Snapshot::ScheduledTask { enabled: !enabled }
+                    }
                 };
                 assert_ne!(s, target);
                 b.set(a, s.clone());
@@ -1722,5 +1762,164 @@ mod tests {
         };
         b.set(&upper("SOFTWARE\\MICROSOFT\\X"), dw(2));
         assert!(undo_precheck(&ids(&["b", "a"]), &b, &j).is_ok());
+    }
+
+    fn task(name: &str) -> Action {
+        Action::ScheduledTask {
+            path: format!("\\Microsoft\\Windows\\UpdateOrchestrator\\{name}"),
+            enabled: false,
+        }
+    }
+
+    fn task_on(on: bool) -> Snapshot {
+        Snapshot::ScheduledTask { enabled: on }
+    }
+
+    fn update_tweak(id: &str, actions: Vec<Action>) -> Tweak {
+        let mut t = tweak(id, Effect::Reboot, actions);
+        t.group = Group::Atualizacoes;
+        t.needs_admin = true;
+        t.choice = Some("windows-update".into());
+        t.choice_label = Some("Atualizações do Windows".into());
+        t
+    }
+
+    #[test]
+    fn task_apply_and_undo_restores_each_task() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        b.set(&task("Schedule Scan"), task_on(true));
+        // Já estava desligada antes: o desfazer não pode ligá-la.
+        b.set(&task("Reboot"), task_on(false));
+        let c = cat(vec![update_tweak(
+            "wu-blocked",
+            vec![task("Schedule Scan"), task("Reboot")],
+        )]);
+        let r = apply(&ids(&["wu-blocked"]), &c, &b, &p);
+        assert!(r.results[0].ok && r.results[0].changed, "{:?}", r.results);
+        assert_eq!(b.get(&task("Schedule Scan")), task_on(false));
+        let u = undo(&ids(&["wu-blocked"]), &b, &p);
+        assert!(u.results[0].ok, "{:?}", u.results);
+        assert_eq!(b.get(&task("Schedule Scan")), task_on(true));
+        assert_eq!(b.get(&task("Reboot")), task_on(false));
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn denied_task_reported_and_not_journaled() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let svc = Action::Service {
+            name: "UsoSvc".into(),
+            start: StartType::Disabled,
+        };
+        b.set(
+            &svc,
+            Snapshot::Service {
+                start: StartType::Automatic,
+            },
+        );
+        for n in ["A", "Protegida", "C"] {
+            b.set(&task(n), task_on(true));
+        }
+        b.fail_writes_for(&task("Protegida"), "acesso negado");
+        let c = cat(vec![update_tweak(
+            "wu-blocked",
+            vec![task("A"), task("Protegida"), task("C"), svc.clone()],
+        )]);
+        let r = apply(&ids(&["wu-blocked"]), &c, &b, &p);
+        let res = &r.results[0];
+        // Parcial: o resto do modo foi aplicado mesmo com a tarefa protegida.
+        assert!(!res.ok && res.changed, "{res:?}");
+        assert!(res.message.contains("Protegida"), "{}", res.message);
+        assert!(res.message.contains("acesso negado"), "{}", res.message);
+        assert_eq!(b.get(&task("A")), task_on(false));
+        assert_eq!(b.get(&task("C")), task_on(false));
+        assert_eq!(
+            b.get(&svc),
+            Snapshot::Service {
+                start: StartType::Disabled
+            }
+        );
+        let j = Journal::load(&p);
+        let journaled: Vec<&Action> = j.entries[0].actions.iter().map(|a| &a.action).collect();
+        assert!(!journaled.contains(&&task("Protegida")));
+        assert_eq!(journaled.len(), 3);
+        assert_eq!(view(&c.tweaks[0], &b).status, TweakStatus::Partial);
+    }
+
+    #[test]
+    fn update_choice_switch_leaves_no_residue() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let defer = reg("Defer", 365);
+        let svc = Action::Service {
+            name: "wuauserv".into(),
+            start: StartType::Disabled,
+        };
+        b.set(
+            &svc,
+            Snapshot::Service {
+                start: StartType::Manual,
+            },
+        );
+        b.set(&task("T"), task_on(true));
+        // Opções com chaves diferentes (só permitido no grupo Atualizações).
+        let c = cat(vec![
+            update_tweak("wu-security", vec![defer.clone()]),
+            update_tweak("wu-blocked", vec![svc.clone(), task("T")]),
+        ]);
+        assert!(apply(&ids(&["wu-security"]), &c, &b, &p).results[0].ok);
+        let r = apply_choice("wu-blocked", &c, &b, &p);
+        assert!(r.results[0].ok, "{:?}", r.results);
+        assert_eq!(b.get(&defer), absent(), "o modo anterior foi desfeito");
+        // O Windows religa o serviço por conta própria.
+        b.set(
+            &svc,
+            Snapshot::Service {
+                start: StartType::Automatic,
+            },
+        );
+        assert_eq!(view(&c.tweaks[1], &b).status, TweakStatus::Partial);
+        // Trocar de modo não é bloqueado pelo que o Windows mudou.
+        let r = apply_choice("wu-security", &c, &b, &p);
+        assert!(r.results[0].ok, "{:?}", r.results);
+        assert_eq!(b.get(&task("T")), task_on(true));
+        // Padrão = desfazer tudo: volta ao original da máquina.
+        let u = undo_all(&b, &p);
+        assert!(u.results.iter().all(|r| r.ok), "{:?}", u.results);
+        assert_eq!(b.get(&defer), absent());
+        assert_eq!(b.get(&task("T")), task_on(true));
+        assert!(Journal::load(&p).entries.is_empty());
+    }
+
+    #[test]
+    fn generated_tweak_undo_after_it_disappears() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let gpu = Action::ListEntry {
+            hive: Hive::Hkcu,
+            path: "Software\\Microsoft\\DirectX\\UserGpuPreferences".into(),
+            name: "C:\\Jogos\\x.exe".into(),
+            key: "GpuPreference".into(),
+            value: "2".into(),
+        };
+        let base = cat(vec![]);
+        let generated = base
+            .with_generated(vec![tweak(
+                "gpu-1234abcd",
+                Effect::Immediate,
+                vec![gpu.clone()],
+            )])
+            .unwrap();
+        assert!(apply(&ids(&["gpu-1234abcd"]), &generated, &b, &p).results[0].ok);
+        // O jogo foi desinstalado: o ajuste não é mais gerado, mas desfaz pelo diário.
+        let u = undo(&ids(&["gpu-1234abcd"]), &b, &p);
+        assert!(u.results[0].ok, "{:?}", u.results);
+        assert_eq!(b.get(&gpu), Snapshot::ListEntry { value: None });
     }
 }

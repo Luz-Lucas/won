@@ -58,6 +58,9 @@ const status = (over: Partial<SystemStatus> = {}): SystemStatus => ({
   ],
   tweaks_applied: 0,
   tweaks_total: 0,
+  updates_mode: "default",
+  updates_days: null,
+  updates_suspended: null,
   ...over,
 });
 

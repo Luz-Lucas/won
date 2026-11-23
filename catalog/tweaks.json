@@ -335,6 +335,146 @@
       ]
     },
     {
+      "id": "fullscreen-optimizations-off",
+      "title": "Desligar otimizações de tela cheia em todos os jogos",
+      "description": "Faz os jogos em tela cheia usarem a tela cheia exclusiva antiga em vez das otimizações de tela cheia do Windows. Ajuda em alguns jogos antigos e piora em outros (troca de janela mais lenta, sobreposições que deixam de aparecer). As chaves usadas não são documentadas pela Microsoft; para um jogo só, prefira a opção \"Desabilitar otimizações de tela cheia\" nas propriedades do executável. Vale após sair e entrar de novo no Windows.",
+      "group": "avancado",
+      "evidence": "controverso",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://devblogs.microsoft.com/directx/demystifying-full-screen-optimizations/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "System\\GameConfigStore",
+          "name": "GameDVR_FSEBehaviorMode",
+          "value": {
+            "type": "dword",
+            "data": 2
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "System\\GameConfigStore",
+          "name": "GameDVR_HonorUserFSEBehaviorMode",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "System\\GameConfigStore",
+          "name": "GameDVR_DXGIHonorFSEWindowsCompatible",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "mmcss-responsiveness",
+      "title": "Reservar menos CPU para tarefas de fundo (MMCSS)",
+      "description": "Reduz de 20% para 10% a fatia de CPU que o agendador multimídia do Windows garante às tarefas de baixa prioridade enquanto um jogo ou áudio está em primeiro plano. O ganho medido é pequeno e depende do jogo. 10% é o mínimo que o Windows aceita: valores menores voltam a 20%. Exige reinício.",
+      "group": "avancado",
+      "evidence": "situacional",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/win32/procthread/multimedia-class-scheduler-service",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+          "name": "SystemResponsiveness",
+          "value": {
+            "type": "dword",
+            "data": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "timer-resolution-global",
+      "title": "Resolução do timer global",
+      "description": "Faz o pedido de timer de alta resolução de um programa valer para o sistema todo, como era antes do Windows 10 2004. Alguns jogadores relatam ritmo de quadros mais estável; o efeito não é documentado pela Microsoft e aumenta o consumo de energia. Exige reinício.",
+      "group": "avancado",
+      "evidence": "controverso",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": true,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/win32/api/timeapi/nf-timeapi-timebeginperiod",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKLM",
+          "path": "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+          "name": "GlobalTimerResolutionRequests",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "services-manual-extra",
+      "title": "Serviços extras em modo manual",
+      "description": "Deixa SysMain (pré-carregamento de programas), MapsBroker (mapas offline) e StorSvc (serviço de armazenamento) iniciando só quando algum programa precisar. Pode liberar um pouco de disco e memória durante o jogo; em HD mecânico, desligar o SysMain deixa a abertura de programas mais lenta. Nenhum serviço é desativado. Exige reinício.",
+      "group": "avancado",
+      "evidence": "situacional",
+      "effect": "reboot",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "service",
+          "name": "SysMain",
+          "start": "manual"
+        },
+        {
+          "kind": "service",
+          "name": "MapsBroker",
+          "start": "manual"
+        },
+        {
+          "kind": "service",
+          "name": "StorSvc",
+          "start": "manual"
+        }
+      ]
+    },
+    {
+      "id": "search-indexing-off",
+      "title": "Desligar a indexação da busca",
+      "description": "Desativa o serviço de indexação (WSearch), que lê o disco em segundo plano para acelerar a busca. A busca do Windows e a do Outlook ficam bem mais lentas e podem deixar de achar conteúdo dentro de arquivos.",
+      "group": "avancado",
+      "evidence": "situacional",
+      "effect": "immediate",
+      "needs_admin": true,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config/tweaks.json",
+      "actions": [
+        {
+          "kind": "service",
+          "name": "WSearch",
+          "start": "disabled"
+        }
+      ]
+    },
+    {
       "id": "taskbar-align-left",
       "title": "Esquerda",
       "description": "Alinha os ícones da barra de tarefas à esquerda, como no Windows 10.",

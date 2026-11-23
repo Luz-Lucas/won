@@ -130,7 +130,7 @@ fn hashes_text(bytes: &[u8]) -> String {
 }
 
 /// UTC timestamp `YYYY-MM-DDTHH:MM:SSZ` from seconds since the Unix epoch.
-fn rfc3339_utc(secs: u64) -> String {
+pub(crate) fn rfc3339_utc(secs: u64) -> String {
     let days = (secs / 86_400) as i64;
     let rem = secs % 86_400;
     // Civil-from-days (Howard Hinnant).

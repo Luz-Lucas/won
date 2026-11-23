@@ -9,8 +9,8 @@ use serde::Serialize;
 
 use sentinela_core::clean::platform;
 use sentinela_core::tweaks::{
-    Catalog, Change, Effect, ItemResult, Journal, SystemBackend, TweakStatus, TweakView,
-    WindowsBackend, apply, create_restore_point, default_journal_path, describe, snapshot_label,
+    Change, Effect, ItemResult, Journal, SystemBackend, TweakStatus, TweakView, WindowsBackend,
+    apply, create_restore_point, default_journal_path, describe, full_catalog, snapshot_label,
     undo, undo_all, view,
 };
 
@@ -70,7 +70,7 @@ pub fn run(cmd: TweakCommand) -> Result<i32> {
 }
 
 /// `SENTINELA_TWEAKS_JOURNAL` (quando definida e não vazia) ou o caminho padrão.
-fn journal_path() -> PathBuf {
+pub(crate) fn journal_path() -> PathBuf {
     match std::env::var_os("SENTINELA_TWEAKS_JOURNAL") {
         Some(p) if !p.is_empty() => PathBuf::from(p),
         _ => default_journal_path(),
@@ -100,7 +100,7 @@ struct ListItem<'a> {
 }
 
 fn cmd_list(json: bool) -> Result<i32> {
-    let cat = Catalog::embedded();
+    let cat = &full_catalog();
     let backend = WindowsBackend::new(true);
     let views: Vec<TweakView> = cat.tweaks.iter().map(|t| view(t, &backend)).collect();
     let mut out = io::stdout().lock();
@@ -171,7 +171,7 @@ fn print_notice(notice: &Option<String>) {
 
 fn cmd_apply(ids: Vec<String>, yes: bool, json: bool) -> Result<i32> {
     let ids = dedupe(ids);
-    let cat = Catalog::embedded();
+    let cat = &full_catalog();
     for id in &ids {
         if cat.get(id).is_none() {
             bail!("otimização desconhecida: {id}. Use `sentinela tweak list`.");
@@ -243,7 +243,7 @@ fn dedupe(ids: Vec<String>) -> Vec<String> {
 
 fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
     let ids = dedupe(ids);
-    let cat = Catalog::embedded();
+    let cat = &full_catalog();
     let path = journal_path();
     // Leitura sem efeitos: nada é movido nem gravado antes da confirmação.
     let journal =

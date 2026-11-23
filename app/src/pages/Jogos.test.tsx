@@ -19,6 +19,7 @@ vi.mock("../api", () => ({
   tweaksApply: vi.fn(),
   relaunchElevated: vi.fn(),
   startupList: vi.fn().mockResolvedValue({ items: [], warnings: [], elevated: true }),
+  gamesList: vi.fn().mockResolvedValue({ games: [], missing: [], gpus: 2, warnings: [] }),
   startupSetEnabled: vi.fn(),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),
@@ -365,5 +366,68 @@ describe("Jogos", () => {
     await screen.findByRole("checkbox", { name: /Título a/ });
     expect(screen.queryByText("Título a: aplicado")).toBeNull();
     expect(screen.queryByText(/Ponto de restauração/)).toBeNull();
+  });
+
+  const advanced = () => [
+    item("a"),
+    item("sit", {
+      tweak: {
+        group: "avancado",
+        evidence: "situacional",
+        recommended: false,
+        description: "Explicação do situacional.",
+      },
+    }),
+    item("con", {
+      tweak: {
+        group: "avancado",
+        evidence: "controverso",
+        recommended: false,
+        description: "Explicação do controverso.",
+      },
+    }),
+  ];
+
+  it("advanced_tab_shows_description_and_evidence", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(page(advanced()));
+    render(<Jogos />);
+    await screen.findByRole("checkbox", { name: /Título a/ });
+    // Fora da aba principal.
+    expect(screen.queryByRole("checkbox", { name: /Título sit/ })).toBeNull();
+    await userEvent.click(screen.getByRole("tab", { name: "Avançado" }));
+    expect(screen.getByRole("checkbox", { name: /Título sit/ })).toBeInTheDocument();
+    expect(screen.getByText("Explicação do situacional.")).toBeInTheDocument();
+    expect(screen.getByText("Explicação do controverso.")).toBeInTheDocument();
+    expect(screen.getByText("Situacional")).toBeInTheDocument();
+    expect(screen.getByText("Controverso")).toBeInTheDocument();
+  });
+
+  it("recommended_profile_ignores_advanced", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(page(advanced()));
+    render(<Jogos />);
+    expect(await screen.findByRole("checkbox", { name: /Título a/ })).toBeChecked();
+    await userEvent.click(screen.getByRole("tab", { name: "Avançado" }));
+    expect(screen.getByRole("checkbox", { name: /Título sit/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Título con/ })).not.toBeChecked();
+  });
+
+  it("fps_profile_adds_situational_not_controversial", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(page(advanced()));
+    vi.mocked(api.tweaksApply).mockResolvedValue(7);
+    render(<Jogos />);
+    await screen.findByRole("checkbox", { name: /Título a/ });
+    await userEvent.click(screen.getByRole("button", { name: "FPS competitivo" }));
+    // Abre a aba Avançado para mostrar o que entrou.
+    expect(screen.getByRole("tab", { name: "Avançado" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("checkbox", { name: /Título sit/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Título con/ })).not.toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Aplicar" }).slice(-1)[0],
+    );
+    expect(api.tweaksApply).toHaveBeenCalledWith(["a", "sit"]);
   });
 });
