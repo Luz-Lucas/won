@@ -53,6 +53,39 @@ pub enum NetCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Rotas alternativas instaladas (Cloudflare WARP, túneis WireGuard, serviços pagos)
+    Routes {
+        /// Saída em JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Compara a conexão atual com as rotas alternativas até um destino (cada rota volta como estava)
+    Compare {
+        #[arg(value_name = "DESTINO")]
+        target: String,
+        /// Rota a comparar (`warp`, `wg:nome`); sem esta opção, todas as que dá para ligar
+        #[arg(long = "route", value_name = "ID")]
+        routes: Vec<String>,
+        /// Rodadas intercaladas
+        #[arg(long, default_value_t = 3)]
+        rounds: u32,
+        /// Saída em JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Liga ou desliga uma rota (`warp` ou `wg:nome`; túnel exige administrador)
+    Route {
+        #[arg(value_name = "ID")]
+        id: String,
+        #[arg(value_enum, value_name = "on|off")]
+        state: OnOff,
+    },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum OnOff {
+    On,
+    Off,
 }
 
 pub fn run(cmd: NetCommand) -> Result<i32> {
@@ -66,6 +99,14 @@ pub fn run(cmd: NetCommand) -> Result<i32> {
         NetCommand::Bufferbloat { json } => cmd_bufferbloat(json),
         NetCommand::Dns { json } => cmd_dns(json),
         NetCommand::History { json } => cmd_history(json),
+        NetCommand::Routes { json } => cmd_routes(json),
+        NetCommand::Compare {
+            target,
+            routes,
+            rounds,
+            json,
+        } => cmd_compare(&target, &routes, rounds, json),
+        NetCommand::Route { id, state } => cmd_route(&id, matches!(state, OnOff::On)),
     }
 }
 
@@ -281,4 +322,130 @@ fn cmd_history(json: bool) -> Result<i32> {
         );
     }
     Ok(0)
+}
+
+fn route_state(on: Option<bool>) -> &'static str {
+    match on {
+        Some(true) => "ligado",
+        Some(false) => "desligado",
+        None => "?",
+    }
+}
+
+fn elevated() -> bool {
+    sentinela_core::clean::platform::is_elevated()
+}
+
+fn cmd_routes(json: bool) -> Result<i32> {
+    let list = session::list_routes(elevated());
+    if json {
+        return print_json(&list);
+    }
+    if list.is_empty() {
+        println!(
+            "Nenhuma rota alternativa instalada. Instale o Cloudflare WARP ou o WireGuard (sentinela apps) ou importe um túnel na página Rede."
+        );
+    }
+    for r in &list {
+        println!("{:<24} {:<28} {}", r.id, r.name, route_state(r.on));
+        if let Some(n) = &r.note {
+            println!("  {n}");
+        }
+    }
+    Ok(0)
+}
+
+fn cmd_compare(spec: &str, ids: &[String], rounds: u32, json: bool) -> Result<i32> {
+    let target = parse_target(spec).map_err(anyhow::Error::msg)?;
+    let available: Vec<String> = session::list_routes(elevated())
+        .into_iter()
+        .filter(|r| r.controllable)
+        .map(|r| r.id)
+        .collect();
+    for id in ids {
+        if !available.contains(id) {
+            bail!("rota desconhecida ou que o Sentinela não pode ligar: {id}");
+        }
+    }
+    let chosen = if ids.is_empty() {
+        available
+    } else {
+        ids.to_vec()
+    };
+    if chosen.is_empty() {
+        println!("Nenhuma rota que o Sentinela possa ligar para comparar.");
+        return Ok(0);
+    }
+    let opts = sentinela_core::net::routes::CompareOptions {
+        rounds: rounds.max(1),
+        ..Default::default()
+    };
+    let c = session::run_compare(
+        &target,
+        &chosen,
+        elevated(),
+        opts,
+        &AtomicBool::new(false),
+        |i, total, name| {
+            if !json {
+                eprintln!("[{}/{total}] {name}…", i + 1);
+            }
+        },
+    );
+    session::record(
+        &history_path(),
+        vec![history::entry(
+            Kind::Route,
+            &target.label(),
+            sentinela_core::net::routes::comparison_summary(&c),
+        )],
+    );
+    if json {
+        return print_json(&c);
+    }
+    println!(
+        "{:<28} {:>12} {:>10} {:>6}",
+        "Rota", "Mediana", "Jitter", "Perda"
+    );
+    for r in &c.rows {
+        let mark = if c.best.as_deref() == Some(r.id.as_str()) {
+            " <- recomendada"
+        } else {
+            ""
+        };
+        println!(
+            "{:<28} {:>12} {:>10} {:>6}{mark}",
+            r.name,
+            opt_ms(r.measurement.median_ms),
+            opt_ms(r.measurement.jitter_ms),
+            format!("{}%", r.measurement.loss_pct.round())
+        );
+    }
+    println!("{}", c.advice);
+    for e in &c.errors {
+        eprintln!("{e}");
+    }
+    Ok(0)
+}
+
+#[cfg(windows)]
+fn cmd_route(id: &str, on: bool) -> Result<i32> {
+    use sentinela_core::net::routes::RouteBackend;
+    use sentinela_core::net::routes::windows::SystemRoutes;
+    let backend = SystemRoutes::new(elevated());
+    if !backend
+        .routes()
+        .iter()
+        .any(|r| r.id == id && r.controllable)
+    {
+        bail!("rota desconhecida ou que o Sentinela não pode ligar: {id}");
+    }
+    backend.set(id, on).map_err(anyhow::Error::msg)?;
+    println!("{id}: {}", if on { "ligado" } else { "desligado" });
+    Ok(0)
+}
+
+#[cfg(not(windows))]
+fn cmd_route(_id: &str, _on: bool) -> Result<i32> {
+    bail!("rotas alternativas só no Windows")
 }

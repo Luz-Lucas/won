@@ -1,6 +1,6 @@
 # Sentinela — Fase N2: rotas alternativas, rota por jogo, QoS e DNS criptografado — Plano de implementação
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Testar rotas que o usuário pode de fato usar e só recomendar quando a medição mostra ganho: comparador lado a lado entre a conexão normal, o Cloudflare WARP e o túnel WireGuard do próprio usuário (e a conexão de serviços pagos já instalados); rota escolhida por jogo, ligada ao abrir o jogo e desligada ao fechar; Wi‑Fi sem varredura em segundo plano enquanto um jogo está aberto; QoS por jogo em "Avançado"; e o DNS sobre HTTPS do próprio Windows na troca de DNS.
 
