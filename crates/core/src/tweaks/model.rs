@@ -101,6 +101,9 @@ pub enum Action {
         interface: String,
         ipv6: bool,
         servers: Vec<String>,
+        /// Criptografar com DNS sobre HTTPS (modelo automático do Windows).
+        #[serde(default)]
+        doh: bool,
     },
 }
 

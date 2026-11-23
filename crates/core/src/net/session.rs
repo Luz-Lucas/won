@@ -284,6 +284,7 @@ pub struct DnsPreview {
 pub fn dns_preview(
     resolver: &str,
     adapters: &[AdapterInfo],
+    doh: bool,
     b: &dyn SystemBackend,
 ) -> Result<Vec<DnsPreview>, String> {
     let r = dns::resolver(resolver).ok_or_else(|| format!("DNS desconhecido: {resolver}"))?;
@@ -291,7 +292,7 @@ pub fn dns_preview(
         .iter()
         .map(|a| DnsPreview {
             adapter: a.name.clone(),
-            changes: view(&dns::dns_tweak(&a.as_ref(), r), b).changes,
+            changes: view(&dns::dns_tweak(&a.as_ref(), r, doh), b).changes,
         })
         .collect())
 }
@@ -300,6 +301,7 @@ pub fn dns_preview(
 pub fn apply_dns(
     resolver: &str,
     adapters: &[AdapterInfo],
+    doh: bool,
     b: &dyn SystemBackend,
     journal_path: &Path,
 ) -> Result<Vec<ItemResult>, String> {
@@ -309,7 +311,7 @@ pub fn apply_dns(
     }
     adapters
         .iter()
-        .map(|a| dns::apply_resolver(dns::dns_tweak(&a.as_ref(), r), b, journal_path))
+        .map(|a| dns::apply_resolver(dns::dns_tweak(&a.as_ref(), r, doh), b, journal_path))
         .collect()
 }
 
@@ -376,6 +378,17 @@ pub fn record(path: &Path, entries: Vec<Entry>) {
     if !entries.is_empty() {
         let _ = history::append(path, entries);
     }
+}
+
+/// Servidores que o Windows sabe criptografar (DNS sobre HTTPS).
+#[cfg(windows)]
+pub fn doh_known() -> Vec<String> {
+    super::windows::doh_known_servers()
+}
+
+#[cfg(not(windows))]
+pub fn doh_known() -> Vec<String> {
+    Vec::new()
 }
 
 #[cfg(windows)]

@@ -385,6 +385,62 @@ pub(crate) fn reg_dword(path: &str, name: &str) -> Option<u32> {
     Some(u32::from_le_bytes(buf))
 }
 
+/// Nomes das subchaves de uma chave de HKLM (vazio se não existe).
+pub(crate) fn hklm_subkeys(path: &str) -> Vec<String> {
+    use windows_sys::Win32::Foundation::ERROR_NO_MORE_ITEMS;
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_LOCAL_MACHINE, KEY_ENUMERATE_SUB_KEYS, KEY_WOW64_64KEY, RegCloseKey,
+        RegEnumKeyExW, RegOpenKeyExW,
+    };
+    let wpath: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut key: HKEY = null_mut();
+    // SAFETY: `wpath` é NUL-terminado e `key` é um ponteiro de saída válido.
+    let rc = unsafe {
+        RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            wpath.as_ptr(),
+            0,
+            KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY,
+            &mut key,
+        )
+    };
+    if rc != 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for index in 0u32.. {
+        let mut name = vec![0u16; 256];
+        let mut len = name.len() as u32;
+        // SAFETY: `name` tem `len` caracteres; os opcionais são nulos.
+        let rc = unsafe {
+            RegEnumKeyExW(
+                key,
+                index,
+                name.as_mut_ptr(),
+                &mut len,
+                null(),
+                null_mut(),
+                null_mut(),
+                null_mut(),
+            )
+        };
+        if rc == ERROR_NO_MORE_ITEMS {
+            break;
+        }
+        if rc == 0 {
+            out.push(String::from_utf16_lossy(&name[..len as usize]));
+        }
+    }
+    // SAFETY: aberta acima e fechada uma vez.
+    unsafe { RegCloseKey(key) };
+    out
+}
+
+/// Servidores para os quais o Windows já conhece o modelo de DNS sobre HTTPS.
+pub fn doh_known_servers() -> Vec<String> {
+    hklm_subkeys("SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters\\DohWellKnownServers")
+}
+
 /// Gateways (roteadores) dos adaptadores ligados, IPv4 primeiro, sem repetir.
 pub fn default_gateways() -> Vec<IpAddr> {
     let mut g: Vec<IpAddr> = adapters()

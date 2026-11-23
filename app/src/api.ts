@@ -630,6 +630,8 @@ export interface NetPage {
   wifi_notice: string | null;
   history: NetHistoryEntry[];
   elevated: boolean;
+  /** Servidores que o Windows sabe criptografar (DNS sobre HTTPS). */
+  doh_known: string[];
 }
 
 export interface DnsPreview {
@@ -646,7 +648,7 @@ export const netMeasure = (label: string | null) => invoke<number>("net_measure"
 export const netTrace = (label: string) => invoke<number>("net_trace", { label });
 export const netBufferbloat = () => invoke<number>("net_bufferbloat");
 export const netDnsBench = () => invoke<number>("net_dns_bench");
-export const netDnsPreview = (resolver: string) =>
-  invoke<DnsPreview[]>("net_dns_preview", { resolver });
-export const netDnsApply = (resolver: string) =>
-  invoke<TweakItemResult[]>("net_dns_apply", { resolver });
+export const netDnsPreview = (resolver: string, doh: boolean) =>
+  invoke<DnsPreview[]>("net_dns_preview", { resolver, doh });
+export const netDnsApply = (resolver: string, doh: boolean) =>
+  invoke<TweakItemResult[]>("net_dns_apply", { resolver, doh });

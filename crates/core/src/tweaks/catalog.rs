@@ -331,9 +331,13 @@ fn validate_tweak(t: &Tweak) -> Result<(), String> {
                 interface,
                 ipv6,
                 servers,
+                doh,
             } => {
                 if t.group != Group::Rede {
                     return Err(format!("{id}: DNS só no grupo Rede"));
+                }
+                if *doh && servers.is_empty() {
+                    return Err(format!("{id}: DNS sobre HTTPS exige servidores fixos"));
                 }
                 if !is_braced_guid(interface) {
                     return Err(format!("{id}: adaptador inválido: {interface}"));

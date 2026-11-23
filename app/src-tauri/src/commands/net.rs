@@ -39,6 +39,8 @@ pub struct NetPage {
     pub wifi_notice: Option<String>,
     pub history: Vec<Entry>,
     pub elevated: bool,
+    /// Servidores que o Windows sabe criptografar (DNS sobre HTTPS).
+    pub doh_known: Vec<String>,
 }
 
 /// Resultado de um job de rede (um por vez).
@@ -74,6 +76,7 @@ fn build_page(targets_path: &Path, history_path: &Path, elevated: bool) -> NetPa
         wifi_notice,
         history: history::load(history_path),
         elevated,
+        doh_known: session::doh_known(),
     }
 }
 
@@ -230,6 +233,7 @@ pub fn net_dns_bench(app: AppHandle, jobs: State<'_, Arc<JobRegistry>>) -> Resul
 #[tauri::command]
 pub async fn net_dns_preview(
     resolver: String,
+    doh: bool,
     state: State<'_, TweaksState>,
 ) -> Result<Vec<DnsPreview>, String> {
     let state = state.inner().clone();
@@ -237,6 +241,7 @@ pub async fn net_dns_preview(
         session::dns_preview(
             &resolver,
             &session::routed_adapters(),
+            doh,
             state.backend().as_ref(),
         )
     })
@@ -252,6 +257,7 @@ pub fn dns_activity_text(resolver: &str) -> String {
 #[tauri::command]
 pub async fn net_dns_apply(
     resolver: String,
+    doh: bool,
     state: State<'_, TweaksState>,
 ) -> Result<Vec<ItemResult>, String> {
     let state = state.inner().clone();
@@ -263,6 +269,7 @@ pub async fn net_dns_apply(
         let results = session::apply_dns(
             &resolver,
             &session::routed_adapters(),
+            doh,
             b.as_ref(),
             &default_journal_path(),
         )?;
