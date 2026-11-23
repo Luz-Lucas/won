@@ -382,6 +382,44 @@ export const gamesAdd = (path: string) => invoke<GamesPage>("games_add", { path 
 export const gamesRemove = (path: string) =>
   invoke<GamesPage>("games_remove", { path });
 
+export type UpdateMode = "default" | "security" | "paused" | "blocked";
+
+export interface UpdateModeState {
+  mode: UpdateMode;
+  /** Quando o modo foi aplicado (RFC 3339). */
+  since: string | null;
+  /** AAAA-MM-DD do fim da pausa. */
+  paused_until: string | null;
+  /** O que o Windows desfez sozinho ("Parcial"). */
+  reverted: string[];
+}
+
+export interface DefenderState {
+  last_attempt: number | null;
+  last_ok: number | null;
+  last_error: string | null;
+}
+
+export interface UpdatesPage {
+  state: UpdateModeState;
+  days: number | null;
+  elevated: boolean;
+  /** Ex.: "Windows 11 25H2". */
+  version: string | null;
+  /** Modo suspenso por "Atualizar agora". */
+  suspended: { mode: UpdateMode; until: string | null } | null;
+  defender: DefenderState;
+}
+
+export const updatesStatus = () => invoke<UpdatesPage>("updates_status");
+export const updatesPreview = (mode: UpdateMode, until: string | null) =>
+  invoke<TweakChange[]>("updates_preview", { mode, until });
+export const updatesSetMode = (mode: UpdateMode, until: string | null) =>
+  invoke<UpdatesPage>("updates_set_mode", { mode, until });
+/** Volta ao Padrão, guarda o modo e abre o Windows Update. */
+export const updatesUpdateNow = () => invoke<UpdatesPage>("updates_update_now");
+export const updatesResume = () => invoke<UpdatesPage>("updates_resume");
+
 export interface SettingsView {
   start_with_windows: boolean;
   close_to_tray: boolean;

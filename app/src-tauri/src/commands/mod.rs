@@ -8,3 +8,4 @@ pub mod signatures;
 pub mod startup;
 pub mod system;
 pub mod tweaks;
+pub mod updates;

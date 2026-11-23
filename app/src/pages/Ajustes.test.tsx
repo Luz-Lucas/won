@@ -18,6 +18,14 @@ vi.mock("../api", () => ({
   abuseKeyPresent: vi.fn(),
   settingsGet: vi.fn(),
   settingsSet: vi.fn(),
+  updatesStatus: vi.fn().mockResolvedValue({
+    state: { mode: "default", since: null, paused_until: null, reverted: [] },
+    days: null,
+    elevated: false,
+    version: "Windows 11 25H2",
+    suspended: null,
+    defender: { last_attempt: null, last_ok: null, last_error: null },
+  }),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),
 }));

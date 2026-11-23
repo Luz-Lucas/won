@@ -306,6 +306,45 @@ pub fn days_since(since: &str, now_secs: u64) -> Option<u64> {
     u64::try_from(today - day).ok()
 }
 
+/// Modo suspenso por "Atualizar agora", para o "Voltar a {modo}".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Suspended {
+    pub mode: Mode,
+    /// Fim da pausa, quando o modo suspenso era Pausado.
+    pub until: Option<String>,
+}
+
+/// `%LOCALAPPDATA%\Sentinela\updates-suspended.json`.
+pub fn default_suspended_path() -> std::path::PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("Sentinela")
+        .join("updates-suspended.json")
+}
+
+/// Ausente ou corrompido vale como "nada suspenso".
+pub fn load_suspended(path: &Path) -> Option<Suspended> {
+    std::fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+}
+
+pub fn save_suspended(path: &Path, s: Option<&Suspended>) -> Result<(), String> {
+    match s {
+        None => match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+            _ => Ok(()),
+        },
+        Some(s) => {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            }
+            let json = serde_json::to_vec_pretty(s).map_err(|e| e.to_string())?;
+            std::fs::write(path, json).map_err(|e| e.to_string())
+        }
+    }
+}
+
 /// O resultado de trocar de modo, em uma linha para a janela e a CLI.
 #[derive(Debug, Clone, Serialize)]
 pub struct ModeResult {
@@ -369,7 +408,11 @@ pub fn set_mode(
                     notice: None,
                 }));
             };
-            Ok(from_undo(undo(&[entry.tweak_id.clone()], b, journal_path)))
+            Ok(from_undo(undo(
+                std::slice::from_ref(&entry.tweak_id),
+                b,
+                journal_path,
+            )))
         }
         Some(id) => {
             let cat = base.with_generated(generated)?;
@@ -594,6 +637,22 @@ mod tests {
                 start: StartType::Automatic
             }
         );
+    }
+
+    #[test]
+    fn suspended_round_trip_and_clear() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("Sentinela/updates-suspended.json");
+        assert_eq!(load_suspended(&p), None);
+        let s = Suspended {
+            mode: Mode::Paused,
+            until: Some("2026-12-01".into()),
+        };
+        save_suspended(&p, Some(&s)).unwrap();
+        assert_eq!(load_suspended(&p), Some(s));
+        save_suspended(&p, None).unwrap();
+        save_suspended(&p, None).unwrap();
+        assert_eq!(load_suspended(&p), None);
     }
 
     #[test]
