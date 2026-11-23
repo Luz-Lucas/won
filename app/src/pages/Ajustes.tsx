@@ -13,6 +13,7 @@ import {
   type SettingsView,
   type UpdateSummary,
 } from "../api";
+import WindowsUpdates from "../components/WindowsUpdates";
 import { humanDate } from "../format";
 import { useJob } from "../jobs";
 
@@ -264,6 +265,8 @@ export default function Ajustes() {
           {keyError}
         </p>
       )}
+
+      <WindowsUpdates />
     </section>
   );
 }

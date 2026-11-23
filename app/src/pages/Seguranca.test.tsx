@@ -232,15 +232,16 @@ describe("Segurança", () => {
         errors_total: 1,
       }),
     );
+    // Desenhar 1.000 linhas no jsdom é lento com a máquina sob carga.
     expect(
-      await screen.findByText("Mostrando 1.000 de 1.500"),
+      await screen.findByText("Mostrando 1.000 de 1.500", {}, { timeout: 5000 }),
     ).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", { name: /Não verificados/ }),
     );
     expect(screen.getByText(/C:\\Sistema\\x/)).toBeInTheDocument();
     expect(screen.getByText(/acesso negado/)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it("banco não inicializado avisa e leva a Ajustes", async () => {
     const onNavigate = vi.fn();

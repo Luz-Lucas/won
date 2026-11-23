@@ -168,7 +168,12 @@ fn clean_dry_run_lists_categories() {
             "crash-dumps",
             "browser-cache",
             "recycle-bin",
-            "windows-update"
+            "windows-update",
+            "shader-cache",
+            "launcher-cache",
+            "thumbnail-cache",
+            "delivery-optimization",
+            "windows-logs"
         ]
     );
     assert!(v["summary"]["files"].is_u64());
@@ -407,6 +412,189 @@ fn tweak_list_shows_catalog_ids() {
         .success()
         .stdout(contains("game-mode"))
         .stdout(contains("hags"));
+}
+
+#[test]
+fn tweak_list_includes_personalization() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["tweak", "list"])
+        .assert()
+        .success()
+        .stdout(contains("taskbar-align-left"))
+        .stdout(contains("taskbar-align-center"))
+        .stdout(contains("explorer-show-extensions"))
+        .stdout(contains("lockscreen-off"));
+}
+
+/// Simulação (sem `--apply`): nada é apagado.
+#[test]
+fn clean_lists_new_categories() {
+    let tmp = tempfile::tempdir().unwrap();
+    let out = sentinela(&tmp.path().join("db"))
+        .arg("clean")
+        .assert()
+        .success();
+    let out = out.get_output();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    for id in [
+        "shader-cache",
+        "launcher-cache",
+        "thumbnail-cache",
+        "delivery-optimization",
+        "windows-logs",
+    ] {
+        assert!(stdout.contains(id), "{id} ausente em:\n{stdout}");
+    }
+}
+
+/// Só leitura: lista as entradas reais desta máquina.
+#[test]
+fn startup_list_runs() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["startup", "list"])
+        .assert()
+        .code(0);
+    let out = Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["startup", "list", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let v = json_of(&out);
+    assert!(v["entries"].is_array());
+    assert!(v["warnings"].is_array());
+}
+
+#[test]
+fn startup_disable_unknown_id_exits_2() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args([
+            "startup",
+            "disable",
+            "run_hkcu:nao-existe-sentinela-teste",
+            "--yes",
+        ])
+        .assert()
+        .code(2)
+        .stderr(contains(
+            "entrada de inicialização desconhecida: run_hkcu:nao-existe-sentinela-teste",
+        ));
+}
+
+#[test]
+fn startup_enable_requires_an_id() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["startup", "enable"])
+        .assert()
+        .code(2);
+}
+
+/// Só leitura (diário vazio num caminho temporário).
+#[test]
+fn updates_status_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["updates", "status"])
+        .assert()
+        .success()
+        .stdout(contains("Modo: Padrão"));
+    let out = Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["updates", "status", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let v = json_of(&out);
+    assert_eq!(v["mode"], "default");
+    assert!(v["reverted"].is_array());
+}
+
+// Os erros abaixo saem antes de qualquer mudança (os runners do CI são
+// administradores: nenhum teste aplica um modo de verdade).
+#[test]
+fn updates_mode_unknown_exits_2() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["updates", "mode", "nada", "--yes"])
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn updates_paused_requires_until() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["updates", "mode", "paused", "--yes"])
+        .assert()
+        .code(2)
+        .stderr(contains("exige --until"));
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args([
+            "updates",
+            "mode",
+            "blocked",
+            "--until",
+            "2030-01-01",
+            "--yes",
+        ])
+        .assert()
+        .code(2)
+        .stderr(contains("só vale com o modo paused"));
+}
+
+/// Só leitura.
+#[test]
+fn games_list_runs() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["games", "list"])
+        .assert()
+        .code(0);
+    let out = Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["games", "list", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    assert!(json_of(&out).is_array());
+}
+
+#[test]
+fn games_gpu_unknown_id_exits_2() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .env("SENTINELA_TWEAKS_JOURNAL", dir.path().join("journal.json"))
+        .args(["games", "gpu", "on", "gpu-00000000", "--yes"])
+        .assert()
+        .code(2)
+        .stderr(contains("jogo desconhecido: gpu-00000000"));
+}
+
+#[test]
+fn tweak_list_includes_advanced() {
+    Command::cargo_bin("sentinela")
+        .unwrap()
+        .args(["tweak", "list"])
+        .assert()
+        .success()
+        .stdout(contains("mmcss-responsiveness"))
+        .stdout(contains("timer-resolution-global"))
+        .stdout(contains("search-indexing-off"));
 }
 
 #[test]

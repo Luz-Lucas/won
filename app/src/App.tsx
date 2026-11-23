@@ -11,6 +11,7 @@ import Historico from "./pages/Historico";
 import Inicio from "./pages/Inicio";
 import Jogos from "./pages/Jogos";
 import Limpeza from "./pages/Limpeza";
+import Personalizar from "./pages/Personalizar";
 import Seguranca from "./pages/Seguranca";
 import "./styles/tokens.css";
 import "./styles/app.css";
@@ -78,11 +79,17 @@ function Shell() {
       <Sidebar current={page} onNavigate={setPage} elevated={status?.elevated} />
       <main className="content">
         {page === "inicio" && (
-          <Inicio status={status} error={statusError} onNavigate={setPage} />
+          <Inicio
+            status={status}
+            error={statusError}
+            onNavigate={setPage}
+            onChanged={refreshStatus}
+          />
         )}
         {page === "jogos" && <Jogos />}
         {page === "limpeza" && <Limpeza />}
         {page === "aplicativos" && <Aplicativos />}
+        {page === "personalizar" && <Personalizar />}
         {page === "seguranca" && (
           <Seguranca onNavigate={setPage} onRestored={refreshStatus} />
         )}

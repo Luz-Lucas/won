@@ -283,6 +283,46 @@ describe("Limpeza", () => {
     expect(api.cleanApply).not.toHaveBeenCalled();
   });
 
+  it("new_categories_render_with_names", async () => {
+    mockPlan({
+      categories: [
+        cat("shader-cache", 1, 10),
+        cat("launcher-cache", 1, 10, {
+          warnings: ["Steam está aberto; cache ignorado"],
+        }),
+        cat("thumbnail-cache", 1, 10),
+        cat("delivery-optimization", 0, 0, {
+          needs_admin: true,
+          skipped_reason: "requer administrador",
+        }),
+        cat("windows-logs", 0, 0, {
+          needs_admin: true,
+          skipped_reason: "requer administrador",
+        }),
+      ],
+      total_files: 3,
+      total_bytes: 30,
+    });
+    render(<Limpeza />);
+    for (const name of [
+      "Cache de shaders",
+      "Cache de launchers",
+      "Cache de miniaturas",
+      "Cache da Otimização de Entrega",
+      "Logs do Windows",
+    ]) {
+      expect(
+        await screen.findByRole("checkbox", { name: new RegExp(name) }),
+      ).toBeInTheDocument();
+    }
+    expect(
+      screen.getByRole("checkbox", { name: /Logs do Windows/ }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(/Steam está aberto; cache ignorado/),
+    ).toBeInTheDocument();
+  });
+
   it("mantém categorias desmarcadas ao simular novamente", async () => {
     mockPlan({
       categories: [cat("user-temp", 3, 300), cat("crash-dumps", 4, 400)],

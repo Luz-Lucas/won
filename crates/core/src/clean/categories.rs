@@ -12,7 +12,7 @@ pub const MIN_AGE: Duration = Duration::from_secs(24 * 3600);
 
 /// Applies `safe_root` to candidate roots (`None` means the env var is
 /// missing). Missing directories are ignored silently.
-fn resolve_roots(
+pub(super) fn resolve_roots(
     env: &Env,
     candidates: Vec<(&str, Option<PathBuf>)>,
 ) -> (Vec<PathBuf>, Vec<String>) {
@@ -34,13 +34,13 @@ fn resolve_roots(
     (roots, warnings)
 }
 
-fn finish(mut plan: Plan, mut warnings: Vec<String>) -> Plan {
+pub(super) fn finish(mut plan: Plan, mut warnings: Vec<String>) -> Plan {
     warnings.append(&mut plan.warnings);
     plan.warnings = warnings;
     plan
 }
 
-fn plan_old(env: &Env, roots: &[PathBuf], warnings: Vec<String>) -> Plan {
+pub(super) fn plan_old(env: &Env, roots: &[PathBuf], warnings: Vec<String>) -> Plan {
     let now = env.now;
     let mut plan = plan_files(roots, env.use_creation_time, |e| {
         effective_age(e.modified, e.created, now).is_some_and(|age| age > MIN_AGE)

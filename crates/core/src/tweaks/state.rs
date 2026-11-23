@@ -74,6 +74,8 @@ pub fn snapshot_text(s: &Snapshot) -> String {
         Snapshot::ListEntry { value: Some(v) } => format!("\"{v}\""),
         Snapshot::Service { start } => start_name(*start).to_string(),
         Snapshot::PowerPlan { scheme } => plan_name(scheme),
+        Snapshot::ScheduledTask { enabled: true } => "Ligada".to_string(),
+        Snapshot::ScheduledTask { enabled: false } => "Desligada".to_string(),
         Snapshot::Unavailable { reason } => format!("indisponível ({reason})"),
     }
 }
@@ -93,7 +95,10 @@ pub fn describe(action: &Action) -> String {
     match action {
         Action::Registry {
             hive, path, name, ..
-        } => format!("{}\\{path}\\{name}", hive_name(*hive)),
+        } => {
+            let name = if name.is_empty() { "(Padrão)" } else { name };
+            format!("{}\\{path}\\{name}", hive_name(*hive))
+        }
         Action::ListEntry {
             hive,
             path,
@@ -103,6 +108,7 @@ pub fn describe(action: &Action) -> String {
         } => format!("{}\\{path}\\{name} (item {key})", hive_name(*hive)),
         Action::Service { name, .. } => format!("Serviço {name} (inicialização)"),
         Action::PowerPlan { .. } => "Plano de energia ativo".to_string(),
+        Action::ScheduledTask { path, .. } => format!("Tarefa agendada {path}"),
     }
 }
 
@@ -213,6 +219,9 @@ mod tests {
             recommended: false,
             source: "https://example.com".into(),
             actions,
+            choice: None,
+            choice_label: None,
+            area: None,
         }
     }
 

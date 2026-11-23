@@ -1,8 +1,10 @@
 pub mod browser;
 pub mod categories;
 pub mod category;
+pub mod gaming;
 pub mod platform;
 pub mod summary;
+pub mod system_extra;
 
 use serde::Serialize;
 
@@ -30,6 +32,11 @@ pub fn all_categories() -> Vec<Box<dyn Category>> {
         Box::new(browser::BrowserCache::default()),
         Box::new(platform::RecycleBin),
         Box::new(platform::WindowsUpdate),
+        Box::new(gaming::ShaderCache),
+        Box::new(gaming::LauncherCache::default()),
+        Box::new(system_extra::ThumbnailCache),
+        Box::new(system_extra::DeliveryOptimization),
+        Box::new(system_extra::WindowsLogs),
     ]
 }
 
@@ -500,7 +507,12 @@ mod tests {
                 "crash-dumps",
                 "browser-cache",
                 "recycle-bin",
-                "windows-update"
+                "windows-update",
+                "shader-cache",
+                "launcher-cache",
+                "thumbnail-cache",
+                "delivery-optimization",
+                "windows-logs"
             ]
         );
     }

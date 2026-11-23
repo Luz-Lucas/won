@@ -24,6 +24,13 @@ pub struct JournalAction {
     pub written: Snapshot,
     /// `false` = intenção gravada, escrita ainda não confirmada.
     pub done: bool,
+    /// A chave do registro não existia antes da primeira escrita (o desfazer a remove se ficar vazia).
+    #[serde(default)]
+    pub key_created: bool,
+    /// A chave mais alta que o motor criou (caminho completo, da raiz permitida até a folha).
+    /// `None` com `key_created` (diário antigo): só a folha.
+    #[serde(default)]
+    pub created_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,6 +273,8 @@ mod tests {
                     before: Snapshot::Registry { value: None },
                     written: target_of(a),
                     done: false,
+                    key_created: false,
+                    created_from: None,
                 }],
             }],
         }

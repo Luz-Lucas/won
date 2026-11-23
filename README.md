@@ -12,13 +12,17 @@ Baixe o instalador `Sentinela_<versão>_x64-setup.exe` mais recente na página d
 
 ### Interface gráfica
 
-A janela do Sentinela tem cinco páginas, na barra lateral:
+A janela do Sentinela tem estas páginas, na barra lateral:
 
-- **Início**: situação da proteção, atalhos para verificar e liberar espaço, e a atividade recente.
+- **Início**: situação da proteção, atalhos para verificar e liberar espaço, e a atividade recente. Com as atualizações do Windows bloqueadas ou pausadas, mostra há quantos dias o Windows está sem correções e o botão **"Atualizar agora"** (libera, abre o Windows Update e depois oferece voltar ao modo).
+- **Jogos**: otimizações do Windows com prévia, perfis Recomendado, **FPS competitivo** (Recomendado + os situacionais) e Personalizado, e ponto de restauração. A aba **Avançado** traz os ajustes situacionais e controversos, cada um com a explicação inteira; os controversos nunca entram em perfil. A seção **GPU por jogo** liga a placa de alto desempenho em cada jogo detectado (Steam, Epic, Riot ou "Adicionar jogo…"). No fim, **Programas que iniciam com o Windows**: liga e desliga cada programa como o Gerenciador de Tarefas, sem apagar nada; entradas de todos os usuários pedem administrador, e programas cujo arquivo sumiu aparecem como "Arquivo não encontrado".
 - **Limpeza**: simula a limpeza e mostra, por categoria, o que seria apagado e o espaço liberado. Nada é apagado antes de você confirmar; categorias desmarcadas são mantidas.
+- **Aplicativos**: instala e atualiza aplicativos do catálogo pelo winget.
+- **Personalizar**: barra de tarefas, menu Iniciar, Explorador, tema e sistema, com interruptores e listas de opções. Cada mudança mostra a prévia, pede confirmação e pode ser desfeita pelo Histórico. Mudanças que só aparecem com o Explorer reiniciado oferecem o botão "Reiniciar Explorer"; o Sentinela nunca o reinicia sozinho.
 - **Segurança**: verifica pastas ou o computador inteiro (com cancelamento) e lista o que encontrou, sem mover nem apagar nada; também lista os itens que o `sentinela full` colocou em quarentena e permite restaurá-los, sempre depois de confirmar.
 - **Disco**: lista os maiores arquivos e os duplicados de uma pasta. Só lista; nunca apaga.
-- **Ajustes**: atualiza o banco de assinaturas e guarda a chave gratuita da abuse.ch.
+- **Histórico**: as otimizações e personalizações aplicadas, com desfazer.
+- **Ajustes**: atualiza o banco de assinaturas, guarda a chave gratuita da abuse.ch e define a inicialização com o Windows e a bandeja. A seção **Atualizações do Windows** escolhe entre Padrão, Só segurança (recomendado), Pausado até… e Bloqueado, com prévia e aviso dos efeitos; mostra "Parcial" quando o Windows desfaz algo sozinho, com "Aplicar de novo". Mudar o modo exige administrador.
 
 O rodapé da barra lateral mostra se o programa está como administrador e oferece "Reiniciar como administrador". As regras de segurança são as mesmas do `sentinela.exe` descrito abaixo.
 
@@ -39,6 +43,9 @@ sentinela quarantine [--json]
 sentinela restore <id>
 sentinela tweak list | apply <id>... | undo (<id>... | --all)
 sentinela apps list | install <id>... | upgrade (<id>... | --all)
+sentinela startup list | enable <id> | disable <id>
+sentinela updates status | mode <modo> [--until AAAA-MM-DD]
+sentinela games list | gpu (on | off) <id>
 sentinela info
 ```
 
@@ -169,6 +176,11 @@ Categorias e o que cada uma apaga (use `--category <nome>`, repetível; sem ela,
 | `browser-cache` | Somente as pastas `Cache`, `Code Cache` e `GPUCache` dos perfis de Chrome, Edge e Brave, e `cache2` do Firefox. **Nunca** toca em cookies, histórico, senhas ou dados de perfil. Com o navegador aberto, a categoria é pulada com aviso | não |
 | `recycle-bin` | Esvazia a Lixeira (sem janelas de confirmação do Windows) | não |
 | `windows-update` | `%SystemRoot%\SoftwareDistribution\Download`. Ao aplicar, para o serviço `wuauserv`, apaga e reinicia o serviço, mesmo que a exclusão falhe | sim |
+| `shader-cache` | Arquivos com mais de 24 horas em `%LOCALAPPDATA%\D3DSCache`, `NVIDIA\DXCache`, `NVIDIA\GLCache`, `AMD\DxCache`, `AMD\DxcCache` e `%USERPROFILE%\AppData\LocalLow\Intel\ShaderCache`. Os jogos recriam o cache na próxima execução | não |
+| `launcher-cache` | Só o cache web dos launchers: `Steam\htmlcache`, as pastas `webcache*` da Epic, `Battle.net\BrowserCaches` e `Cache`, `Code Cache` e `GPUCache` do Discord. **Nunca** toca em `Steam\userdata`, logins, saves ou jogos. Launcher aberto é pulado com aviso | não |
+| `thumbnail-cache` | Só os arquivos `thumbcache_*.db` e `iconcache_*.db` de `%LOCALAPPDATA%\Microsoft\Windows\Explorer`; os que o Explorer estiver usando são pulados | não |
+| `delivery-optimization` | Cache da Otimização de Entrega em `%SystemRoot%\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache` | sim |
+| `windows-logs` | `*.log` e `*.cab` de `%SystemRoot%\Logs\CBS` e `*.log` de `%SystemRoot%\Temp`, com mais de 24 horas. Nunca o log do CBS em uso | sim |
 
 Com `--json`, o resultado segue o mesmo envelope: `summary` com `files`, `bytes`, `deleted` e `freed`; `items` com uma entrada por categoria (`id`, `plan`, `applied`, `skipped_reason`); e `errors` com os arquivos pulados.
 
@@ -189,6 +201,50 @@ sentinela tweak undo (<id>... | --all) [--yes] [--json]
 - Só um processo altera as otimizações por vez; se outro estiver alterando, o item falha com "outro processo está alterando as otimizações; tente de novo."
 - Códigos de saída: `0` sucesso (inclusive "nada a fazer"), `1` se algum item falhou ou houve conflito no `undo`, `2` erro global (id desconhecido, uso incorreto).
 - Com `--json`, `list` devolve uma lista de `{ id, title, status, blocked, changes }`, em que `status` é `applied`, `not_applied`, `partial` ou `unavailable`; `apply` e `undo` devolvem o relatório.
+- As personalizações (`taskbar-*`, `start-*`, `explorer-*`, `theme-*` e as de sistema) também aparecem no `list`. As que formam uma lista de opções (por exemplo `taskbar-align-left` e `taskbar-align-center`) são exclusivas: aplicar uma desfaz antes a outra opção do mesmo grupo que o Sentinela tiver aplicado. Quando a mudança só aparece com o Explorer reiniciado, o `apply` termina com "Reinicie o Explorer para concluir."; o CLI não reinicia o Explorer.
+
+### `startup`: programas que iniciam com o Windows
+
+```
+sentinela startup list [--json]
+sentinela startup enable <id> [--yes]
+sentinela startup disable <id> [--yes]
+```
+
+- `list` mostra cada entrada das chaves `Run` (usuário, todos os usuários e 32 bits) e das pastas Inicializar (usuário e comum): id, estado (`ativado`/`desativado`), nome, origem e o comando, com `(arquivo não encontrado)`, `(requer administrador)` ou `(este é o Sentinela)` quando for o caso. Só lê o sistema.
+- `enable` e `disable` **perguntam `[s/N]`** (`--yes` pula) e só alternam o estado "aprovado/desativado" de `Explorer\StartupApproved`, exatamente como o Gerenciador de Tarefas. **Nunca** apagam a entrada nem o atalho: o programa continua instalado e pode ser religado a qualquer momento (pelo Sentinela ou pelo Gerenciador de Tarefas).
+- O id é `<origem>:<nome>`, como mostrado no `list`; ids com espaço vão entre aspas (`sentinela startup disable "run_hkcu:Rise Mode Controller"`).
+- Entradas de todos os usuários exigem o terminal como administrador. A entrada do próprio Sentinela não é alterada aqui: use Ajustes → Inicialização na janela.
+- Id desconhecido encerra com código `2` antes de qualquer pergunta. Códigos de saída: `0` sucesso (inclusive "já estava" e cancelamento), `2` erro (id desconhecido, falta de administrador, falha ao gravar).
+- Com `--json`, `list` devolve `{ entries, warnings }`; cada entrada tem `id`, `name`, `command`, `source` (`run_hkcu`, `run_hklm`, `run_hklm32`, `startup_folder_user`, `startup_folder_common`), `enabled`, `file_exists` e `needs_admin`.
+
+### `updates`: Atualizações do Windows
+
+```
+sentinela updates status [--json]
+sentinela updates mode (default | security | paused --until AAAA-MM-DD | blocked) [--yes]
+```
+
+- Quatro modos, todos pelo motor de ajustes (prévia, diário, desfazer):
+  - `default`: desfaz o modo ativo pelo diário e devolve exatamente o que havia antes (nunca apaga políticas que já existiam).
+  - `security`: fixa a versão atual do Windows (`TargetReleaseVersion` com a versão instalada), adia as atualizações de recursos por 365 dias e as de qualidade por 4; as correções de segurança continuam chegando. É o modo recomendado.
+  - `paused`: pausa tudo até a data (entre amanhã e 35 dias); depois o Windows volta a atualizar sozinho.
+  - `blocked`: desliga as atualizações automáticas por política, desativa `wuauserv`, `UsoSvc` e `BITS` e as tarefas agendadas de atualização. O Windows fica **sem correções de segurança**; a Microsoft Store e alguns instaladores falham. Tarefas protegidas que negam acesso são puladas e avisadas.
+- `status` mostra o modo, há quantos dias foi aplicado e, em "Parcial", o que o Windows desfez sozinho (o Sentinela não reaplica por conta própria). Só lê o sistema.
+- `mode` exige o terminal como administrador, mostra a prévia e **pergunta `[s/N]`** (`--yes` pula). Erros de uso (`paused` sem `--until`, `--until` em outro modo, modo desconhecido) saem com código `2` antes de qualquer leitura.
+- Em `blocked` e `paused`, a janela do Sentinela atualiza as definições do Defender uma vez por dia direto da Microsoft (`MpCmdRun -SignatureUpdate -MMPC`, que não passa pelo Windows Update).
+- Códigos de saída: `0` sucesso (inclusive cancelamento), `1` se o modo não pôde ser aplicado por inteiro, `2` erro de uso ou falta de administrador.
+
+### `games`: GPU de alto desempenho por jogo
+
+```
+sentinela games list [--json]
+sentinela games gpu (on | off) <id> [--yes]
+```
+
+- `list` mostra os jogos da Steam (todas as bibliotecas), da Epic, da Riot e os adicionados na janela ("Adicionar jogo…"), um por executável, com `GPU+` quando a preferência de alto desempenho está ligada. Em jogos Unreal, o executável é o `*-Win64-Shipping.exe`, o processo que de fato usa a placa de vídeo. Só lê o sistema.
+- `gpu on` grava a mesma preferência que Configurações → Sistema → Tela → Gráficos ("Alto desempenho"); `gpu off` volta ao que era antes, inclusive para um jogo que já foi desinstalado. Pergunta `[s/N]` (`--yes` pula); não exige administrador.
+- Id desconhecido encerra com código `2`. Com `--json`, `list` devolve `{ id, name, source, exe, high_performance }`.
 
 ### `apps`: aplicativos via winget
 

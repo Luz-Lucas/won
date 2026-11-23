@@ -3,9 +3,14 @@
 //!
 //! Dividido em submódulos (`registry`, `service`, `power`) para manter cada arquivo curto.
 
+mod network;
 mod power;
 mod registry;
 mod service;
+mod tasks;
+
+pub use network::configured_interfaces;
+pub use tasks::tasks_in_folder;
 
 use std::ptr::null_mut;
 
@@ -19,7 +24,8 @@ use windows_sys::Win32::System::Restore::{
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
-use super::backend::{Snapshot, SystemBackend};
+use super::backend::{Snapshot, SystemBackend, reg_key};
+use super::catalog::keys_to_remove;
 use super::model::{Action, RegValue};
 use crate::clean::platform::is_elevated;
 
@@ -110,6 +116,9 @@ impl SystemBackend for WindowsBackend {
                     scheme: power::active_scheme()?,
                 })
             }
+            Action::ScheduledTask { path, .. } => Ok(Snapshot::ScheduledTask {
+                enabled: tasks::read_enabled(path)?,
+            }),
         }
     }
 
@@ -144,6 +153,9 @@ impl SystemBackend for WindowsBackend {
                 service::write_start(name, *start)
             }
             (Action::PowerPlan { .. }, Snapshot::PowerPlan { scheme }) => power::set_active(scheme),
+            (Action::ScheduledTask { path, .. }, Snapshot::ScheduledTask { enabled }) => {
+                tasks::set_enabled(path, *enabled)
+            }
             _ => Err("estado incompatível com a ação".to_string()),
         }
     }
@@ -158,6 +170,30 @@ impl SystemBackend for WindowsBackend {
 
     fn scheme_name(&self, guid: &str) -> Option<String> {
         power::friendly_name(guid)
+    }
+
+    fn key_exists(&self, action: &Action) -> Result<bool, String> {
+        match reg_key(action) {
+            Some((hive, path)) => registry::key_exists(hive, path),
+            None => Ok(true),
+        }
+    }
+
+    fn delete_key_if_empty(
+        &self,
+        action: &Action,
+        created_from: Option<&str>,
+    ) -> Result<(), String> {
+        let Some((hive, path)) = reg_key(action) else {
+            return Ok(());
+        };
+        // Da folha para cima, só dentro da raiz permitida; para na primeira chave não vazia.
+        for p in keys_to_remove(hive, path, created_from) {
+            if !registry::delete_key_if_empty(hive, &p)? {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -386,6 +422,108 @@ mod tests {
             be.write(&a, &Snapshot::Unavailable { reason: "x".into() })
                 .is_err()
         );
+    }
+
+    #[test]
+    #[ignore = "toca no registro (só HKCU\\Software\\Sentinela-test-pid)"]
+    fn default_value_name_empty_reads_writes_and_deletes() {
+        let k = TestKey::new();
+        let be = WindowsBackend::new(true);
+        let a = reg(&k.0, "", Some(RegValue::String("padrão".into())));
+        // ausente no início
+        assert_eq!(be.read(&a).unwrap(), Snapshot::Registry { value: None });
+        let want = Snapshot::Registry {
+            value: Some(RegValue::String("padrão".into())),
+        };
+        be.write(&a, &want).unwrap();
+        assert_eq!(be.read(&a).unwrap(), want);
+        // um valor nomeado ao lado não se confunde com o padrão
+        let named = reg(&k.0, "x", Some(RegValue::Dword(1)));
+        assert_eq!(be.read(&named).unwrap(), Snapshot::Registry { value: None });
+        // apagar o padrão
+        be.write(&a, &Snapshot::Registry { value: None }).unwrap();
+        assert_eq!(be.read(&a).unwrap(), Snapshot::Registry { value: None });
+    }
+
+    #[test]
+    #[ignore = "toca no registro (só HKCU\\Software\\Sentinela-test-pid)"]
+    fn key_exists_and_delete_if_empty_respect_contents() {
+        let k = TestKey::new();
+        let be = WindowsBackend::new(true);
+        let sub = format!("{}\\a\\b", k.0);
+        let leaf = reg(&sub, "v", Some(RegValue::Dword(1)));
+        assert!(!be.key_exists(&leaf).unwrap());
+        be.write(
+            &leaf,
+            &Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        )
+        .unwrap();
+        assert!(be.key_exists(&leaf).unwrap());
+        // com valor: não apaga
+        be.delete_key_if_empty(&leaf, None).unwrap();
+        assert!(be.key_exists(&leaf).unwrap());
+        // sem valor: apaga a folha e os pais vazios, mas nunca a raiz de teste
+        be.write(&leaf, &Snapshot::Registry { value: None })
+            .unwrap();
+        let top = format!("{}\\a", k.0);
+        be.delete_key_if_empty(&leaf, Some(&top)).unwrap();
+        assert!(!be.key_exists(&leaf).unwrap());
+        let a = reg(&format!("{}\\a", k.0), "v", None);
+        assert!(!be.key_exists(&a).unwrap());
+        let root = reg(&k.0, "v", None);
+        assert!(
+            be.key_exists(&root).unwrap(),
+            "a raiz permitida não é apagada"
+        );
+        // chave com subchave não é apagada
+        let child = reg(&format!("{}\\c\\d", k.0), "v", Some(RegValue::Dword(1)));
+        be.write(
+            &child,
+            &Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        )
+        .unwrap();
+        let parent = reg(&format!("{}\\c", k.0), "v", None);
+        be.delete_key_if_empty(&parent, None).unwrap();
+        assert!(be.key_exists(&parent).unwrap());
+    }
+
+    #[test]
+    #[ignore = "toca no registro (só HKCU\\Software\\Sentinela-test-pid)"]
+    fn delete_key_stops_at_created_from_and_keeps_preexisting_parent() {
+        let k = TestKey::new();
+        let be = WindowsBackend::new(true);
+        let parent_path = format!("{}\\p", k.0);
+        let child_path = format!("{}\\q", parent_path);
+        // O pai já existia (vazio): cria e apaga o valor, a chave fica.
+        let parent = reg(&parent_path, "v", Some(RegValue::Dword(1)));
+        be.write(
+            &parent,
+            &Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        )
+        .unwrap();
+        be.write(&parent, &Snapshot::Registry { value: None })
+            .unwrap();
+        assert!(be.key_exists(&parent).unwrap());
+        // O motor cria só o filho.
+        let child = reg(&child_path, "v", Some(RegValue::Dword(1)));
+        be.write(
+            &child,
+            &Snapshot::Registry {
+                value: Some(RegValue::Dword(1)),
+            },
+        )
+        .unwrap();
+        be.write(&child, &Snapshot::Registry { value: None })
+            .unwrap();
+        be.delete_key_if_empty(&child, Some(&child_path)).unwrap();
+        assert!(!be.key_exists(&child).unwrap(), "o filho criado sumiu");
+        assert!(be.key_exists(&parent).unwrap(), "o pai que já existia fica");
     }
 
     #[test]
