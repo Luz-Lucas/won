@@ -54,7 +54,7 @@ pub fn summarize(
         let mut s = ok.clone();
         s.sort_by(f64::total_cmp);
         let mid = s.len() / 2;
-        if s.len() % 2 == 0 {
+        if s.len().is_multiple_of(2) {
             (s[mid - 1] + s[mid]) / 2.0
         } else {
             s[mid]
