@@ -34,3 +34,13 @@ Fica por último e só com confirmação explícita do Lucas.
 ## Pendências para ligar qualquer hook
 - Toolchain Rust e um desmontador/depurador neste PC (nenhum instalado hoje).
 - Ponto de restauração "Sentinela mods 4-7 antes de injecao" já criado (seq. 215).
+
+## Desmontagem confirmada (Taskbar.dll 26100.9818, ferramenta `tools/dis`)
+- `TrayUI::ShouldUseSmallIcons` (0x63020): `mov eax,[rcx+0xBC]; ret`. Getter trivial de 7 bytes. Dá para
+  trocar no lugar por `mov eax,1; ret` (B8 01 00 00 00 C3) e desfazer restaurando os bytes, sem trampolim.
+  Porém o 24H2 já tem o ajuste nativo "botões pequenos da barra", então o ganho sobre o registro é pequeno.
+- `GetTaskbarGlomLevelFlags` (0x63030): lê um valor DWORD de 4 bytes do registro (HKCU, chave em 0x1D39B0)
+  e devolve 0..3 em `eax`. É o ponto natural do mod 5 (rótulos/agrupamento): forçar o retorno no hook.
+- `TaskbarHost::FrameHeight` (0xB10A4): só lê `Height` (double) de um elemento XAML e converte para inteiro.
+  Altura real da barra no Windows 11 é XAML, então o mod 4 de altura depende da fase 13.
+- `CTaskListWnd::GetButtonHeight` (0x63950): lê campos do objeto e consulta DPI; precisa de análise mais longa.

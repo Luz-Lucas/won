@@ -1,0 +1,8 @@
+[package]
+name="dis"
+version="0.1.0"
+edition="2021"
+[dependencies]
+iced-x86="1"
+goblin={version="0.9",default-features=false,features=["pe64","std"]}
+[workspace]
