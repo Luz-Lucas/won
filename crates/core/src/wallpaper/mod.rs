@@ -6,6 +6,7 @@
 pub mod gallery;
 pub mod host;
 pub mod palette;
+pub mod pause;
 pub mod steam;
 
 pub use host::{Command, FakeHost, WallpaperHost, WindowsHost};
