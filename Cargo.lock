@@ -5052,6 +5052,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentinela-mod-icons"
+version = "0.1.0"
+
+[[package]]
 name = "sentinela-mod-labels"
 version = "0.1.0"
 

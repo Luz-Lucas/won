@@ -77,7 +77,11 @@ pub fn eject(dir: &Path, filter: Option<&str>) -> Result<usize> {
 
 /// Liga o mod 5 (rótulos da barra) no Explorer. Passa por todas as travas de `shell::may_enable`.
 /// `build` é o build do Windows; `experimental` precisa ser pedido pelo usuário para builds fora da lista.
-pub fn enable_shell_labels(
+#[allow(clippy::too_many_arguments)]
+pub fn enable_shell_mod(
+    mod_name: &str,
+    symbol: &str,
+    rva_file: &str,
     dir: &Path,
     exe: &Path,
     dll: &Path,
@@ -85,7 +89,7 @@ pub fn enable_shell_labels(
     tested_builds: &[u32],
     experimental: bool,
 ) -> Result<Vec<Injection>> {
-    const SYMBOL: &str = "?GetTaskbarGlomLevelFlags@@YAKPEBG@Z";
+    let _ = ();
     if !dll.is_file() {
         bail!("DLL não encontrada: {}", dll.display());
     }
@@ -101,9 +105,9 @@ pub fn enable_shell_labels(
     let taskbar = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| "C:/Windows".into()))
         .join("System32")
         .join("Taskbar.dll");
-    let rva = symbols::resolve_module(dir, &taskbar, &[SYMBOL])
+    let rva = symbols::resolve_module(dir, &taskbar, &[symbol])
         .ok()
-        .and_then(|m| m.get(SYMBOL).copied());
+        .and_then(|m| m.get(symbol).copied());
     if let Err(b) = shell::may_enable(
         "explorer.exe",
         build,
@@ -115,7 +119,7 @@ pub fn enable_shell_labels(
     ) {
         bail!("trava do agente do shell: {b:?}");
     }
-    std::fs::write(dir.join("labels.rva"), format!("{:X}", rva.unwrap()))?;
+    std::fs::write(dir.join(rva_file), format!("{:X}", rva.unwrap()))?;
     let mut state = registry::load_state(dir);
     let mut done = Vec::new();
     for p in sys.processes().values() {
@@ -126,7 +130,7 @@ pub fn enable_shell_labels(
         let pid = p.pid().as_u32();
         inject::load(pid, dll)?;
         let inj = Injection {
-            mod_name: "rotulos-barra".into(),
+            mod_name: mod_name.into(),
             pid,
             process: name,
             dll: dll.to_path_buf(),
@@ -136,4 +140,48 @@ pub fn enable_shell_labels(
         done.push(inj);
     }
     Ok(done)
+}
+
+/// Mod 5: rótulos (nunca combinar botões).
+pub fn enable_shell_labels(
+    dir: &Path,
+    exe: &Path,
+    dll: &Path,
+    build: u32,
+    tested: &[u32],
+    experimental: bool,
+) -> Result<Vec<Injection>> {
+    enable_shell_mod(
+        "rotulos-barra",
+        "?GetTaskbarGlomLevelFlags@@YAKPEBG@Z",
+        "labels.rva",
+        dir,
+        exe,
+        dll,
+        build,
+        tested,
+        experimental,
+    )
+}
+
+/// Mod 4: ícones pequenos na barra.
+pub fn enable_shell_icons(
+    dir: &Path,
+    exe: &Path,
+    dll: &Path,
+    build: u32,
+    tested: &[u32],
+    experimental: bool,
+) -> Result<Vec<Injection>> {
+    enable_shell_mod(
+        "icones-pequenos",
+        "?ShouldUseSmallIcons@TrayUI@@UEBAHXZ",
+        "icons.rva",
+        dir,
+        exe,
+        dll,
+        build,
+        tested,
+        experimental,
+    )
 }
