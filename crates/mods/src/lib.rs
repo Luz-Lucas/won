@@ -85,7 +85,7 @@ pub fn enable_shell_labels(
     tested_builds: &[u32],
     experimental: bool,
 ) -> Result<Vec<Injection>> {
-    const SYMBOL: &str = "GetTaskbarGlomLevelFlags";
+    const SYMBOL: &str = "?GetTaskbarGlomLevelFlags@@YAKPEBG@Z";
     if !dll.is_file() {
         bail!("DLL não encontrada: {}", dll.display());
     }
