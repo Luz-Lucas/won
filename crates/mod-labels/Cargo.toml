@@ -1,0 +1,8 @@
+[package]
+name = "sentinela-mod-labels"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
