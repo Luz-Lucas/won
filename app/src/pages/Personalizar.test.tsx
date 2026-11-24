@@ -21,6 +21,12 @@ vi.mock("../api", () => ({
   tweaksApplyChoice: vi.fn(),
   tweaksUndo: vi.fn(),
   restartExplorer: vi.fn(),
+  wallpaperStatus: vi.fn().mockResolvedValue({
+    installed: false,
+    running: false,
+    build: null,
+    pause_mode: "pause",
+  }),
   relaunchElevated: vi.fn(),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),

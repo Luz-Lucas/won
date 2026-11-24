@@ -8,7 +8,8 @@ pub mod builtin;
 pub mod model;
 
 pub use apply::{
-    Applied, Env, Preview, PreviewItem, Record, WallpaperCtx, apply, history, preview, undo_last,
+    Applied, Env, Preview, PreviewItem, Record, Undone, WallpaperCtx, apply, default_history_path,
+    history, preview, undo_last,
 };
 pub use archive::{EXTENSION, Imported, export, import, snapshot_current};
 pub use model::{Accent, Parsed, Theme, WallpaperRef, parse, to_toml};

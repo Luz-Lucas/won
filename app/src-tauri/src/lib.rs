@@ -113,6 +113,16 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::wallpaper::wallpaper_status,
+            commands::wallpaper::wallpaper_gallery,
+            commands::wallpaper::wallpaper_open,
+            commands::wallpaper::wallpaper_pause_mode_set,
+            commands::theme::theme_list,
+            commands::theme::theme_preview,
+            commands::theme::theme_apply,
+            commands::theme::theme_undo,
+            commands::theme::theme_export,
+            commands::theme::theme_import,
             commands::clean::clean_apply,
             commands::clean::clean_plan,
             commands::disk::disk_find_large,

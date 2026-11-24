@@ -805,3 +805,93 @@ export const netWifiHoldSet = (on: boolean) => invoke<RoutesPage>("net_wifi_hold
 /** Compara a conexão atual com as rotas `ids` até o destino `label` (job "net"). */
 export const netCompare = (label: string, ids: string[]) =>
   invoke<number>("net_compare", { label, ids });
+
+// --- Wallpaper Engine e temas (fase 5) ---
+
+export type WallpaperPauseMode = "off" | "pause" | "stop";
+
+export interface WallpaperStatus {
+  installed: boolean;
+  running: boolean;
+  build: string | null;
+  pause_mode: WallpaperPauseMode;
+}
+
+export interface WallpaperItem {
+  id: string;
+  dir: string;
+  title: string;
+  kind: string | null;
+  preview: string | null;
+  /** Miniatura em data URL; `null` para GIF ou sem miniatura. */
+  thumb: string | null;
+  active: boolean;
+}
+
+export const wallpaperStatus = () => invoke<WallpaperStatus>("wallpaper_status");
+export const wallpaperGallery = () => invoke<WallpaperItem[]>("wallpaper_gallery");
+export const wallpaperOpen = (id: string) => invoke<void>("wallpaper_open", { id });
+export const wallpaperPauseModeSet = (mode: WallpaperPauseMode) =>
+  invoke<WallpaperStatus>("wallpaper_pause_mode_set", { mode });
+
+export interface ThemeInfo {
+  name: string;
+  description: string;
+  toml: string;
+  builtin: boolean;
+}
+
+export interface ThemeRecord {
+  seq: number;
+  theme: string;
+  applied_at: string;
+  tweak_ids: string[];
+  wallpaper: { previous: string | null; applied: string } | null;
+}
+
+export interface ThemesPage {
+  themes: ThemeInfo[];
+  history: ThemeRecord[];
+}
+
+export interface ThemePreviewItem {
+  kind: "tweak" | "accent" | "wallpaper";
+  label: string;
+  change: boolean;
+  detail: string;
+}
+
+export interface ThemePreview {
+  items: ThemePreviewItem[];
+  warnings: string[];
+}
+
+export interface ThemeApplied {
+  results: { tweak_id: string; ok: boolean; changed: boolean; message: string }[];
+  effect: TweakEffect;
+  warnings: string[];
+  record: ThemeRecord | null;
+}
+
+export interface ThemeUndone {
+  results: { tweak_id: string; ok: boolean; changed: boolean; message: string }[];
+  conflicts: string[];
+  warnings: string[];
+  remaining: ThemeRecord | null;
+}
+
+export interface ImportedTheme {
+  name: string;
+  description: string;
+  toml: string;
+  warnings: string[];
+  disabled: string[];
+}
+
+export const themeList = () => invoke<ThemesPage>("theme_list");
+export const themePreview = (toml: string) => invoke<ThemePreview>("theme_preview", { toml });
+export const themeApply = (toml: string) => invoke<ThemeApplied>("theme_apply", { toml });
+export const themeUndo = () => invoke<ThemeUndone>("theme_undo");
+export const themeExport = (name: string, path: string) =>
+  invoke<void>("theme_export", { name, path });
+export const themeImport = (path: string) => invoke<ImportedTheme>("theme_import", { path });

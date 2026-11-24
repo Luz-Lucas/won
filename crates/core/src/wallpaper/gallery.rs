@@ -55,6 +55,21 @@ pub fn read_item(dir: &Path) -> Option<Item> {
     })
 }
 
+/// Miniatura JPEG (lado maior `side`) de um PNG ou JPEG; `None` para outros
+/// formatos (GIF etc.) ou arquivo ilegível.
+pub fn thumbnail_jpeg(path: &Path, side: u32) -> Option<Vec<u8>> {
+    // Miniaturas enormes não valem a memória.
+    if std::fs::metadata(path).ok()?.len() > 32 * 1024 * 1024 {
+        return None;
+    }
+    let img = image::load_from_memory(&std::fs::read(path).ok()?).ok()?;
+    let mut out = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgb8(img.thumbnail(side, side).to_rgb8())
+        .write_to(&mut out, image::ImageFormat::Jpeg)
+        .ok()?;
+    Some(out.into_inner())
+}
+
 /// Todos os wallpapers da pasta da Oficina, por título.
 pub fn list(workshop: &Path) -> Vec<Item> {
     let Ok(rd) = std::fs::read_dir(workshop) else {
@@ -130,6 +145,23 @@ mod tests {
         for i in list(w.path()) {
             assert_eq!(i.preview, None, "{}", i.id);
         }
+    }
+
+    #[test]
+    fn thumbnail_of_png_and_other_formats() {
+        let d = tempfile::tempdir().unwrap();
+        let png = d.path().join("p.png");
+        image::RgbImage::from_pixel(400, 200, image::Rgb([200, 30, 30]))
+            .save(&png)
+            .unwrap();
+        let t = thumbnail_jpeg(&png, 64).unwrap();
+        assert!(t.starts_with(&[0xFF, 0xD8]), "JPEG");
+        let back = image::load_from_memory(&t).unwrap();
+        assert!(back.width() <= 64 && back.height() <= 64);
+        let gif = d.path().join("p.gif");
+        std::fs::write(&gif, b"GIF89a....").unwrap();
+        assert_eq!(thumbnail_jpeg(&gif, 64), None);
+        assert_eq!(thumbnail_jpeg(&d.path().join("nao-existe"), 64), None);
     }
 
     #[test]
