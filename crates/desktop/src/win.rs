@@ -7,6 +7,7 @@
 use crate::config::{Action, Borders, Loader, Reload, Rgb, default_path};
 use crate::keys::EMERGENCY;
 use crate::rules::{self, Backdrop, Corners, Effects, Rect, WindowInfo};
+use crate::winbar;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -398,6 +399,7 @@ unsafe extern "system" fn on_event(
         } else if event == EVENT_SYSTEM_FOREGROUND {
             consider(st, hwnd);
             paint_borders(st, hwnd);
+            winbar::tick(is_fullscreen(hwnd));
         }
     });
 }
@@ -511,6 +513,7 @@ fn reload(st: &mut State) {
             scan_all(st);
             let fg = unsafe { GetForegroundWindow() };
             paint_borders(st, fg);
+            winbar::apply(st.loader.config().bar.as_ref());
         }
         Reload::Unchanged | Reload::Rejected(_) => {}
     }
@@ -518,6 +521,7 @@ fn reload(st: &mut State) {
 
 fn shutdown(st: &mut State) {
     restore_all(st);
+    winbar::destroy();
     for (id, _) in st.registered.drain(..) {
         unsafe { UnregisterHotKey(std::ptr::null_mut(), id) };
     }
@@ -540,6 +544,10 @@ fn request_stop() {
         if !ev.is_null() {
             SetEvent(ev);
             CloseHandle(ev);
+        } else {
+            // Nenhum em execução: se um anterior caiu com a barra do Windows
+            // escondida, isto a devolve.
+            winbar::show_native_taskbar();
         }
     }
 }
@@ -623,13 +631,15 @@ pub fn run() {
                         }
                     });
                 }
-                WM_TIMER => with_state(|st| {
+                WM_TIMER if msg.hwnd.is_null() => with_state(|st| {
                     if WaitForSingleObject(st.stop, 0) == WAIT_OBJECT_0 {
                         shutdown(st);
                     } else {
                         // Janelas que sumiram saem da lista.
                         st.touched.retain(|k, _| IsWindow(*k as HWND) != 0);
                         reload(st);
+                        let fg = GetForegroundWindow();
+                        winbar::tick(!fg.is_null() && is_fullscreen(fg));
                     }
                 }),
                 _ => {

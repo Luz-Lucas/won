@@ -1,6 +1,7 @@
 //! `desktop.toml`: lido com validação completa. Arquivo inválido nunca
 //! derruba nem troca a configuração que está valendo.
 
+use crate::bar::{self, BarConfig, Edge, Module};
 use crate::keys::{self, Combo};
 use crate::rules::{Backdrop, Corners, Effects, Rule};
 use serde::Deserialize;
@@ -46,6 +47,7 @@ pub struct Config {
     pub hotkeys: Vec<Hotkey>,
     pub rules: Vec<Rule>,
     pub borders: Borders,
+    pub bar: Option<BarConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,6 +58,7 @@ struct RawFile {
     #[serde(default)]
     rule: Vec<RawRule>,
     borders: Option<RawBorders>,
+    bar: Option<RawBar>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,6 +83,23 @@ struct RawRule {
     no_titlebar: bool,
     corners: Option<Corners>,
     backdrop: Option<Backdrop>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawBar {
+    edge: Option<Edge>,
+    height: Option<u32>,
+    background: Option<String>,
+    foreground: Option<String>,
+    font: Option<String>,
+    font_size: Option<u32>,
+    #[serde(default)]
+    hide_native_taskbar: bool,
+    left: Option<Vec<Module>>,
+    center: Option<Vec<Module>>,
+    right: Option<Vec<Module>>,
+    clock_format: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -131,6 +151,70 @@ fn action(h: &RawHotkey) -> Result<Action, String> {
         "toggle-maximize" => named(Action::ToggleMaximize),
         other => Err(format!("ação desconhecida \"{other}\"")),
     }
+}
+
+fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
+    let before = errors.len();
+    let mut pick = |text: &Option<String>, default: Rgb| match text.as_deref().map(color) {
+        Some(Ok(c)) => c,
+        Some(Err(e)) => {
+            errors.push(format!("bar: {e}"));
+            default
+        }
+        None => default,
+    };
+    let background = pick(&b.background, Rgb(0x1C, 0x1C, 0x1E));
+    let foreground = pick(&b.foreground, Rgb(0xFF, 0xFF, 0xFF));
+    let height = b.height.unwrap_or(32);
+    if !(bar::MIN_HEIGHT..=bar::MAX_HEIGHT).contains(&height) {
+        errors.push(format!(
+            "bar: height deve ficar entre {} e {}",
+            bar::MIN_HEIGHT,
+            bar::MAX_HEIGHT
+        ));
+    }
+    let font_size = b.font_size.unwrap_or(12);
+    if !(bar::MIN_FONT..=bar::MAX_FONT).contains(&font_size) {
+        errors.push(format!(
+            "bar: font_size deve ficar entre {} e {}",
+            bar::MIN_FONT,
+            bar::MAX_FONT
+        ));
+    }
+    let font = b.font.clone().unwrap_or_else(|| "Segoe UI".into());
+    if font.trim().is_empty() || font.chars().count() > 31 || font.contains('\0') {
+        errors.push("bar: font inválida".into());
+    }
+    let clock_format = b
+        .clock_format
+        .clone()
+        .unwrap_or_else(|| bar::DEFAULT_CLOCK.into());
+    if clock_format.chars().count() > 40 {
+        errors.push("bar: clock_format longo demais".into());
+    }
+    let (left, center, right) = (
+        b.left.clone().unwrap_or_else(|| vec![Module::Title]),
+        b.center.clone().unwrap_or_default(),
+        b.right
+            .clone()
+            .unwrap_or_else(|| vec![Module::Cpu, Module::Ram, Module::Clock]),
+    );
+    if left.len() + center.len() + right.len() > 12 {
+        errors.push("bar: no máximo 12 módulos".into());
+    }
+    (errors.len() == before).then_some(BarConfig {
+        edge: b.edge.unwrap_or(Edge::Top),
+        height,
+        background,
+        foreground,
+        font,
+        font_size,
+        hide_native_taskbar: b.hide_native_taskbar,
+        left,
+        center,
+        right,
+        clock_format,
+    })
 }
 
 /// Lê o texto inteiro; devolve todos os problemas de uma vez.
@@ -213,11 +297,14 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
         }
     }
 
+    let bar = raw.bar.as_ref().and_then(|b| parse_bar(b, &mut errors));
+
     if errors.is_empty() {
         Ok(Config {
             hotkeys,
             rules,
             borders,
+            bar,
         })
     } else {
         Err(errors)
@@ -336,6 +423,20 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # [borders]
 # active = "#0A84FF"
 # inactive = "#3A3A3C"
+
+# Barra própria (fica ocupando a borda; janelas maximizadas não passam por baixo dela).
+# [bar]
+# edge = "top"                 # top ou bottom
+# height = 32                  # 20 a 96
+# background = "#1C1C1E"
+# foreground = "#FFFFFF"
+# font = "Segoe UI"
+# font_size = 12
+# left = ["title"]             # módulos: title, clock, cpu, ram
+# center = []
+# right = ["cpu", "ram", "clock"]
+# clock_format = "%H:%M"       # %H %M %S %d %m %Y %y
+# hide_native_taskbar = false  # esconde a barra do Windows enquanto o programa roda
 "##;
 
 #[cfg(test)]
@@ -359,6 +460,25 @@ mod tests {
         assert_eq!(c.hotkeys.len(), 2);
         assert_eq!(c.rules.len(), 1);
         assert!(c.borders.active.is_some());
+        assert!(c.bar.is_some());
+    }
+
+    #[test]
+    fn bar_defaults_and_validation() {
+        let c = parse("[bar]\n").unwrap();
+        let b = c.bar.unwrap();
+        assert_eq!(b.height, 32);
+        assert_eq!(b.right.len(), 3);
+        assert!(!b.hide_native_taskbar);
+        let c = parse("[bar]\nedge=\"bottom\"\nheight=40\nleft=[\"clock\"]\nright=[]\nhide_native_taskbar=true\n").unwrap();
+        let b = c.bar.unwrap();
+        assert_eq!(b.edge, crate::bar::Edge::Bottom);
+        assert!(b.right.is_empty() && b.hide_native_taskbar);
+        let e = parse("[bar]\nheight=5\nfont_size=99\nbackground=\"x\"\n").unwrap_err();
+        assert_eq!(e.len(), 3, "{e:?}");
+        assert!(parse("[bar]\nleft=[\"coisa\"]\n").is_err());
+        assert!(parse("[bar]\nedge=\"left\"\n").is_err());
+        assert!(parse("[bar]\nmagia=1\n").is_err());
     }
 
     #[test]
