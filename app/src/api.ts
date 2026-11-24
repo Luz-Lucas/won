@@ -829,11 +829,26 @@ export interface WallpaperItem {
   /** Miniatura em data URL; `null` para GIF ou sem miniatura. */
   thumb: string | null;
   active: boolean;
+  /** Índices dos monitores em que está em uso. */
+  active_on: number[];
+}
+
+export interface WallpaperMonitor {
+  /** Índice do `-monitor` do Wallpaper Engine (começa em 0). */
+  index: number;
+  name: string;
+  width: number;
+  height: number;
+  primary: boolean;
+  current: string | null;
 }
 
 export const wallpaperStatus = () => invoke<WallpaperStatus>("wallpaper_status");
 export const wallpaperGallery = () => invoke<WallpaperItem[]>("wallpaper_gallery");
-export const wallpaperOpen = (id: string) => invoke<void>("wallpaper_open", { id });
+export const wallpaperMonitors = () => invoke<WallpaperMonitor[]>("wallpaper_monitors");
+/** `monitor` `null` aplica em todos os monitores. */
+export const wallpaperOpen = (id: string, monitor: number | null = null) =>
+  invoke<void>("wallpaper_open", { id, monitor });
 export const wallpaperPauseModeSet = (mode: WallpaperPauseMode) =>
   invoke<WallpaperStatus>("wallpaper_pause_mode_set", { mode });
 
@@ -842,6 +857,8 @@ export interface ThemeInfo {
   description: string;
   toml: string;
   builtin: boolean;
+  /** Tudo do tema já está assim agora (lido de volta do sistema). */
+  applied?: boolean;
 }
 
 export interface ThemeRecord {

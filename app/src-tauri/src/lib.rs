@@ -115,6 +115,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::wallpaper::wallpaper_status,
             commands::wallpaper::wallpaper_gallery,
+            commands::wallpaper::wallpaper_monitors,
             commands::wallpaper::wallpaper_open,
             commands::wallpaper::wallpaper_pause_mode_set,
             commands::theme::theme_list,

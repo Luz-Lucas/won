@@ -27,6 +27,35 @@ fn inside(dir: &Path, rel: &str) -> Option<PathBuf> {
     safe.then(|| dir.join(p))
 }
 
+const PREVIEW_NAMES: [&str; 8] = [
+    "preview.jpg",
+    "preview.png",
+    "preview.gif",
+    "preview.jpeg",
+    "preview.webp",
+    "thumbnail.jpg",
+    "thumbnail.png",
+    "preview.bmp",
+];
+
+/// Procura `preview.*` na pasta, sem diferenciar maiúsculas de minúsculas.
+fn fallback_preview(dir: &Path) -> Option<PathBuf> {
+    let names: Vec<_> = std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .filter(|e| e.path().is_file())
+        .map(|e| e.file_name().to_string_lossy().to_lowercase())
+        .collect();
+    let found = PREVIEW_NAMES
+        .iter()
+        .find(|n| names.iter().any(|f| f == *n))?;
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().to_lowercase() == *found)
+        .map(|e| e.path())
+}
+
 /// Lê um `project.json`; campos ausentes não derrubam o item.
 pub fn read_item(dir: &Path) -> Option<Item> {
     let text = std::fs::read_to_string(dir.join("project.json")).ok()?;
@@ -41,11 +70,14 @@ pub fn read_item(dir: &Path) -> Option<Item> {
         .get("type")
         .and_then(|t| t.as_str())
         .map(|t| t.to_lowercase());
+    // `preview` do project.json; se faltar ou apontar para um arquivo que não
+    // existe, tenta os nomes que a Oficina costuma usar.
     let preview = v
         .get("preview")
         .and_then(|p| p.as_str())
         .and_then(|p| inside(dir, p))
-        .filter(|p| p.is_file());
+        .filter(|p| p.is_file())
+        .or_else(|| fallback_preview(dir));
     Some(Item {
         id,
         dir: dir.to_path_buf(),
@@ -59,7 +91,7 @@ pub fn read_item(dir: &Path) -> Option<Item> {
 /// formatos (GIF etc.) ou arquivo ilegível.
 pub fn thumbnail_jpeg(path: &Path, side: u32) -> Option<Vec<u8>> {
     // Miniaturas enormes não valem a memória.
-    if std::fs::metadata(path).ok()?.len() > 32 * 1024 * 1024 {
+    if std::fs::metadata(path).ok()?.len() > 64 * 1024 * 1024 {
         return None;
     }
     let img = image::load_from_memory(&std::fs::read(path).ok()?).ok()?;
@@ -160,8 +192,29 @@ mod tests {
         assert!(back.width() <= 64 && back.height() <= 64);
         let gif = d.path().join("p.gif");
         std::fs::write(&gif, b"GIF89a....").unwrap();
-        assert_eq!(thumbnail_jpeg(&gif, 64), None);
+        assert_eq!(thumbnail_jpeg(&gif, 64), None, "GIF quebrado");
         assert_eq!(thumbnail_jpeg(&d.path().join("nao-existe"), 64), None);
+    }
+
+    #[test]
+    fn preview_falls_back_to_common_names() {
+        let w = tempfile::tempdir().unwrap();
+        item(w.path(), "1", r#"{"title":"Sem campo"}"#);
+        fs::write(w.path().join("1").join("Preview.GIF"), b"x").unwrap();
+        item(w.path(), "2", r#"{"preview":"nao-existe.jpg"}"#);
+        fs::write(w.path().join("2").join("preview.jpg"), b"x").unwrap();
+        let all = list(w.path());
+        assert!(all[0].preview.is_some() && all[1].preview.is_some());
+    }
+
+    #[test]
+    fn gif_thumbnail_uses_first_frame() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("a.gif");
+        image::RgbImage::from_pixel(100, 50, image::Rgb([10, 200, 10]))
+            .save_with_format(&p, image::ImageFormat::Gif)
+            .unwrap();
+        assert!(thumbnail_jpeg(&p, 32).unwrap().starts_with(&[0xFF, 0xD8]));
     }
 
     #[test]

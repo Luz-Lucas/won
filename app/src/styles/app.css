@@ -659,31 +659,167 @@ body {
 .wallpaper-grid {
   list-style: none;
   padding: 0;
-  margin: 1rem 0;
+  margin: var(--sp-4) 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: var(--sp-4);
 }
 .wallpaper-card {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--sp-2);
   align-items: flex-start;
+  min-width: 0;
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 .wallpaper-card img,
 .wallpaper-placeholder {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 .wallpaper-placeholder {
   display: grid;
   place-items: center;
   font-size: 2rem;
-  background: var(--surface-2, rgba(128, 128, 128, 0.2));
+  background: var(--surface-2);
 }
 .wallpaper-title {
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.wallpaper-card .btn {
+  margin-top: auto;
+}
+
+/* Ritmo vertical e espaçamento das páginas (revisão geral). `:where` deixa
+   qualquer regra de classe mais específica ganhar. */
+:where(.page) p {
+  margin: 0 0 var(--sp-3);
+}
+
+:where(.page) .form-error {
+  margin-bottom: var(--sp-3);
+}
+
+.tweak-profiles {
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+
+.notice p {
+  margin: 0 0 var(--sp-2);
+}
+
+.notice > :last-child {
+  margin-bottom: 0;
+}
+
+.notice .btn {
+  margin-top: var(--sp-2);
+}
+
+.clean-list {
+  margin-bottom: var(--sp-4);
+}
+
+.clean-row {
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.clean-row > p {
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+
+.clean-row > .btn {
+  margin-top: var(--sp-1);
+}
+
+.clean-head {
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.clean-head > .clean-check {
+  margin-right: auto;
+}
+
+.clean-row > .tweak-badge {
+  display: inline-block;
+  margin: var(--sp-2) var(--sp-2) 0 0;
+}
+
+.tweak-badge {
+  padding: 2px var(--sp-2);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.choice-group {
+  gap: var(--sp-2) var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.clean-row .choice-group {
+  margin-bottom: 0;
+}
+
+.choice-group > p {
+  width: 100%;
+  margin: 0;
+}
+
+.clean-check {
+  line-height: 1.4;
+}
+
+.clean-head > label:not(.clean-check) {
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+}
+
+.page input[type="text"] {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-2);
+}
+
+.dialog-body ul {
+  margin: 0 0 var(--sp-3);
+  padding-left: var(--sp-4);
+}
+
+.dialog-body li {
+  margin-bottom: var(--sp-1);
+}
+
+.dialog-body {
+  line-height: 1.5;
+}
+
+.page > .btn,
+.page > p + .btn {
+  margin-bottom: var(--sp-3);
+}
+
+.clean-footer {
+  gap: var(--sp-3);
+}
+
+.scan-actions,
+.scan-running {
+  margin-bottom: var(--sp-4);
+}
+
+.finding-head,
+.quarantine-row {
+  flex-wrap: wrap;
 }

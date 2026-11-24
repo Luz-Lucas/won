@@ -122,6 +122,42 @@ pub fn current_wallpaper(config_json: &str) -> Option<String> {
     find(&v)
 }
 
+/// Wallpaper de cada monitor, pelas chaves `Monitor0`, `Monitor1`… de
+/// `selectedwallpapers` (índice, arquivo), em ordem de monitor. Vazio se o
+/// arquivo não for lido ou não tiver a seção.
+pub fn wallpapers_by_monitor(config_json: &str) -> Vec<(u32, String)> {
+    let Ok(v) =
+        serde_json::from_str::<serde_json::Value>(config_json.trim_start_matches('\u{feff}'))
+    else {
+        return Vec::new();
+    };
+    fn find(v: &serde_json::Value) -> Option<Vec<(u32, String)>> {
+        match v {
+            serde_json::Value::Object(m) => {
+                if let Some(sel) = m.get("selectedwallpapers").and_then(|s| s.as_object()) {
+                    let mut out: Vec<(u32, String)> = sel
+                        .iter()
+                        .filter_map(|(k, m)| {
+                            let n = k
+                                .strip_prefix("Monitor")
+                                .or_else(|| k.strip_prefix("monitor"))?
+                                .parse::<u32>()
+                                .ok()?;
+                            Some((n, m.get("file")?.as_str()?.to_string()))
+                        })
+                        .collect();
+                    out.sort();
+                    return Some(out);
+                }
+                m.values().find_map(find)
+            }
+            serde_json::Value::Array(a) => a.iter().find_map(find),
+            _ => None,
+        }
+    }
+    find(&v).unwrap_or_default()
+}
+
 /// Observa o `config.json` de tempos em tempos: avisa só quando o wallpaper muda.
 #[derive(Debug, Default)]
 pub struct ConfigWatch {
@@ -189,6 +225,19 @@ mod tests {
 
     const CFG: &str = r#"{"user1":{"general":{},"wallpaperconfig":{"selectedwallpapers":{
         "Monitor1":{"file":"C:\\w\\2\\project.json"},"Monitor0":{"file":"C:\\w\\1\\project.json"}}}}}"#;
+
+    #[test]
+    fn wallpapers_per_monitor() {
+        assert_eq!(
+            wallpapers_by_monitor(CFG),
+            [
+                (0, r"C:\w\1\project.json".to_string()),
+                (1, r"C:\w\2\project.json".to_string())
+            ]
+        );
+        assert!(wallpapers_by_monitor("lixo").is_empty());
+        assert!(wallpapers_by_monitor("{}").is_empty());
+    }
 
     #[test]
     fn config_change_detected() {

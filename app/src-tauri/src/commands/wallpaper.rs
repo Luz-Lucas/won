@@ -27,8 +27,22 @@ pub struct GalleryItem {
     pub item: Item,
     /// Miniatura como data URL (PNG/JPEG); `None` para GIF ou sem miniatura.
     pub thumb: Option<String>,
-    /// É o wallpaper em uso agora.
+    /// É o wallpaper em uso agora (em algum monitor).
     pub active: bool,
+    /// Índices dos monitores em que ele está em uso.
+    pub active_on: Vec<u32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MonitorInfo {
+    /// Índice usado pelo `-monitor` do Wallpaper Engine.
+    pub index: u32,
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub primary: bool,
+    /// Arquivo do wallpaper em uso nesse monitor, se o `config.json` disser.
+    pub current: Option<String>,
 }
 
 async fn blocking<T: Send + 'static>(
@@ -69,14 +83,16 @@ pub async fn wallpaper_status() -> Result<Status, String> {
 pub async fn wallpaper_gallery() -> Result<Vec<GalleryItem>, String> {
     blocking(|| {
         let install = wallpaper::system_install().ok_or(NOT_INSTALLED)?;
-        let current = wallpaper::current_file(&install);
+        let per_monitor = wallpaper::current_by_monitor(&install);
         let items = gallery::list(&install.workshop);
         Ok(items
             .into_par_iter()
             .map(|item| {
-                let active = current.as_deref().is_some_and(|c| {
-                    c.contains(&format!("\\{}\\", item.id)) || c.contains(&format!("/{}/", item.id))
-                });
+                let active_on: Vec<u32> = per_monitor
+                    .iter()
+                    .filter(|(_, f)| wallpaper::file_is_item(f, &item.id))
+                    .map(|(m, _)| *m)
+                    .collect();
                 let thumb = item
                     .preview
                     .as_deref()
@@ -85,7 +101,8 @@ pub async fn wallpaper_gallery() -> Result<Vec<GalleryItem>, String> {
                 GalleryItem {
                     item,
                     thumb,
-                    active,
+                    active: !active_on.is_empty(),
+                    active_on,
                 }
             })
             .collect())
@@ -93,12 +110,51 @@ pub async fn wallpaper_gallery() -> Result<Vec<GalleryItem>, String> {
     .await
 }
 
-/// Coloca um wallpaper da Oficina (pela pasta) em todos os monitores.
+/// Monitores conectados, na ordem do Windows (a mesma do Wallpaper Engine).
 #[tauri::command]
-pub async fn wallpaper_open(id: String) -> Result<(), String> {
+pub async fn wallpaper_monitors(app: tauri::AppHandle) -> Result<Vec<MonitorInfo>, String> {
+    let monitors = app
+        .available_monitors()
+        .map_err(|_| "Não foi possível listar os monitores.".to_string())?;
+    let primary = app.primary_monitor().ok().flatten();
+    let per_monitor = wallpaper::system_install()
+        .map(|i| wallpaper::current_by_monitor(&i))
+        .unwrap_or_default();
+    Ok(monitors
+        .iter()
+        .enumerate()
+        .map(|(n, m)| {
+            let index = n as u32;
+            MonitorInfo {
+                index,
+                name: m
+                    .name()
+                    .cloned()
+                    .unwrap_or_else(|| format!("Monitor {}", index + 1)),
+                width: m.size().width,
+                height: m.size().height,
+                primary: primary
+                    .as_ref()
+                    .is_some_and(|p| p.position() == m.position()),
+                current: per_monitor
+                    .iter()
+                    .find(|(i, _)| *i == index)
+                    .map(|(_, f)| f.clone()),
+            }
+        })
+        .collect())
+}
+
+/// Coloca um wallpaper da Oficina (pela pasta) em um monitor (`monitor`) ou
+/// em todos (`None`).
+#[tauri::command]
+pub async fn wallpaper_open(id: String, monitor: Option<u32>) -> Result<(), String> {
     blocking(move || {
         if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
             return Err("Wallpaper inválido.".into());
+        }
+        if monitor.is_some_and(|m| m >= 16) {
+            return Err("Monitor inválido.".into());
         }
         let install = wallpaper::system_install().ok_or(NOT_INSTALLED)?;
         let file = install.workshop.join(&id).join("project.json");
@@ -107,7 +163,7 @@ pub async fn wallpaper_open(id: String) -> Result<(), String> {
         }
         WindowsHost::new(&install.exe).send(&Command::OpenWallpaper {
             path: file,
-            monitor: None,
+            monitor,
         })
     })
     .await

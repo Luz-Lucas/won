@@ -1,7 +1,6 @@
 //! Preferências (início com o Windows, fechar para a bandeja).
 //! A lógica de arquivo vive em `sentinela_core::settings`; aqui só a fiação.
 
-use sentinela_core::clean;
 use sentinela_core::scan::explorer as scan_explorer;
 use sentinela_core::settings::{self, Settings};
 use serde::Serialize;
@@ -11,8 +10,7 @@ use std::sync::atomic::AtomicBool;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
-const ELEVATED_NOTE: &str =
-    "Abra o Sentinela sem administrador para mudar a inicialização com o Windows.";
+const ELEVATED_NOTE: &str = "Esta janela está em outra conta do Windows. A inicialização com o Windows só pode ser mudada pela própria conta.";
 const NOT_INSTALLED_NOTE: &str =
     "A inicialização com o Windows só é registrada pela versão instalada.";
 const SAVE_ERR: &str = "Não foi possível salvar as preferências.";
@@ -100,9 +98,12 @@ fn autostart_mode() -> AutostartMode {
         .iter()
         .filter_map(|k| std::env::var_os(k).map(PathBuf::from))
         .collect();
+    // O app sempre abre como administrador (manifesto), então estar elevado já
+    // não impede nada. O que impede é a janela estar em outra conta: aí o HKCU
+    // não é o do usuário dono do app.
     autostart_mode_for(
         cfg!(not(debug_assertions)),
-        clean::platform::is_elevated(),
+        !super::tweaks::startup_hkcu_allowed(),
         std::env::current_exe().ok().as_deref(),
         &roots,
     )
@@ -149,8 +150,57 @@ pub fn apply_settings(
     Ok(view(&saved, mode))
 }
 
-/// Escrita única na entrada Run. Ligar sempre a reescreve (desliga e liga), para
-/// corrigir uma entrada que aponte para outro executável.
+const AUTOSTART_ERR: &str = "Não foi possível alterar a inicialização com o Windows.";
+
+/// Como o app abre sempre como administrador, a entrada `Run` não o inicia
+/// (o Windows barra programa elevado ali). O início automático é uma tarefa
+/// agendada "ao entrar" com privilégios altos; a entrada `Run` antiga é
+/// removida. Ligar sempre recria a tarefa (`/F`), apontando para este exe.
+#[cfg(windows)]
+fn write_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let schtasks = |args: &[String]| {
+        std::process::Command::new("schtasks")
+            .args(args)
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .output()
+    };
+    let manager = app.autolaunch();
+    if manager.is_enabled().unwrap_or(false) {
+        let _ = manager.disable(); // entrada Run das versões anteriores
+    }
+    if on {
+        let exe = std::env::current_exe().map_err(|_| AUTOSTART_ERR.to_string())?;
+        let out = schtasks(&[
+            "/Create".into(),
+            "/TN".into(),
+            "Sentinela".into(),
+            "/TR".into(),
+            format!("\"{}\" {}", exe.display(), super::system::MINIMIZED_ARG),
+            "/SC".into(),
+            "ONLOGON".into(),
+            "/RL".into(),
+            "HIGHEST".into(),
+            "/F".into(),
+        ])
+        .map_err(|_| AUTOSTART_ERR.to_string())?;
+        out.status
+            .success()
+            .then_some(())
+            .ok_or_else(|| AUTOSTART_ERR.to_string())
+    } else {
+        // Sem tarefa (já removida) também é sucesso.
+        let _ = schtasks(&[
+            "/Delete".into(),
+            "/TN".into(),
+            "Sentinela".into(),
+            "/F".into(),
+        ]);
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
 fn write_autostart(app: &AppHandle, on: bool) -> Result<(), String> {
     let manager = app.autolaunch();
     let r = if on {

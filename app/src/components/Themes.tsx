@@ -176,6 +176,7 @@ export default function Themes({ engine }: { engine: boolean }) {
             <div className="clean-head">
               <strong>{t.name}</strong>
               {!t.builtin && <span className="tweak-badge">Importado</span>}
+              {t.applied && <span className="tweak-badge">Aplicado</span>}
             </div>
             <p className="muted">{t.description}</p>
             <button
