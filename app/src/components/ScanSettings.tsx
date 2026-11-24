@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import {
+  explorerMenuGet,
+  explorerMenuSet,
   scanAutoQuarantineSet,
   scanExceptionRemove,
   scanExceptionsList,
   scanScheduleGet,
   scanScheduleSet,
+  type ExplorerMenuView,
   type ScanException,
   type ScheduleView,
 } from "../api";
@@ -16,12 +19,14 @@ const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 export default function ScanSettings() {
   const [schedule, setSchedule] = useState<ScheduleView | null>(null);
   const [exceptions, setExceptions] = useState<ScanException[] | null>(null);
+  const [explorer, setExplorer] = useState<ExplorerMenuView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     scanScheduleGet().then(setSchedule, (e) => setError(errorText(e)));
     scanExceptionsList().then(setExceptions, (e) => setError(errorText(e)));
+    explorerMenuGet().then(setExplorer, (e) => setError(errorText(e)));
   }, []);
 
   const run = async <T,>(f: () => Promise<T>, set: (v: T) => void) => {
@@ -73,6 +78,27 @@ export default function ScanSettings() {
             Só na verificação agendada e só para arquivos na lista de malware conhecido; nunca
             dentro da pasta do Windows nem em programas abertos. O resto continua esperando você
             decidir.
+          </p>
+        </>
+      )}
+
+      <h2 className="section-title">Menu do Explorador</h2>
+      {explorer && (
+        <>
+          <p>
+            <label>
+              <input
+                type="checkbox"
+                checked={explorer.enabled}
+                disabled={busy || explorer.note !== null}
+                onChange={(e) => void run(() => explorerMenuSet(e.target.checked), setExplorer)}
+              />{" "}
+              "Verificar com o Sentinela" no clique direito
+            </label>
+          </p>
+          <p className="muted">
+            {explorer.note ??
+              'Em arquivos, pastas e discos. No Windows 11, fica em "Mostrar mais opções". Desligar apaga o item do menu.'}
           </p>
         </>
       )}

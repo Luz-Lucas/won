@@ -5,6 +5,8 @@ import * as api from "../api";
 import ScanSettings from "./ScanSettings";
 
 vi.mock("../api", () => ({
+  explorerMenuGet: vi.fn(),
+  explorerMenuSet: vi.fn(),
   scanScheduleGet: vi.fn(),
   scanScheduleSet: vi.fn(),
   scanAutoQuarantineSet: vi.fn(),
@@ -18,6 +20,10 @@ describe("ScanSettings", () => {
   beforeEach(() => {
     vi.mocked(api.scanScheduleGet).mockReset().mockResolvedValue(view());
     vi.mocked(api.scanExceptionsList).mockReset().mockResolvedValue([]);
+    vi.mocked(api.explorerMenuGet)
+      .mockReset()
+      .mockResolvedValue({ enabled: true, note: null });
+    vi.mocked(api.explorerMenuSet).mockReset();
     vi.mocked(api.scanScheduleSet).mockReset();
     vi.mocked(api.scanAutoQuarantineSet).mockReset();
     vi.mocked(api.scanExceptionRemove).mockReset();
@@ -57,5 +63,29 @@ describe("ScanSettings", () => {
     );
     expect(api.scanExceptionRemove).toHaveBeenCalledWith(sha);
     expect(await screen.findByText('Nenhum arquivo em "Ignorar sempre".')).toBeInTheDocument();
+  });
+
+  it("explorer_menu_setting", async () => {
+    vi.mocked(api.explorerMenuSet).mockResolvedValue({ enabled: false, note: null });
+    render(<ScanSettings />);
+    const box = await screen.findByLabelText('"Verificar com o Sentinela" no clique direito');
+    expect(box).toBeChecked();
+    await userEvent.click(box);
+    expect(api.explorerMenuSet).toHaveBeenCalledWith(false);
+    expect(
+      await screen.findByLabelText('"Verificar com o Sentinela" no clique direito'),
+    ).not.toBeChecked();
+  });
+
+  it("menu do Explorador fica travado quando o app não é o instalado", async () => {
+    vi.mocked(api.explorerMenuGet).mockResolvedValue({
+      enabled: true,
+      note: "O menu do Explorador só é registrado pela versão instalada.",
+    });
+    render(<ScanSettings />);
+    expect(
+      await screen.findByLabelText('"Verificar com o Sentinela" no clique direito'),
+    ).toBeDisabled();
+    expect(screen.getByText(/só é registrado pela versão instalada/)).toBeInTheDocument();
   });
 });

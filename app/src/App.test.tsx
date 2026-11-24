@@ -32,6 +32,7 @@ const scanSummary = {
   interrupted: false,
   malicious: 0,
   suspicious: 0,
+  risk: 0,
   items: [],
   items_total: 0,
   errors: [],

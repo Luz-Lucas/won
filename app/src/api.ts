@@ -92,7 +92,7 @@ export type ScanTarget =
   | { kind: "full" }
   | { kind: "custom"; paths: string[] };
 
-export type Severity = "info" | "suspicious" | "malicious";
+export type Severity = "info" | "risk" | "suspicious" | "malicious";
 
 export interface Finding {
   detector: string;
@@ -111,6 +111,8 @@ export interface ScanItem {
   recommended: boolean;
   /** O "por quê" de cada achado, na mesma ordem de `findings`. */
   why: string[];
+  /** Achado dentro de um compactado: a entrada. A quarentena move o compactado inteiro. */
+  in_archive: string | null;
 }
 
 export interface WalkError {
@@ -123,6 +125,8 @@ export interface ScanSummary {
   interrupted: boolean;
   malicious: number;
   suspicious: number;
+  /** Nível Risco: contexto ruim, sem nada casar (vem desmarcado). */
+  risk: number;
   items: ScanItem[];
   items_total: number;
   /** Achados tirados por estarem em "Ignorar sempre". */
@@ -146,6 +150,7 @@ export interface QuarantineEntry {
 
 export type Guard =
   | { kind: "system_folder" }
+  | { kind: "microsoft_signed"; signer: string }
   | { kind: "in_use"; pids: number[]; names: string[] };
 
 export interface GuardView {
@@ -182,6 +187,26 @@ export interface ScheduleView {
   auto_quarantine: boolean;
   offered: boolean;
 }
+
+export interface PauseState {
+  paused: boolean;
+  reason: "user" | "game" | null;
+}
+
+export const scanPause = (paused: boolean) => invoke<PauseState>("scan_pause", { paused });
+export const scanPauseState = () => invoke<PauseState>("scan_pause_state");
+/** Pedidos do menu "Verificar com o Sentinela" do Explorador (esvazia a fila). */
+export const scanRequestTake = () => invoke<string[]>("scan_request_take");
+
+export interface ExplorerMenuView {
+  enabled: boolean;
+  /** Por que não dá para mudar (app de desenvolvimento ou elevado). */
+  note: string | null;
+}
+
+export const explorerMenuGet = () => invoke<ExplorerMenuView>("explorer_menu_get");
+export const explorerMenuSet = (on: boolean) =>
+  invoke<ExplorerMenuView>("explorer_menu_set", { on });
 
 export const scanGuard = (paths: string[]) => invoke<GuardView[]>("scan_guard", { paths });
 export const scanQuarantine = (requests: QuarantineRequest[], endPids: number[]) =>

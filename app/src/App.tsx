@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { quitApp, systemStatus, windowReady, type SystemStatus } from "./api";
+import {
+  quitApp,
+  scanRequestTake,
+  systemStatus,
+  windowReady,
+  type SystemStatus,
+} from "./api";
 import ConfirmDialog from "./components/ConfirmDialog";
 import Sidebar, { type Page } from "./components/Sidebar";
 import { JobsProvider, useJobSettled } from "./jobs";
@@ -14,7 +20,7 @@ import Limpeza from "./pages/Limpeza";
 import Personalizar from "./pages/Personalizar";
 import Rede from "./pages/Rede";
 import Quarentena from "./pages/Quarentena";
-import Seguranca from "./pages/Seguranca";
+import Seguranca, { type ExplorerRequest } from "./pages/Seguranca";
 import "./styles/tokens.css";
 import "./styles/app.css";
 
@@ -70,6 +76,35 @@ function Shell() {
     };
   }, []);
 
+  // "Verificar com o Sentinela" no Explorador: abre a Segurança e verifica o item.
+  const [explorerRequest, setExplorerRequest] = useState<ExplorerRequest | null>(null);
+  const requestId = useRef(0);
+  useEffect(() => {
+    const take = () => {
+      scanRequestTake().then(
+        (paths) => {
+          if (!Array.isArray(paths) || paths.length === 0) return;
+          setExplorerRequest({ id: ++requestId.current, paths });
+          setPage("seguranca");
+        },
+        () => {
+          /* sem backend (navegador): nada a fazer */
+        },
+      );
+    };
+    take();
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void listen("scan:request", take).then((un) => {
+      if (disposed) un();
+      else unlisten = un;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   // O Início sempre mostra dados atuais: ao abrir e depois de cada operação.
   useEffect(() => {
     if (page === "inicio") refreshStatus();
@@ -93,7 +128,13 @@ function Shell() {
         {page === "aplicativos" && <Aplicativos />}
         {page === "personalizar" && <Personalizar />}
         {page === "rede" && <Rede />}
-        {page === "seguranca" && <Seguranca onNavigate={setPage} />}
+        {page === "seguranca" && (
+          <Seguranca
+            onNavigate={setPage}
+            explorerRequest={explorerRequest}
+            elevated={status?.elevated}
+          />
+        )}
         {page === "quarentena" && <Quarentena onRestored={refreshStatus} />}
         {page === "disco" && <Disco />}
         {page === "historico" && <Historico />}
