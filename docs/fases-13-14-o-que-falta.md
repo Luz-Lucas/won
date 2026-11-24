@@ -99,3 +99,24 @@ Passos tomados, nessa ordem:
 
 **Ainda não testado:** sobrevivência a um reboot completo (login). Isso só um reboot real confirma.
 `%LOCALAPPDATA%\Sentinela\mods\backup-sistema\uxtheme.dll.original` + ponto nº 216 desfazem se algo falhar.
+
+## Atualização: mod 6 (estilo da barra) feito pelo método do Windhawk
+A abordagem de vtable/`this` foi descartada. `crates/mod-xaml` (`sentinela_mod_xaml.dll`) usa a API de
+diagnóstico do XAML (`InitializeXamlDiagnosticsEx` + `IVisualTreeService`), a mesma do Live Visual Tree:
+recebe cada elemento da árvore, acha `BackgroundFill`/`BackgroundStroke` dentro de `TaskbarFrame` e troca
+`Fill`, `Margin`, `RadiusX/Y` e a opacidade da borda por APIs WinRT, na thread de UI. Nada é escrito em
+memória do Explorer. Testado no build 26100/26200: aplicou nas duas barras (monitor principal e
+secundário), o Explorer manteve o PID, e o eject restaurou a aparência original.
+
+Uso: `sentinela-mods shell-xaml <dll> --experimental`; configuração em `%LOCALAPPDATA%\Sentinela\mods\xaml-barra.cfg`
+(`fill`, `radius`, `margin`, `hide_border`, `enabled`), relida a cada 0,5 s; desfazer: `sentinela-mods eject-all`
+(cria `xaml-barra.eject`, a DLL restaura os valores originais). A DLL se fixa no processo porque o XAML guarda
+ponteiros para ela; reiniciar o Explorer a remove por completo. Diagnóstico em `xaml-barra.log`.
+Bindings WinRT gerados com `windows-bindgen` a partir de `Windows.winmd` do SDK 26100 (o crate `windows` 0.62 não traz `UI.Xaml`).
+
+### Mod 7 (menu Iniciar)
+Mesma DLL, também injetada no `StartMenuExperienceHost.exe` (o `shell-xaml` carrega nos dois). O painel é o
+`Border#AcrylicBorder` dentro de `Grid#MainMenu`; o mod troca `Background` e `CornerRadius` com as chaves
+`start_fill=#AARRGGBB` e `start_radius=N` do `xaml-barra.cfg`. Para descobrir alvos em outros processos, criar
+`xaml-barra.dump` na pasta de mods faz a DLL listar a árvore em `xaml-barra.tree.log`. Testado: painel roxo com
+cantos arredondados junto com a ilha da barra; o eject restaurou o menu.
