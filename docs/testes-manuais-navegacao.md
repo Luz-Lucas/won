@@ -8,3 +8,4 @@ Só a interface mudou; nada novo roda no sistema. Testado com vitest e `npm run 
 4. **Rede:** não há mais campo de texto. "Analisar minha rede" mede latência, bufferbloat e DNS em sequência. O WARP continua com o botão "Ativar WARP" / "Criar túnel WireGuard do WARP".
 
 Os perfis ficam no armazenamento local do WebView2 (`localStorage`) da conta que abriu o app.
+5. **Estilização → Desktop:** o editor visual mostra Barra própria, Tiling e Lançador com prévia ao vivo. Ligue a barra, mude posição, altura, cores e módulos e confira o texto em "Avançado" e a prévia. Salve e veja o `sentinela-desktop` aplicar na hora. Atalhos e regras continuam no arquivo; seções fora de barra/tiling/lançador (e comentários) são preservadas.
