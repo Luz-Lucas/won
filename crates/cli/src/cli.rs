@@ -357,6 +357,8 @@ fn cmd_scan(
             ..WalkOptions::default()
         },
         max_size,
+        // O CLI não usa o cache de verificados.
+        cache: None,
     };
     let progress = make_progress(json);
     let mut scan = run_scan_with_progress(&engine, &opts, &cancel, &*progress);

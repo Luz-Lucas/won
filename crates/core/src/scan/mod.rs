@@ -1,6 +1,7 @@
 pub mod archive;
 pub mod areas;
 pub mod authenticode;
+pub mod cache;
 pub mod context;
 pub mod detector;
 pub mod exceptions;
@@ -39,6 +40,9 @@ pub struct ScanOptions {
     pub walk: WalkOptions,
     /// Files larger than this (bytes) are only hashed, streaming.
     pub max_size: u64,
+    /// Cache de verificados (só a janela usa): lido no começo e atualizado
+    /// no fim com os arquivos limpos percorridos nas pastas.
+    pub cache: Option<std::sync::Arc<Mutex<cache::ScanCache>>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,6 +81,8 @@ pub struct Engine {
     big_read: Mutex<()>,
     /// Validação Authenticode (injetável nos testes).
     trust: authenticode::TrustFn,
+    /// Chave das regras para o cache de verificados.
+    rules_key: [u8; 32],
 }
 
 /// Files above this size are read one at a time.
@@ -100,6 +106,7 @@ impl Engine {
             content,
             big_read: Mutex::new(()),
             trust: authenticode::verify,
+            rules_key: cache::rules_key(db),
         };
         (engine, warnings)
     }
@@ -268,8 +275,8 @@ pub fn run_scan_with_progress(
     cancel: &AtomicBool,
     progress: &dyn Progress,
 ) -> ScanReport {
-    // (arquivo, ler só se for de risco)
-    let mut entries: Vec<(Entry, bool)> = Vec::new();
+    // (arquivo, ler só se for de risco, veio das pastas)
+    let mut entries: Vec<(Entry, bool, bool)> = Vec::new();
     let mut errors = Vec::new();
     let mut skipped_in_walk = false;
     let mut seen = std::collections::HashSet::new();
@@ -280,7 +287,7 @@ pub fn run_scan_with_progress(
         match explicit_entry(path) {
             Ok(Some(e)) => {
                 if seen.insert(path_key(&e.path)) {
-                    entries.push((e, false));
+                    entries.push((e, false, false));
                 }
             }
             Ok(None) => {}
@@ -295,7 +302,7 @@ pub fn run_scan_with_progress(
         match item {
             WalkItem::File(e) => {
                 if seen.insert(path_key(&e.path)) {
-                    entries.push((e, opts.risky_only));
+                    entries.push((e, opts.risky_only, true));
                 }
                 if entries.len().is_multiple_of(256) {
                     progress.counting(entries.len());
@@ -304,7 +311,7 @@ pub fn run_scan_with_progress(
             WalkItem::Error(e) => errors.push(e),
         }
     }
-    let total_bytes: u64 = entries.iter().map(|(e, _)| e.size).sum();
+    let total_bytes: u64 = entries.iter().map(|(e, _, _)| e.size).sum();
     progress.start(entries.len(), total_bytes);
     let files_done = AtomicUsize::new(0);
     let bytes_done = AtomicU64::new(0);
@@ -312,48 +319,113 @@ pub fn run_scan_with_progress(
     let autostart: std::collections::HashSet<String> =
         opts.autostart.iter().map(|p| path_key(p)).collect();
     let skipped = AtomicBool::new(skipped_in_walk);
-    type Scanned = (Option<ScanItem>, Vec<WalkError>);
-    let results: Vec<Result<Scanned, WalkError>> = entries
+    let old_cache = opts.cache.as_ref().map(|c| {
+        std::mem::take(&mut *c.lock().unwrap_or_else(|p| p.into_inner()))
+            .for_rules(engine.rules_key)
+    });
+    type Record = (String, PathBuf, cache::Cached);
+    type Scanned = (Option<ScanItem>, Vec<WalkError>, Option<Record>);
+    // (chave, se veio das pastas e foi processado; resultado, se foi lido)
+    type Outcome = (Option<String>, Option<Result<Scanned, WalkError>>);
+    let results: Vec<Outcome> = entries
         .par_iter()
-        .filter_map(|(entry, only_risky)| {
+        .filter_map(|(entry, only_risky, from_walk)| {
             if cancel.load(Ordering::Relaxed) {
                 skipped.store(true, Ordering::Relaxed);
                 return None;
             }
+            let key = path_key(&entry.path);
             let wanted = !only_risky || risk::file_is_risky(&entry.path);
-            let scanned = wanted.then(|| {
-                let starts = autostart.contains(&path_key(&entry.path));
-                scan_entry(engine, entry, opts.max_size, starts).map(|r| {
-                    let item = (r.verdict >= Severity::Risk).then(|| ScanItem {
-                        path: entry.path.clone(),
-                        verdict: r.verdict,
-                        findings: r.findings,
-                        sha256: hex::encode(r.sha256),
-                        in_archive: r.in_archive,
-                    });
-                    (item, r.errors)
+            let stamp = cache::Stamp::new(entry.size, entry.modified, entry.created);
+            let cached = (*from_walk && wanted)
+                .then(|| old_cache.as_ref().and_then(|c| c.get(&key, &stamp)))
+                .flatten();
+            let scanned = if let Some(sha) = cached {
+                // Inalterado: não relê, mas confere o hash contra o banco atual.
+                let data = FileData::with_trust(&entry.path, None, sha, None);
+                let findings = engine.hash.inspect(&data).unwrap_or_default();
+                let record = findings.is_empty().then(|| {
+                    (
+                        key.clone(),
+                        entry.path.clone(),
+                        cache::Cached { stamp, sha256: sha },
+                    )
+                });
+                let item = (!findings.is_empty()).then(|| ScanItem {
+                    path: entry.path.clone(),
+                    verdict: Severity::Malicious,
+                    findings,
+                    sha256: hex::encode(sha),
+                    in_archive: None,
+                });
+                Some(Ok((item, Vec::new(), record)))
+            } else {
+                wanted.then(|| {
+                    let starts = autostart.contains(&key);
+                    scan_entry(engine, entry, opts.max_size, starts).map(|r| {
+                        let clean = r.verdict < Severity::Risk && r.errors.is_empty();
+                        let record = (*from_walk && clean).then(|| {
+                            (
+                                key.clone(),
+                                entry.path.clone(),
+                                cache::Cached {
+                                    stamp,
+                                    sha256: r.sha256,
+                                },
+                            )
+                        });
+                        let item = (r.verdict >= Severity::Risk).then(|| ScanItem {
+                            path: entry.path.clone(),
+                            verdict: r.verdict,
+                            findings: r.findings,
+                            sha256: hex::encode(r.sha256),
+                            in_archive: r.in_archive,
+                        });
+                        (item, r.errors, record)
+                    })
                 })
-            });
+            };
             // Errored and skipped files count too, so the bar can reach 100%.
             let f = files_done.fetch_add(1, Ordering::Relaxed) + 1;
             let b = bytes_done.fetch_add(entry.size, Ordering::Relaxed) + entry.size;
             progress.advance(f, b, &entry.path);
-            scanned
+            Some(((*from_walk && scanned.is_some()).then_some(key), scanned))
         })
         .collect();
     progress.finish();
+    let interrupted = skipped.load(Ordering::Relaxed);
 
     let mut scanned = 0;
     let mut items = Vec::new();
-    for r in results {
+    let mut records = Vec::new();
+    let mut processed = Vec::new();
+    for (key, r) in results {
+        processed.extend(key);
         match r {
-            Ok((item, errs)) => {
+            None => {}
+            Some(Ok((item, errs, record))) => {
                 scanned += 1;
                 items.extend(item);
                 errors.extend(errs);
+                records.extend(record);
             }
-            Err(e) => errors.push(e),
+            Some(Err(e)) => errors.push(e),
         }
+    }
+    if let (Some(shared), Some(mut old)) = (opts.cache.as_ref(), old_cache) {
+        // Lidos de novo: sai o registro antigo, entra o novo se continuou limpo.
+        for k in &processed {
+            old.entries.remove(k);
+        }
+        // Percurso completo: o que estava nas pastas e sumiu também sai.
+        if !interrupted {
+            old.entries
+                .retain(|k, (p, _)| seen.contains(k) || !opts.roots.iter().any(|r| is_under(p, r)));
+        }
+        for (k, p, c) in records {
+            old.entries.insert(k, (p, c));
+        }
+        *shared.lock().unwrap_or_else(|p| p.into_inner()) = old;
     }
     items.sort_by(|a, b| a.path.cmp(&b.path));
     errors.sort_by(|a, b| a.path.cmp(&b.path));
@@ -361,7 +433,7 @@ pub fn run_scan_with_progress(
         scanned,
         items,
         errors,
-        interrupted: skipped.load(Ordering::Relaxed),
+        interrupted,
     }
 }
 
@@ -775,6 +847,167 @@ mod tests {
                 .reason
                 .contains("seg.exe: protegido por senha")
         );
+    }
+
+    struct Counter(std::sync::Arc<AtomicUsize>);
+    impl Detector for Counter {
+        fn name(&self) -> &'static str {
+            "counter"
+        }
+        fn inspect(&self, _file: &FileData) -> Result<Vec<Finding>, String> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            Ok(Vec::new())
+        }
+    }
+
+    fn counting_engine(db: &Database) -> (Engine, std::sync::Arc<AtomicUsize>) {
+        let reads = std::sync::Arc::new(AtomicUsize::new(0));
+        let (mut engine, _) = Engine::from_database(db);
+        engine.content.push(Box::new(Counter(reads.clone())));
+        (engine, reads)
+    }
+
+    fn cached_opts(dir: &Path, c: &std::sync::Arc<Mutex<cache::ScanCache>>) -> ScanOptions {
+        let mut o = opts(dir, 1 << 20);
+        o.cache = Some(c.clone());
+        o
+    }
+
+    fn no_hash_db() -> Database {
+        Database {
+            hashes: HashSet::new(),
+            ..marker_db()
+        }
+    }
+
+    #[test]
+    fn unchanged_file_is_not_reread() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), b"hello").unwrap();
+        fs::write(dir.path().join("b.txt"), b"world").unwrap();
+        let c = std::sync::Arc::new(Mutex::new(cache::ScanCache::default()));
+        let (engine, reads) = counting_engine(&marker_db());
+        let first = run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(first.scanned, 2);
+        assert_eq!(reads.load(Ordering::Relaxed), 2);
+        assert_eq!(c.lock().unwrap().entries.len(), 2);
+        let second = run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(second.scanned, 2);
+        assert_eq!(reads.load(Ordering::Relaxed), 2, "nada foi relido");
+        // Arquivo sumiu: sai do cache depois do percurso completo.
+        fs::remove_file(dir.path().join("b.txt")).unwrap();
+        run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(c.lock().unwrap().entries.len(), 1);
+    }
+
+    #[test]
+    fn findings_and_loose_files_are_never_cached() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("m.bin"), MARKER).unwrap();
+        fs::write(dir.path().join("foto.jpg.exe"), b"MZ").unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let loose = other.path().join("solto.txt");
+        fs::write(&loose, b"ok").unwrap();
+        let c = std::sync::Arc::new(Mutex::new(cache::ScanCache::default()));
+        let (engine, _) = Engine::from_database(&marker_db());
+        let mut o = cached_opts(dir.path(), &c);
+        o.files = vec![loose];
+        let r = run_scan(&engine, &o, &AtomicBool::new(false));
+        assert_eq!(r.items.len(), 2);
+        assert!(c.lock().unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn new_hash_signature_still_detects_cached_file() {
+        let dir = tempfile::tempdir().unwrap();
+        // Sem a regra YARA nem o hash, o marcador passa limpo e vai para o cache.
+        fs::write(dir.path().join("m.bin"), MARKER).unwrap();
+        let mut db = no_hash_db();
+        db.rule_sources.clear();
+        let c = std::sync::Arc::new(Mutex::new(cache::ScanCache::default()));
+        let (engine, _) = Engine::from_database(&db);
+        let r = run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert!(r.items.is_empty());
+        assert_eq!(c.lock().unwrap().entries.len(), 1);
+        // O banco de hashes cresceu (mesmas regras): o cache vale, mas o hash pega.
+        db.hashes.insert(hash::sha256_bytes(MARKER));
+        let (engine, reads) = counting_engine(&db);
+        let r = run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(reads.load(Ordering::Relaxed), 0);
+        assert_eq!(r.items.len(), 1);
+        assert_eq!(r.items[0].verdict, Severity::Malicious);
+        assert_eq!(r.items[0].findings[0].detector, "hash");
+        assert!(c.lock().unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn rules_change_drops_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("m.bin"), MARKER).unwrap();
+        let mut db = no_hash_db();
+        db.rule_sources.clear();
+        let c = std::sync::Arc::new(Mutex::new(cache::ScanCache::default()));
+        let (engine, _) = Engine::from_database(&db);
+        run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(c.lock().unwrap().entries.len(), 1);
+        // Regra nova: o cache inteiro é descartado e a regra pega o arquivo.
+        let (engine, reads) = counting_engine(&no_hash_db());
+        let r = run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(reads.load(Ordering::Relaxed), 1);
+        assert_eq!(r.items.len(), 1);
+        assert_eq!(r.items[0].findings[0].detector, "yara");
+    }
+
+    #[test]
+    fn changed_file_is_rescanned() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("a.bin");
+        fs::write(&p, b"limpo").unwrap();
+        let c = std::sync::Arc::new(Mutex::new(cache::ScanCache::default()));
+        let (engine, reads) = counting_engine(&no_hash_db());
+        run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(reads.load(Ordering::Relaxed), 1);
+        fs::write(&p, MARKER).unwrap();
+        let r = run_scan(
+            &engine,
+            &cached_opts(dir.path(), &c),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(reads.load(Ordering::Relaxed), 2);
+        assert_eq!(r.items.len(), 1);
+        assert!(c.lock().unwrap().entries.is_empty());
     }
 
     #[test]
