@@ -19,3 +19,4 @@ pub mod tweaks;
 pub mod updater;
 pub mod updates;
 pub mod walker;
+pub mod wallpaper;
