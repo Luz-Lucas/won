@@ -588,9 +588,15 @@ fn reload(st: &mut State) {
             paint_borders(st, fg);
             winbar::apply(st.loader.config().bar.as_ref());
             let cfg = st.loader.config().clone();
+            crate::dlog::log(&format!(
+                "config recarregada: tiling={} bar={}",
+                cfg.tiling.is_some(),
+                cfg.bar.is_some()
+            ));
             st.tiler.configure(cfg.tiling.as_ref(), &cfg.rules);
         }
-        Reload::Unchanged | Reload::Rejected(_) => {}
+        Reload::Rejected(errs) => crate::dlog::log(&format!("config REJEITADA: {errs:?}")),
+        Reload::Unchanged => {}
     }
 }
 

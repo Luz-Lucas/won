@@ -884,3 +884,54 @@ active = "azul"
         assert!(matches!(l.reload(), Reload::Rejected(_)));
     }
 }
+
+#[cfg(test)]
+mod editor_roundtrip {
+    use super::*;
+
+    /// O que o editor visual do app escreve (desktopToml.ts) tem de ser aceito pelo daemon.
+    #[test]
+    fn visual_editor_output_is_accepted() {
+        let text = r##"
+[[hotkey]]
+keys = "Alt+Return"
+action = "toggle-maximize"
+
+[bar]
+edge = "bottom"
+height = 36
+background = "#101018"
+foreground = "#FFFFFF"
+font = "Segoe UI"
+font_size = 10
+hide_native_taskbar = false
+left = ["title"]
+center = ["clock"]
+right = ["cpu", "ram"]
+clock_format = "%H:%M"
+islands = true
+island_radius = 12
+island_margin = 6
+island_align = "center"
+
+[tiling]
+layout = "master-stack"
+gap = 8
+outer_gap = 8
+master_ratio = 0.55
+portrait_layout = "rows"
+
+[[tiling.monitor]]
+index = 2
+layout = "rows"
+max_windows = 3
+
+[launcher]
+hotkey = "Alt+Space"
+max_results = 8
+"##;
+        let c = parse(text).unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(c.tiling.is_some());
+        assert!(c.bar.is_some());
+    }
+}

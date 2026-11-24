@@ -4,6 +4,7 @@
 
 pub mod bar;
 pub mod config;
+pub mod dlog;
 pub mod keys;
 pub mod launcher;
 pub mod launcher_theme;

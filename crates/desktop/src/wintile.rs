@@ -43,6 +43,7 @@ pub struct Tiler {
     placed_at: Option<std::time::Instant>,
     /// Verificações seguidas em que a janela estava longe do lugar.
     strikes: HashMap<isize, u8>,
+    seen: usize,
 }
 
 impl Tiler {
@@ -63,6 +64,7 @@ impl Tiler {
             last: Vec::new(),
             placed_at: None,
             strikes: HashMap::new(),
+            seen: usize::MAX,
         }
     }
 
@@ -70,12 +72,16 @@ impl Tiler {
     pub fn configure(&mut self, cfg: Option<&TilingConfig>, rules: &[Rule]) {
         match cfg {
             Some(c) => {
+                crate::dlog::log(&format!("tiling LIGADO: {c:?}"));
                 self.cfg = c.clone();
                 self.enabled = true;
                 self.last.clear();
                 self.retile(rules);
             }
-            None => self.disable(),
+            None => {
+                crate::dlog::log("tiling DESLIGADO (sem [tiling] ou enabled=false)");
+                self.disable();
+            }
         }
     }
 
@@ -122,6 +128,10 @@ impl Tiler {
         }
         self.release_moved_windows();
         let found = candidates(rules, &self.floating);
+        if found.len() != self.seen {
+            self.seen = found.len();
+            crate::dlog::log(&format!("tiling: {} janela(s) candidata(s)", found.len()));
+        }
         let mut per_monitor: HashMap<isize, Vec<isize>> = HashMap::new();
         for (hwnd, mon) in &found {
             per_monitor.entry(*mon).or_default().push(*hwnd);
@@ -143,6 +153,10 @@ impl Tiler {
             let Some(area) = work_area(*mon as *mut c_void) else {
                 continue;
             };
+            crate::dlog::log(&format!(
+                "tiling: monitor {mon} área {area:?} janelas {}",
+                list.len()
+            ));
             let index = monitors.iter().position(|m| m == mon).map_or(1, |i| i + 1);
             let (layout, max) = self.cfg.for_monitor(index, area);
             // Acima do limite do monitor, as janelas ficam soltas onde estão.
@@ -162,6 +176,11 @@ impl Tiler {
         for (h, r) in &plan {
             self.place(*h as HWND, *r);
         }
+        crate::dlog::log(&format!(
+            "tiling: {} janela(s) organizadas: {:?}",
+            plan.len(),
+            plan
+        ));
         self.last = plan;
         self.placed_at = Some(std::time::Instant::now());
     }
@@ -211,6 +230,9 @@ impl Tiler {
         if moved.is_empty() {
             return;
         }
+        crate::dlog::log(&format!(
+            "tiling: janelas soltas (movidas pelo usuário): {moved:?}"
+        ));
         for h in moved {
             self.strikes.remove(&h);
             self.floating.insert(h);
@@ -229,6 +251,11 @@ impl Tiler {
             self.saved.entry(hwnd as isize).or_insert(cur);
             if IsZoomed(hwnd) != 0 {
                 ShowWindow(hwnd, SW_RESTORE);
+                // `cur` era o retângulo MAXIMIZADO: sem reler, a compensação das bordas sai
+                // gigante e a janela fica maior que a tela (e passa a "cobrir" o monitor).
+                if GetWindowRect(hwnd, &mut cur) == 0 {
+                    return;
+                }
             }
             // As janelas têm bordas invisíveis; compensa para os espaços
             // ficarem do tamanho certo.
@@ -246,6 +273,13 @@ impl Tiler {
                     cur.right - vis.right,
                     cur.bottom - vis.bottom,
                 )
+            } else {
+                (0, 0, 0, 0)
+            };
+            // Bordas invisíveis reais têm poucos pixels; algo maior é leitura de momento errado.
+            let sane = |v: i32| (0..=32).contains(&v);
+            let (dl, dt, dr, db) = if sane(dl) && sane(dt) && sane(dr) && sane(db) {
+                (dl, dt, dr, db)
             } else {
                 (0, 0, 0, 0)
             };
