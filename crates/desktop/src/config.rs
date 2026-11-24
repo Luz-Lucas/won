@@ -317,7 +317,10 @@ fn parse_tiling(t: &RawTiling, errors: &mut Vec<String>) -> Option<TilingConfig>
     for m in &t.monitor {
         if !(1..=16).contains(&m.index) {
             errors.push("tiling.monitor: index vai de 1 a 16 (1 = monitor mais à esquerda)".into());
-        } else if monitors.iter().any(|r: &tiling::MonitorRule| r.index == m.index) {
+        } else if monitors
+            .iter()
+            .any(|r: &tiling::MonitorRule| r.index == m.index)
+        {
             errors.push(format!("tiling.monitor: index {} repetido", m.index));
         }
         if m.max_windows.is_some_and(|n| !(1..=12).contains(&n)) {
@@ -733,7 +736,8 @@ mod tests {
         assert!(parse("[tiling]\nmaster_ratio=0.95\n").is_err());
         assert!(parse("[tiling]\ngap=500\n").is_err());
         assert!(parse("[tiling]\nlayout=\"spiral\"\n").is_err());
-        let c = parse("[tiling]\n[[tiling.monitor]]\nindex=2\nlayout=\"rows\"\nmax_windows=3\n").unwrap();
+        let c = parse("[tiling]\n[[tiling.monitor]]\nindex=2\nlayout=\"rows\"\nmax_windows=3\n")
+            .unwrap();
         let t = c.tiling.unwrap();
         assert_eq!(t.portrait_layout, Layout::Rows);
         assert_eq!(t.monitors[0].max_windows, Some(3));
@@ -759,7 +763,10 @@ mod tests {
         assert!(parse("[bar]\nleft=[\"coisa\"]\n").is_err());
         assert!(parse("[bar]\nedge=\"left\"\n").is_err());
         assert!(parse("[bar]\nmagia=1\n").is_err());
-        let b = parse("[bar]\nislands=true\nisland_radius=20\nisland_align=\"left\"\n").unwrap().bar.unwrap();
+        let b = parse("[bar]\nislands=true\nisland_radius=20\nisland_align=\"left\"\n")
+            .unwrap()
+            .bar
+            .unwrap();
         assert!(b.islands && b.island_radius == 20 && b.island_align == bar::IslandAlign::Left);
         assert!(parse("[bar]\nisland_margin=99\n").is_err());
     }

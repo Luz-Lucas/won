@@ -459,7 +459,12 @@ fn send_win_z() {
             },
         },
     };
-    let inputs = [key(VK_LWIN, false), key(VK_Z, false), key(VK_Z, true), key(VK_LWIN, true)];
+    let inputs = [
+        key(VK_LWIN, false),
+        key(VK_Z, false),
+        key(VK_Z, true),
+        key(VK_LWIN, true),
+    ];
     unsafe {
         SendInput(
             inputs.len() as u32,
@@ -643,6 +648,11 @@ pub fn run() {
         return;
     }
     unsafe {
+        // Sem isto o Windows "virtualiza" as coordenadas (escala de 125%/150%): a área
+        // de trabalho sai menor e as janelas do tiling ficam maiores que a tela.
+        windows_sys::Win32::UI::HiDpi::SetProcessDpiAwarenessContext(
+            windows_sys::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+        );
         let name = wide(MUTEX_NAME);
         let mutex = CreateMutexW(std::ptr::null(), 0, name.as_ptr());
         if mutex.is_null() || GetLastError() == ERROR_ALREADY_EXISTS {

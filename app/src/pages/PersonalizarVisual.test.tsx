@@ -20,6 +20,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("../api", () => ({
+  systemFontStatus: vi.fn().mockResolvedValue(undefined),
+  systemFontSet: vi.fn(),
   shellModsStatus: vi.fn().mockResolvedValue(undefined),
   shellModSet: vi.fn(),
   xamlCfgWrite: vi.fn(),

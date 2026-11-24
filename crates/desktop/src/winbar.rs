@@ -25,10 +25,9 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowExW, FindWindowW,
     GW_OWNER, GWL_EXSTYLE, GetForegroundWindow, GetSystemMetrics, GetWindow, GetWindowLongW,
     GetWindowTextW, IsIconic, IsWindowVisible, LWA_COLORKEY, RegisterClassExW, SM_CXSCREEN,
-    SM_CYSCREEN, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SW_SHOWNOACTIVATE,
-    SetForegroundWindow, SetLayeredWindowAttributes, ShowWindow, WM_ERASEBKGND, WM_LBUTTONDOWN,
-    WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_POPUP,
+    SM_CYSCREEN, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SW_SHOWNOACTIVATE, SetForegroundWindow,
+    SetLayeredWindowAttributes, ShowWindow, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_PAINT, WNDCLASSEXW,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 const CLASS: &str = "SentinelaDesktopBar";
@@ -225,7 +224,18 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
         let dpi = GetDeviceCaps(hdc, LOGPIXELSY as i32);
         let font = CreateFontW(
             -(b.cfg.font_size as i32 * dpi / 72),
-            0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0,
+            0,
+            0,
+            0,
+            400,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            5,
+            0,
             wide(&b.cfg.font).as_ptr(),
         );
         let old_font = SelectObject(hdc, font);
@@ -244,6 +254,10 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
         // Ilha da direita: os módulos do centro e da direita (relógio, CPU, RAM).
         let mut mods = b.cfg.center.clone();
         mods.extend(b.cfg.right.iter().copied());
+        // O relógio nunca some da ilha da direita.
+        if !mods.contains(&Module::Clock) {
+            mods.insert(0, Module::Clock);
+        }
         let right_text = group_text(b, &mods);
         let right_w = text_width(hdc, &right_text) + 2 * PAD;
         let item_pad = 10;
@@ -258,12 +272,7 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
             .collect();
         let gap = m.max(4);
         let avail = (w - 2 * m - right_w - gap - 2 * 6).max(0);
-        let widths = bar::fit_items(
-            &wants.iter().map(|x| x.1).collect::<Vec<_>>(),
-            avail,
-            4,
-            48,
-        );
+        let widths = bar::fit_items(&wants.iter().map(|x| x.1).collect::<Vec<_>>(), avail, 4, 48);
         let apps_w = if widths.is_empty() {
             0
         } else {
@@ -280,10 +289,23 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
             RoundRect(hdc, apps_x, m, apps_x + apps_w, m + ih, r, r);
             let mut x = apps_x + 6;
             for ((a, (text, _)), iw) in b.apps.iter().zip(wants.iter()).zip(widths.iter()) {
-                let cell = RECT { left: x, top: m + 4, right: x + iw, bottom: m + ih - 4 };
+                let cell = RECT {
+                    left: x,
+                    top: m + 4,
+                    right: x + iw,
+                    bottom: m + ih - 4,
+                };
                 if a.hwnd == fg {
                     SelectObject(hdc, sel);
-                    RoundRect(hdc, cell.left, cell.top, cell.right, cell.bottom, r / 2 + 2, r / 2 + 2);
+                    RoundRect(
+                        hdc,
+                        cell.left,
+                        cell.top,
+                        cell.right,
+                        cell.bottom,
+                        r / 2 + 2,
+                        r / 2 + 2,
+                    );
                 }
                 let col = if IsIconic(a.hwnd as HWND) != 0 {
                     mix(b.cfg.background, b.cfg.foreground, 55)
@@ -372,7 +394,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
     match msg {
         WM_ERASEBKGND => 1,
         WM_LBUTTONDOWN => {
-            let (x, y) = ((lp & 0xFFFF) as i16 as i32, ((lp >> 16) & 0xFFFF) as i16 as i32);
+            let (x, y) = (
+                (lp & 0xFFFF) as i16 as i32,
+                ((lp >> 16) & 0xFFFF) as i16 as i32,
+            );
             let target = BAR.with(|c| {
                 c.try_borrow().ok().and_then(|b| {
                     b.as_ref().and_then(|b| {
@@ -544,7 +569,11 @@ pub fn apply(cfg: Option<&BarConfig>) {
         }
         BAR.with(|c| {
             *c.borrow_mut() = Some(Bar {
-                apps: if cfg.islands { visible_windows(hwnd) } else { Vec::new() },
+                apps: if cfg.islands {
+                    visible_windows(hwnd)
+                } else {
+                    Vec::new()
+                },
                 hits: RefCell::new(Vec::new()),
                 hwnd,
                 cfg: cfg.clone(),

@@ -6,6 +6,7 @@ pub mod bar;
 pub mod config;
 pub mod keys;
 pub mod launcher;
+pub mod launcher_theme;
 pub mod rules;
 pub mod tiling;
 

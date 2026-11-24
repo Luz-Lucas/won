@@ -16,6 +16,8 @@ const render = (ui: React.ReactElement) =>
   rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
+  systemFontStatus: vi.fn().mockResolvedValue(undefined),
+  systemFontSet: vi.fn(),
   shellModsStatus: vi.fn().mockResolvedValue(undefined),
   shellModSet: vi.fn(),
   xamlCfgWrite: vi.fn(),

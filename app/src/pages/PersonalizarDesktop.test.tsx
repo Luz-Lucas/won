@@ -11,6 +11,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: () => Promise.resolve(() => {}) }));
 
 vi.mock("../api", () => ({
+  systemFontStatus: vi.fn().mockResolvedValue(undefined),
+  systemFontSet: vi.fn(),
   shellModsStatus: vi.fn().mockResolvedValue(undefined),
   shellModSet: vi.fn(),
   xamlCfgWrite: vi.fn(),

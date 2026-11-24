@@ -2,6 +2,7 @@ pub mod apps;
 pub mod clean;
 pub mod desktop;
 pub mod disk;
+pub mod font;
 pub mod games;
 pub mod mods;
 pub mod net;

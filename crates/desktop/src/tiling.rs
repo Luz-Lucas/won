@@ -205,7 +205,12 @@ mod tests {
 
     #[test]
     fn every_layout_stays_inside_and_never_overlaps() {
-        for layout in [Layout::MasterStack, Layout::Columns, Layout::Grid, Layout::Rows] {
+        for layout in [
+            Layout::MasterStack,
+            Layout::Columns,
+            Layout::Grid,
+            Layout::Rows,
+        ] {
             for n in 1..=12 {
                 let rs = arrange(&cfg(layout), AREA, n);
                 assert_eq!(rs.len(), n, "{layout:?} {n}");
@@ -308,13 +313,29 @@ mod tests {
 
     #[test]
     fn portrait_monitor_stacks_rows_and_respects_rules() {
-        let portrait = Rect { left: 1920, top: 0, right: 3000, bottom: 1920 };
+        let portrait = Rect {
+            left: 1920,
+            top: 0,
+            right: 3000,
+            bottom: 1920,
+        };
         let mut c = cfg(Layout::MasterStack);
         assert_eq!(c.for_monitor(2, portrait), (Layout::Rows, None));
         assert_eq!(c.for_monitor(1, AREA), (Layout::MasterStack, None));
-        c.monitors.push(MonitorRule { index: 2, layout: None, max_windows: Some(3) });
+        c.monitors.push(MonitorRule {
+            index: 2,
+            layout: None,
+            max_windows: Some(3),
+        });
         assert_eq!(c.for_monitor(2, portrait), (Layout::Rows, Some(3)));
-        let rs = arrange(&TilingConfig { layout: Layout::Rows, ..c }, portrait, 3);
+        let rs = arrange(
+            &TilingConfig {
+                layout: Layout::Rows,
+                ..c
+            },
+            portrait,
+            3,
+        );
         assert_eq!(rs.len(), 3);
         assert!(rs.iter().all(|r| r.left == 1930 && r.right == 2990));
         assert!(rs[0].bottom + 8 == rs[1].top && rs[1].bottom + 8 == rs[2].top);

@@ -4,6 +4,7 @@
 
 use crate::config::LauncherConfig;
 use crate::launcher::{self, Builtin, Entry, Target};
+use crate::launcher_theme::{self, Theme, colorref};
 use crate::rules;
 use std::cell::RefCell;
 use std::os::windows::ffi::OsStrExt;
@@ -11,19 +12,20 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, CreateFontW, CreateSolidBrush, DeleteObject, EndPaint, FillRect, GetDC,
-    GetDeviceCaps, GetTextExtentPoint32W, InvalidateRect, LOGPIXELSY, PAINTSTRUCT, ReleaseDC,
-    SelectObject, SetBkMode, SetTextColor, TRANSPARENT, TextOutW,
+    BeginPaint, CreateFontW, CreateRoundRectRgn, CreateSolidBrush, DeleteObject, EndPaint,
+    FillRect, GetDC, GetDeviceCaps, GetStockObject, GetTextExtentPoint32W, InvalidateRect,
+    LOGPIXELSY, NULL_PEN, PAINTSTRUCT, ReleaseDC, RoundRect, SelectObject, SetBkMode, SetTextColor,
+    SetWindowRgn, TRANSPARENT, TextOutW,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, EnumWindows, GW_OWNER, GWL_EXSTYLE, GetForegroundWindow,
     GetSystemMetrics, GetWindow, GetWindowLongW, HWND_TOPMOST, IsIconic, IsWindowVisible,
-    PostQuitMessage, RegisterClassExW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_RESTORE, SW_SHOW,
-    SW_SHOWNORMAL, SWP_NOACTIVATE, SetForegroundWindow, SetWindowPos, ShowWindow, WM_ACTIVATE,
-    WM_CHAR, WM_ERASEBKGND, WM_KEYDOWN, WM_KILLFOCUS, WM_PAINT, WNDCLASSEXW, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_POPUP,
+    LWA_ALPHA, PostQuitMessage, RegisterClassExW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_RESTORE,
+    SW_SHOW, SW_SHOWNORMAL, SWP_NOACTIVATE, SetForegroundWindow, SetLayeredWindowAttributes,
+    SetWindowPos, ShowWindow, WM_ACTIVATE, WM_CHAR, WM_ERASEBKGND, WM_KEYDOWN, WM_KILLFOCUS,
+    WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 const CLASS: &str = "SentinelaDesktopLauncher";
@@ -35,10 +37,6 @@ const VK_RETURN: usize = 0x0D;
 const VK_ESCAPE: usize = 0x1B;
 const VK_UP: usize = 0x26;
 const VK_DOWN: usize = 0x28;
-const BG: u32 = 0x0023_2020;
-const SEL: u32 = 0x0058_3A0A;
-const FG: u32 = 0x00FF_FFFF;
-const DIM: u32 = 0x00B0_B0B0;
 
 fn wide(s: &str) -> Vec<u16> {
     std::ffi::OsStr::new(s)
@@ -58,6 +56,7 @@ struct Launcher {
     selected: usize,
     visible: bool,
     scale: f32,
+    theme: Theme,
 }
 
 thread_local! {
@@ -187,7 +186,7 @@ fn ensure_window(l: &mut Launcher) -> bool {
         wc.lpszClassName = class.as_ptr();
         RegisterClassExW(&wc);
         l.hwnd = CreateWindowExW(
-            WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+            WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED,
             class.as_ptr(),
             wide("Sentinela").as_ptr(),
             WS_POPUP,
@@ -221,6 +220,10 @@ fn resize_and_center(l: &Launcher) {
             h,
             SWP_NOACTIVATE,
         );
+        let r = (l.theme.radius as f32 * l.scale) as i32 * 2;
+        let rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, r, r);
+        SetWindowRgn(l.hwnd, rgn, 1);
+        SetLayeredWindowAttributes(l.hwnd, 0, l.theme.alpha, LWA_ALPHA);
     }
 }
 
@@ -244,6 +247,7 @@ pub fn toggle(cfg: &LauncherConfig) {
             selected: 0,
             visible: false,
             scale: scale(),
+            theme: Theme::default(),
         });
         if l.visible {
             hide(l);
@@ -257,6 +261,7 @@ pub fn toggle(cfg: &LauncherConfig) {
             return;
         }
         l.max = cfg.max_results;
+        l.theme = launcher_theme::load();
         l.custom = cfg
             .apps
             .iter()
@@ -370,12 +375,13 @@ fn paint(hwnd: HWND, l: &Launcher) {
         let hdc = BeginPaint(hwnd, &mut ps);
         let mut rc: RECT = std::mem::zeroed();
         windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect(hwnd, &mut rc);
-        let bg = CreateSolidBrush(BG);
+        let th = l.theme;
+        let bg = CreateSolidBrush(colorref(th.bg));
         FillRect(hdc, &rc, bg);
         DeleteObject(bg);
 
         let dpi = GetDeviceCaps(hdc, LOGPIXELSY as i32);
-        let face = wide("Segoe UI");
+        let face = wide("Segoe UI Variable Text");
         let font = CreateFontW(
             -(14 * dpi / 72 * 5 / 4),
             0,
@@ -401,31 +407,59 @@ fn paint(hwnd: HWND, l: &Launcher) {
         GetTextExtentPoint32W(hdc, ag.as_ptr(), 2, &mut probe);
         let center = |row_h: i32| (px(row_h) - probe.cy) / 2;
 
-        SetTextColor(hdc, FG);
-        text_out(hdc, px(16), center(INPUT_H), &format!("{}|", l.query));
+        let pad = px(20);
+        if l.query.is_empty() {
+            SetTextColor(hdc, colorref(th.dim));
+            text_out(
+                hdc,
+                pad,
+                center(INPUT_H),
+                "Pesquisar apps, janelas e comandos…",
+            );
+        } else {
+            SetTextColor(hdc, colorref(th.fg));
+            text_out(hdc, pad, center(INPUT_H), &format!("{}|", l.query));
+        }
         let mut y = px(INPUT_H);
+        let sep = CreateSolidBrush(colorref(th.line));
+        FillRect(
+            hdc,
+            &RECT {
+                left: pad,
+                top: y - 1,
+                right: rc.right - pad,
+                bottom: y,
+            },
+            sep,
+        );
+        DeleteObject(sep);
 
         if let Some(line) = l.calc_line() {
-            SetTextColor(hdc, DIM);
-            text_out(hdc, px(16), y + center(ROW), &line);
+            SetTextColor(hdc, colorref(th.dim));
+            text_out(hdc, pad, y + center(ROW), &line);
             y += px(ROW);
         }
         let results = l.results();
         for (n, i) in results.iter().enumerate() {
             if n == l.selected {
                 let row = RECT {
-                    left: 0,
-                    top: y,
-                    right: rc.right,
-                    bottom: y + px(ROW),
+                    left: px(8),
+                    top: y + px(1),
+                    right: rc.right - px(8),
+                    bottom: y + px(ROW) - px(1),
                 };
-                let b = CreateSolidBrush(SEL);
-                FillRect(hdc, &row, b);
+                let b = CreateSolidBrush(colorref(th.sel));
+                let old_b = SelectObject(hdc, b);
+                let old_p = SelectObject(hdc, GetStockObject(NULL_PEN));
+                let r = px(th.radius.min(8) as i32);
+                RoundRect(hdc, row.left, row.top, row.right, row.bottom, r, r);
+                SelectObject(hdc, old_p);
+                SelectObject(hdc, old_b);
                 DeleteObject(b);
             }
             let e = &l.entries[*i];
-            SetTextColor(hdc, FG);
-            text_out(hdc, px(16), y + center(ROW), &launcher_label(e));
+            SetTextColor(hdc, colorref(th.fg));
+            text_out(hdc, pad, y + center(ROW), &launcher_label(e));
             y += px(ROW);
         }
         SelectObject(hdc, old);

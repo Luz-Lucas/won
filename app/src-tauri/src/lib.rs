@@ -136,6 +136,8 @@ pub fn run() {
             commands::mods::shell_mods_status,
             commands::mods::shell_mod_set,
             commands::mods::xaml_cfg_write,
+            commands::font::system_font_status,
+            commands::font::system_font_set,
             commands::desktop::desktop_status,
             commands::desktop::desktop_start,
             commands::desktop::desktop_stop,

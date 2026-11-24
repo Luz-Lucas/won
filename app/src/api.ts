@@ -1087,3 +1087,12 @@ export const shellModsStatus = () => invoke<ShellModsStatus>("shell_mods_status"
 export const shellModSet = (id: ShellModItem["id"], on: boolean) =>
   invoke<number>("shell_mod_set", { id, on });
 export const xamlCfgWrite = (text: string) => invoke<void>("xaml_cfg_write", { text });
+
+export interface SystemFontStatus {
+  bundled: boolean;
+  active: boolean;
+  elevated: boolean;
+  backup_path: string;
+}
+export const systemFontStatus = () => invoke<SystemFontStatus>("system_font_status");
+export const systemFontSet = (on: boolean) => invoke<void>("system_font_set", { on });

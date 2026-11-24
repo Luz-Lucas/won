@@ -1,4 +1,5 @@
 import ShellMods from "../components/ShellMods";
+import SystemFont from "../components/SystemFont";
 import { useCallback, useEffect, useState } from "react";
 import {
   relaunchElevated,
@@ -464,6 +465,7 @@ export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page)
           {(view === "barra" || view === "iniciar") && (
             <ShellMods only={view === "iniciar" ? ["xaml"] : ["xaml", "icones", "rotulos"]} />
           )}
+          {view === "sistema" && <SystemFont />}
           <details className="style-reference">
             <summary>Referências: o que esta área muda</summary>
             <ul>
