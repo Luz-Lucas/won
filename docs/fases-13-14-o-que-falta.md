@@ -82,3 +82,41 @@ não está instalado e não é scriptável por uma sessão automatizada) para ac
 real, não apenas do PDB. Não tentei chutar o `this`, porque isso é exatamente o tipo de hook que o
 `may_enable` do shell foi desenhado para recusar (`SymbolsMissing` cobre o endereço da função; não
 cobre, e não poderia cobrir, "ponteiro de instância certo").
+
+## Fase 14 aplicada no disco (PC de testes do Lucas, com o risco aceito por ele)
+Patch real aplicado em `C:\Windows\System32\uxtheme.dll` (não cópia, não injeção): `CThemeSignature::Verify`
+(RVA 0x624BC, ver acima) teve o prólogo trocado por `xor eax,eax; ret` (sempre "assinatura válida").
+Passos tomados, nessa ordem:
+1. Backup dos originais com hash em `%LOCALAPPDATA%\Sentinela\mods\backup-sistema\*.original`.
+2. Ponto de restauração nº 216 ("Sentinela fase 14: antes do patch de uxtheme.dll").
+3. Verifiquei que esta máquina não tem Memory Integrity/HVCI ativo (`Win32_DeviceGuard`), o que reduz
+   bastante o risco de o Windows recusar carregar o arquivo modificado por integridade de código.
+4. `takeown` + `icacls` para tomar posse do arquivo (protegido por TrustedInstaller).
+5. Escrita no arquivo não foi direta (o DLL estava em uso): gravei a versão nova num arquivo temporário
+   e troquei por `Move-Item` (renomear por cima funciona mesmo com o DLL mapeado; processos que já tinham
+   o arquivo aberto continuam com a versão antiga até reiniciarem).
+6. Confirmei os bytes gravados e reiniciei o Explorer: subiu normal com o arquivo novo já carregado.
+
+**Ainda não testado:** sobrevivência a um reboot completo (login). Isso só um reboot real confirma.
+`%LOCALAPPDATA%\Sentinela\mods\backup-sistema\uxtheme.dll.original` + ponto nº 216 desfazem se algo falhar.
+
+## Atualização: mod 6 (estilo da barra) feito pelo método do Windhawk
+A abordagem de vtable/`this` foi descartada. `crates/mod-xaml` (`sentinela_mod_xaml.dll`) usa a API de
+diagnóstico do XAML (`InitializeXamlDiagnosticsEx` + `IVisualTreeService`), a mesma do Live Visual Tree:
+recebe cada elemento da árvore, acha `BackgroundFill`/`BackgroundStroke` dentro de `TaskbarFrame` e troca
+`Fill`, `Margin`, `RadiusX/Y` e a opacidade da borda por APIs WinRT, na thread de UI. Nada é escrito em
+memória do Explorer. Testado no build 26100/26200: aplicou nas duas barras (monitor principal e
+secundário), o Explorer manteve o PID, e o eject restaurou a aparência original.
+
+Uso: `sentinela-mods shell-xaml <dll> --experimental`; configuração em `%LOCALAPPDATA%\Sentinela\mods\xaml-barra.cfg`
+(`fill`, `radius`, `margin`, `hide_border`, `enabled`), relida a cada 0,5 s; desfazer: `sentinela-mods eject-all`
+(cria `xaml-barra.eject`, a DLL restaura os valores originais). A DLL se fixa no processo porque o XAML guarda
+ponteiros para ela; reiniciar o Explorer a remove por completo. Diagnóstico em `xaml-barra.log`.
+Bindings WinRT gerados com `windows-bindgen` a partir de `Windows.winmd` do SDK 26100 (o crate `windows` 0.62 não traz `UI.Xaml`).
+
+### Mod 7 (menu Iniciar)
+Mesma DLL, também injetada no `StartMenuExperienceHost.exe` (o `shell-xaml` carrega nos dois). O painel é o
+`Border#AcrylicBorder` dentro de `Grid#MainMenu`; o mod troca `Background` e `CornerRadius` com as chaves
+`start_fill=#AARRGGBB` e `start_radius=N` do `xaml-barra.cfg`. Para descobrir alvos em outros processos, criar
+`xaml-barra.dump` na pasta de mods faz a DLL listar a árvore em `xaml-barra.tree.log`. Testado: painel roxo com
+cantos arredondados junto com a ilha da barra; o eject restaurou o menu.

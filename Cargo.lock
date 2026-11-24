@@ -5064,6 +5064,22 @@ name = "sentinela-mod-test"
 version = "0.1.0"
 
 [[package]]
+name = "sentinela-mod-theme"
+version = "0.1.0"
+
+[[package]]
+name = "sentinela-mod-xaml"
+version = "0.1.0"
+dependencies = [
+ "windows",
+ "windows-collections",
+ "windows-core",
+ "windows-future",
+ "windows-link",
+ "windows-numerics",
+]
+
+[[package]]
 name = "sentinela-mods"
 version = "0.1.0"
 dependencies = [

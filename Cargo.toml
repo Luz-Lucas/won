@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/core", "crates/cli", "crates/desktop", "crates/mods", "crates/mods-testdll", "crates/mod-labels", "crates/mod-icons", "app/src-tauri"]
+members = ["crates/core", "crates/cli", "crates/desktop", "crates/mods", "crates/mods-testdll", "crates/mod-labels", "crates/mod-icons", "crates/mod-theme", "crates/mod-xaml", "app/src-tauri"]
 resolver = "3"
 
 [workspace.package]
