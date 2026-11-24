@@ -24,3 +24,6 @@ Login real, tela, anticheats e o comportamento de qualquer DLL de terceiros. Tes
 
 ## Recuperação
 Ao primeiro `inject`, o script `%LOCALAPPDATA%\Sentinela\mods\recuperacao\desfazer-mods.cmd` é gravado. Ele descarrega tudo, apaga a entrada de inicialização e renomeia `mods.toml` para `mods.toml.desativado`. Roda sem o Sentinela abrir e no modo seguro. `sentinela-mods recovery` regrava e mostra o caminho.
+
+## Tela de Mods (menu "Mods")
+Mostra os mods do `mods.toml`, os programas permitidos, onde cada um está carregado, o aviso de anticheat aberto, e os botões Carregar (com confirmação), Descarregar, Descarregar todos e "Gravar e mostrar o script de recuperação". O cadastro continua sendo o arquivo `mods.toml`; a tela não edita DLLs nem programas permitidos.

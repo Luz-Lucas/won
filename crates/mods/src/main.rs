@@ -50,7 +50,7 @@ fn main() -> Result<()> {
             let Some(m) = reg.find(&name) else {
                 bail!("mod {name} não cadastrado")
             };
-            let done = inject_mod(&dir, m)?;
+            let done = inject_mod(&dir, &std::env::current_exe()?, m)?;
             println!("{} carregamento(s)", done.len());
         }
         Cmd::Eject { name } => println!("{} descarregado(s)", eject(&dir, Some(&name))?),

@@ -68,7 +68,12 @@ fn injeta_e_descarrega() {
     let mut child = spawn_target();
     std::thread::sleep(Duration::from_millis(500));
 
-    let done = inject_mod(dir.path(), &mod_for(dll)).unwrap();
+    let done = inject_mod(
+        dir.path(),
+        &PathBuf::from(env!("CARGO_BIN_EXE_sentinela-mods")),
+        &mod_for(dll),
+    )
+    .unwrap();
     assert!(
         done.iter().any(|i| i.pid == child.id()),
         "ping não recebeu o mod"
@@ -94,7 +99,12 @@ fn script_de_recuperacao_desfaz_tudo() {
     let _ = std::fs::remove_file(marker());
     let mut child = spawn_target();
     std::thread::sleep(Duration::from_millis(500));
-    inject_mod(dir.path(), &mod_for(dll)).unwrap();
+    inject_mod(
+        dir.path(),
+        &PathBuf::from(env!("CARGO_BIN_EXE_sentinela-mods")),
+        &mod_for(dll),
+    )
+    .unwrap();
     assert!(wait_marker("attached"));
 
     // O binário real faz o `eject-all`; o script o chama e arruma o resto.

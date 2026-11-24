@@ -9,6 +9,7 @@ const alvo = resolve(process.env.CARGO_TARGET_DIR ?? resolve(raiz, "target"));
 for (const [nome, pacote] of [
   ["sentinela.exe", "sentinela"],
   ["sentinela-desktop.exe", "sentinela-desktop"],
+  ["sentinela-mods.exe", "sentinela-mods"],
 ]) {
   const origem = resolve(alvo, "release", nome);
   const destino = resolve(raiz, "app", "src-tauri", "bin", nome);
