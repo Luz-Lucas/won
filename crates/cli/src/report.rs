@@ -394,6 +394,7 @@ mod tests {
                     detail: "d".into(),
                 }],
                 sha256: "ab".into(),
+                in_archive: None,
             }],
             errors: vec![WalkError {
                 path: PathBuf::from("a/locked"),

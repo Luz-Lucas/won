@@ -250,6 +250,7 @@ mod tests {
                 detail: String::new(),
             }],
             sha256: "ab".repeat(32),
+            in_archive: None,
         };
         SummaryItem {
             recommended: explain::recommended(&item),

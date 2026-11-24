@@ -103,6 +103,7 @@ mod tests {
             verdict: Severity::Malicious,
             findings,
             sha256: String::new(),
+            in_archive: None,
         };
         assert!(recommended(&item(vec![f(
             "hash",

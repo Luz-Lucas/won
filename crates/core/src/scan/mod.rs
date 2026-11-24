@@ -1,3 +1,4 @@
+pub mod archive;
 pub mod areas;
 pub mod authenticode;
 pub mod context;
@@ -48,6 +49,9 @@ pub struct ScanItem {
     pub findings: Vec<Finding>,
     /// SHA-256 do arquivo, em hexadecimal minúsculo.
     pub sha256: String,
+    /// Achado dentro de um compactado: a entrada (a quarentena move o
+    /// compactado inteiro).
+    pub in_archive: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -101,6 +105,22 @@ impl Engine {
     }
 }
 
+impl Engine {
+    /// Hash e detectores de conteúdo num arquivo já lido. Devolve os achados
+    /// e os erros dos detectores (`"nome: motivo"`).
+    fn inspect(&self, data: &FileData) -> (Vec<Finding>, Vec<String>) {
+        let mut found = self.hash.inspect(data).unwrap_or_default();
+        let mut errors = Vec::new();
+        for d in &self.content {
+            match d.inspect(data) {
+                Ok(f) => found.extend(f),
+                Err(e) => errors.push(format!("{}: {e}", d.name())),
+            }
+        }
+        (found, errors)
+    }
+}
+
 fn walk_error(path: &Path, e: impl std::fmt::Display) -> WalkError {
     WalkError {
         path: path.to_path_buf(),
@@ -115,6 +135,7 @@ struct EntryScan {
     findings: Vec<Finding>,
     errors: Vec<WalkError>,
     sha256: [u8; 32],
+    in_archive: Option<String>,
 }
 
 /// Scans one file. Returns the verdict and findings, or a `WalkError` if the
@@ -141,15 +162,25 @@ fn scan_entry(
     };
     let mut inspect_errors = Vec::new();
     let sha256;
+    let mut in_archive = None;
     let mut findings = if let Some(bytes) = full {
         sha256 = hash::sha256_bytes(&bytes);
         let mut data = FileData::with_trust(path, Some(&bytes), sha256, Some(engine.trust));
         data.autostart = autostart;
-        let mut f = engine.hash.inspect(&data).unwrap_or_default();
-        for d in &engine.content {
-            match d.inspect(&data) {
-                Ok(found) => f.extend(found),
-                Err(e) => inspect_errors.push(walk_error(path, format!("{}: {e}", d.name()))),
+        let (mut f, errs) = engine.inspect(&data);
+        inspect_errors.extend(errs.into_iter().map(|e| walk_error(path, e)));
+        if archive::is_zip(path, &bytes) {
+            let inner = archive::scan(&bytes, &archive::LIMITS, &|d| engine.inspect(d).0);
+            for s in inner.skipped {
+                inspect_errors.push(walk_error(path, format!("dentro do compactado: {s}")));
+            }
+            let worst = inner
+                .hits
+                .iter()
+                .max_by_key(|h| h.findings.iter().map(|f| f.severity).max());
+            in_archive = worst.map(|h| h.entry.clone());
+            for h in inner.hits {
+                f.extend(h.findings);
             }
         }
         f
@@ -169,6 +200,7 @@ fn scan_entry(
         findings,
         errors: inspect_errors,
         sha256,
+        in_archive,
     })
 }
 
@@ -297,6 +329,7 @@ pub fn run_scan_with_progress(
                         verdict: r.verdict,
                         findings: r.findings,
                         sha256: hex::encode(r.sha256),
+                        in_archive: r.in_archive,
                     });
                     (item, r.errors)
                 })
@@ -706,6 +739,42 @@ mod tests {
         let report = run_scan(&engine, &o, &AtomicBool::new(false));
         assert_eq!(report.items.len(), 1);
         assert_eq!(report.items[0].findings[0].rule, "autostart-unsigned");
+    }
+
+    #[test]
+    fn marker_inside_zip_points_to_the_archive() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let mut buf = std::io::Cursor::new(Vec::new());
+        {
+            let mut z = zip::ZipWriter::new(&mut buf);
+            let o = zip::write::SimpleFileOptions::default();
+            z.start_file("pasta/m.bin", o).unwrap();
+            z.write_all(MARKER).unwrap();
+            z.start_file("seg.exe", o.with_aes_encryption(zip::AesMode::Aes256, "x"))
+                .unwrap();
+            z.write_all(b"MZ").unwrap();
+            z.finish().unwrap();
+        }
+        let zip_path = dir.path().join("baixado.zip");
+        fs::write(&zip_path, buf.into_inner()).unwrap();
+        let (engine, _) = Engine::from_database(&marker_db());
+        let report = run_scan(&engine, &opts(dir.path(), 1 << 20), &AtomicBool::new(false));
+        assert_eq!(report.items.len(), 1);
+        let item = &report.items[0];
+        assert_eq!(item.path, zip_path);
+        assert_eq!(item.verdict, Severity::Malicious);
+        assert_eq!(item.in_archive.as_deref(), Some("pasta/m.bin"));
+        assert_eq!(
+            item.sha256,
+            hex::encode(hash::sha256_file(&zip_path).unwrap())
+        );
+        assert_eq!(report.errors.len(), 1);
+        assert!(
+            report.errors[0]
+                .reason
+                .contains("seg.exe: protegido por senha")
+        );
     }
 
     #[test]

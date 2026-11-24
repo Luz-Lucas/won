@@ -259,6 +259,7 @@ mod tests {
                 detail: String::new(),
             }],
             sha256: String::new(),
+            in_archive: None,
         }
     }
 

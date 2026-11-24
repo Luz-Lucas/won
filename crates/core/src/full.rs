@@ -210,6 +210,7 @@ mod tests {
             verdict,
             findings,
             sha256: String::new(),
+            in_archive: None,
         }
     }
 
