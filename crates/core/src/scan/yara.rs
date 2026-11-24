@@ -128,11 +128,7 @@ mod tests {
     }
 
     fn file(bytes: Option<&[u8]>) -> FileData<'_> {
-        FileData {
-            path: Path::new("x"),
-            bytes,
-            sha256: [0; 32],
-        }
+        FileData::new(Path::new("x"), bytes, [0; 32])
     }
 
     #[test]

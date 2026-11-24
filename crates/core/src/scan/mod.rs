@@ -1,4 +1,5 @@
 pub mod areas;
+pub mod authenticode;
 pub mod detector;
 pub mod exceptions;
 pub mod explain;
@@ -65,6 +66,8 @@ pub struct Engine {
     content: Vec<Box<dyn Detector>>,
     /// Serializes full reads of files above `BIG_FILE`.
     big_read: Mutex<()>,
+    /// Validação Authenticode (injetável nos testes).
+    trust: authenticode::TrustFn,
 }
 
 /// Files above this size are read one at a time.
@@ -86,6 +89,7 @@ impl Engine {
             hash: hash::HashDetector::new(db.hashes.clone()),
             content,
             big_read: Mutex::new(()),
+            trust: authenticode::verify,
         };
         (engine, warnings)
     }
@@ -128,11 +132,7 @@ fn scan_entry(engine: &Engine, entry: &Entry, max_size: u64) -> Result<EntryScan
     let sha256;
     let mut findings = if let Some(bytes) = full {
         sha256 = hash::sha256_bytes(&bytes);
-        let data = FileData {
-            path,
-            sha256,
-            bytes: Some(&bytes),
-        };
+        let data = FileData::with_trust(path, Some(&bytes), sha256, Some(engine.trust));
         let mut f = engine.hash.inspect(&data).unwrap_or_default();
         for d in &engine.content {
             match d.inspect(&data) {
@@ -143,11 +143,7 @@ fn scan_entry(engine: &Engine, entry: &Entry, max_size: u64) -> Result<EntryScan
         f
     } else {
         sha256 = hash::sha256_file(path).map_err(|e| walk_error(path, e))?;
-        let data = FileData {
-            path,
-            bytes: None,
-            sha256,
-        };
+        let data = FileData::with_trust(path, None, sha256, Some(engine.trust));
         engine.hash.inspect(&data).unwrap_or_default()
     };
     findings.sort_by_key(|a| std::cmp::Reverse(a.severity));
@@ -651,6 +647,18 @@ mod tests {
         let report = run_scan(&engine, &opts(dir.path(), 1 << 20), &flag);
         assert_eq!(report.scanned, 1);
         assert!(!report.interrupted);
+    }
+
+    #[test]
+    fn valid_signature_never_hides_hash_or_yara() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("m.bin"), MARKER).unwrap();
+        let (mut engine, _) = Engine::from_database(&marker_db());
+        engine.trust = |_| authenticode::Trust::Valid {
+            signer: "Microsoft Windows".into(),
+        };
+        let report = run_scan(&engine, &opts(dir.path(), 1 << 20), &AtomicBool::new(false));
+        assert_malicious(&report);
     }
 
     #[test]

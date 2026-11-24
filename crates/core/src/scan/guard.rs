@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use super::authenticode::{self, Trust, TrustFn};
 use crate::games::running::Process;
 use crate::quarantine;
 use crate::walker::is_under;
@@ -16,15 +17,33 @@ use crate::walker::is_under;
 pub enum Guard {
     /// Dentro de `%SystemRoot%`: mover pode quebrar o Windows.
     SystemFolder,
+    /// Assinado pela Microsoft: pede a mesma segunda confirmação da pasta
+    /// do Windows.
+    MicrosoftSigned { signer: String },
     /// Executável de processo aberto.
     InUse { pids: Vec<u32>, names: Vec<String> },
 }
 
 /// Travas que valem para o arquivo. Lista vazia: pode ir direto.
 pub fn check(path: &Path, system_root: &Path, procs: &[Process]) -> Vec<Guard> {
+    check_with_trust(path, system_root, procs, authenticode::verify)
+}
+
+/// Como `check`, com a validação de assinatura injetada (para os testes).
+pub fn check_with_trust(
+    path: &Path,
+    system_root: &Path,
+    procs: &[Process],
+    verify: TrustFn,
+) -> Vec<Guard> {
     let mut out = Vec::new();
     if is_under(path, system_root) {
         out.push(Guard::SystemFolder);
+    }
+    if let Trust::Valid { signer } = verify(path)
+        && authenticode::is_microsoft(&signer)
+    {
+        out.push(Guard::MicrosoftSigned { signer });
     }
     let running: Vec<&Process> = procs
         .iter()
@@ -181,6 +200,26 @@ mod tests {
             [Guard::SystemFolder]
         );
         assert!(check(Path::new(r"C:\WindowsApps\x.dll"), root, &[]).is_empty());
+    }
+
+    #[test]
+    fn microsoft_signed_needs_second_confirmation() {
+        let ms = |_: &Path| Trust::Valid {
+            signer: "Microsoft Corporation".into(),
+        };
+        let other = |_: &Path| Trust::Valid {
+            signer: "Contoso".into(),
+        };
+        let p = Path::new(r"C:\Users\A\AppData\Local\x.exe");
+        let root = Path::new(r"C:\Windows");
+        assert_eq!(
+            check_with_trust(p, root, &[], ms),
+            [Guard::MicrosoftSigned {
+                signer: "Microsoft Corporation".into()
+            }]
+        );
+        assert!(check_with_trust(p, root, &[], other).is_empty());
+        assert!(check_with_trust(p, root, &[], |_| Trust::Unsigned).is_empty());
     }
 
     #[test]

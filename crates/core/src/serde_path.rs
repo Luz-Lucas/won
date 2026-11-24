@@ -37,10 +37,10 @@ pub fn lossy_pairs<S: Serializer>(v: &[(PathBuf, String)], s: S) -> Result<S::Ok
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
+    #[cfg(windows)]
     #[test]
     fn invalid_unicode_path_serializes_lossily() {
+        use super::*;
         use std::os::windows::ffi::OsStringExt;
         let p = PathBuf::from(std::ffi::OsString::from_wide(&[0x61, 0xD800, 0x62]));
         let e = crate::walker::WalkError {

@@ -79,11 +79,7 @@ mod tests {
     fn known_hash_is_malicious() {
         let h = sha256_bytes(b"abc");
         let det = HashDetector::new(HashSet::from([h]));
-        let f = FileData {
-            path: Path::new("a.exe"),
-            bytes: Some(b"abc"),
-            sha256: h,
-        };
+        let f = FileData::new(Path::new("a.exe"), Some(b"abc"), h);
         let out = det.inspect(&f).unwrap();
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].severity, Severity::Malicious);
@@ -95,11 +91,7 @@ mod tests {
     fn unknown_hash_is_clean() {
         let h = sha256_bytes(b"abc");
         let det = HashDetector::new(HashSet::new());
-        let f = FileData {
-            path: Path::new("a.exe"),
-            bytes: Some(b"abc"),
-            sha256: h,
-        };
+        let f = FileData::new(Path::new("a.exe"), Some(b"abc"), h);
         assert!(det.inspect(&f).unwrap().is_empty());
     }
 
@@ -107,11 +99,7 @@ mod tests {
     fn works_without_bytes() {
         let h = sha256_bytes(b"abc");
         let det = HashDetector::new(HashSet::from([h]));
-        let f = FileData {
-            path: Path::new("big.bin"),
-            bytes: None,
-            sha256: h,
-        };
+        let f = FileData::new(Path::new("big.bin"), None, h);
         assert_eq!(det.inspect(&f).unwrap().len(), 1);
     }
 }
