@@ -20,7 +20,7 @@ A janela do Sentinela tem estas páginas, na barra lateral:
 - **Aplicativos**: instala e atualiza aplicativos do catálogo pelo winget.
 - **Personalizar**: barra de tarefas, menu Iniciar, Explorador, tema e sistema, com interruptores e listas de opções. Cada mudança mostra a prévia, pede confirmação e pode ser desfeita pelo Histórico. Mudanças que só aparecem com o Explorer reiniciado oferecem o botão "Reiniciar Explorer"; o Sentinela nunca o reinicia sozinho.
 - **Rede**: mede latência, *jitter* e perda até o roteador, a Cloudflare e os servidores que você acrescentar; rastreia a rota separando sua casa do provedor e mostra onde o atraso começa; testa o *bufferbloat*; compara o DNS atual com DNS públicos e, se outro for mais rápido, aplica com prévia (desfaz pelo Histórico); desliga a economia de energia do adaptador de rede; mostra o sinal do Wi‑Fi. Em **Rotas alternativas**, compara a conexão atual com o Cloudflare WARP e com um túnel WireGuard seu (e mostra ExitLag/NoPing, se instalados), só recomenda quando a diferença passa da variação medida, liga a rota escolhida ao abrir cada jogo e pode segurar a varredura do Wi‑Fi durante jogos. Na troca de DNS, oferece DNS sobre HTTPS quando o Windows conhece o servidor. A rota até o servidor do jogo é do provedor: o Sentinela mede e ajusta só o que é do computador.
-- **Segurança**: antivírus sob demanda (sem proteção em tempo real; mantenha o Defender ligado). A verificação **Rápida** lê os programas abertos, tudo que inicia com o Windows (chaves `Run`/`RunOnce`, pastas Inicializar, tarefas agendadas e serviços) e as pastas onde malware costuma cair (Downloads, Área de Trabalho, Documentos, Temp, AppData, ProgramData, Público e a raiz dos discos), só nos tipos de arquivo de risco; a **Completa** lê todos os discos fixos; a **Personalizada**, as pastas e discos que você escolher. Cada achado diz por quê em português, com o SHA-256, e tem Detalhes, Abrir pasta, Consultar no VirusTotal (só o hash vai ao navegador) e Ignorar sempre. Só o malware confirmado por hash vem marcado para quarentena; nada é movido sem você pedir. Antes de mover, arquivos da pasta do Windows pedem uma segunda confirmação e arquivos de programas abertos oferecem encerrar o programa. Depois da primeira verificação, oferece agendar uma rápida por semana.
+- **Segurança**: antivírus sob demanda (sem proteção em tempo real; mantenha o Defender ligado). A verificação **Rápida** lê os programas abertos, tudo que inicia com o Windows (chaves `Run`/`RunOnce`, pastas Inicializar, tarefas agendadas e serviços) e as pastas onde malware costuma cair (Downloads, Área de Trabalho, Documentos, Temp, AppData, ProgramData, Público e a raiz dos discos), só nos tipos de arquivo de risco; a **Completa** lê todos os discos fixos; a **Personalizada**, as pastas e discos que você escolher. Cada achado diz por quê em português, com o SHA-256, e tem Detalhes, Abrir pasta, Consultar no VirusTotal (só o hash vai ao navegador) e Ignorar sempre. Só o malware confirmado por hash vem marcado para quarentena; nada é movido sem você pedir. Antes de mover, arquivos da pasta do Windows pedem uma segunda confirmação e arquivos de programas abertos oferecem encerrar o programa. Depois da primeira verificação, oferece agendar uma rápida por semana. Além dos níveis Malicioso e Suspeito há o nível **Risco**: nada casou, mas o arquivo está num contexto ruim (executável sem assinatura válida que inicia sozinho a partir de Temp ou AppData, extensão dupla como `foto.jpg.exe` ou programa disfarçado de documento, script na pasta Inicializar, atalho que chama o PowerShell com comando codificado, Office com macro que roda ao abrir). Os de Risco nunca vêm marcados. A **assinatura digital (Authenticode)** é validada de verdade: assinatura válida tira pontos da heurística de executáveis (nunca anula hash de malware conhecido nem regra YARA) e arquivos assinados pela Microsoft pedem a mesma segunda confirmação da pasta do Windows antes da quarentena. Arquivos **.zip** são verificados por dentro (até 10.000 entradas, 64 MB por entrada, 512 MB no total, dois níveis de zip dentro de zip e compressão até 200:1; o que passa do limite ou tem senha aparece em "Não verificados"); a quarentena move o compactado inteiro e a janela avisa antes. A janela guarda um **cache** (`%LOCALAPPDATA%\Sentinela\scan-cache.bin`) dos arquivos limpos: o que não mudou não é relido, mas o hash é sempre conferido contra o banco, e regras novas descartam o cache. A verificação da janela roda em **segundo plano** (metade dos processadores, prioridade baixa de CPU e disco), pode ser **pausada**, e pausa sozinha enquanto um jogo detectado estiver aberto. Em Ajustes, "Verificar com o Sentinela" no **clique direito** do Explorador (arquivos, pastas e discos; no Windows 11, em "Mostrar mais opções") começa uma verificação personalizada do item. Sem administrador, a janela diz o que ficou de fora por acesso negado e oferece "Reiniciar como administrador".
 - **Quarentena**: os arquivos ficam guardados codificados (não rodam por engano); restaurar confere o conteúdo e nunca sobrescreve; apagar definitivamente pede confirmação.
 - **Disco**: lista os maiores arquivos e os duplicados de uma pasta. Só lista; nunca apaga.
 - **Histórico**: as otimizações e personalizações aplicadas, com desfazer.
@@ -60,7 +60,7 @@ sentinela info
 | Código | Significado |
 | --- | --- |
 | `0` | Sucesso / nada encontrado |
-| `1` | Achados de malware (`scan` encontrou algo suspeito ou malicioso; no `full`, só quando malware confirmado por hash **não** pôde ser isolado) |
+| `1` | Achados de malware (`scan` encontrou algo suspeito ou malicioso, o nível `[RISCO]` não conta; no `full`, só quando malware confirmado por hash **não** pôde ser isolado) |
 | `2` | Erro global (caminho inexistente, categoria inválida, falha de rede no `update`, uso incorreto) |
 
 Erros em arquivos individuais (acesso negado, arquivo em uso) **não** interrompem a execução: aparecem em "Não verificados" no texto ou em `errors` no JSON.
@@ -69,15 +69,17 @@ Erros em arquivos individuais (acesso negado, arquivo em uso) **não** interromp
 
 ```
 > sentinela scan C:\Users\eu\Downloads
-Verificados: 1342 | Maliciosos: 1 | Suspeitos: 1 | Erros: 2
+Verificados: 1342 | Maliciosos: 1 | Suspeitos: 1 | Risco: 1 | Erros: 2
 [MALICIOSO] C:\Users\eu\Downloads\crack.exe — sha256:3f9a…
 [SUSPEITO] C:\Users\eu\Downloads\setup.exe — pe-heuristics
+[RISCO] C:\Users\eu\Downloads\foto.jpg.exe — double-extension
 
 Não verificados:
   C:\Users\eu\Downloads\bloqueado.tmp — acesso negado
 ```
 
-- `--json`: saída estável em JSON, um objeto com `version` (1), `summary`, `items` e `errors`.
+- `--json`: saída estável em JSON, um objeto com `version` (1), `summary` (com `malicious`, `suspicious` e `risk`), `items` e `errors`.
+- `[RISCO]` é o nível abaixo de `[SUSPEITO]` (contexto ruim, sem nada casar) e **não** muda o código de saída. O CLI valida a assinatura Authenticode e verifica `.zip` por dentro, mas não usa o cache de verificados.
 - `--max-size <MB>` (padrão `256`): arquivos maiores que isso só têm o hash calculado (em streaming), sem análise de conteúdo.
 - `--exclude <glob>` (repetível): ignora caminhos que casam com o glob, por exemplo `--exclude "**/node_modules/**" --exclude "**/*.iso"`.
 - Links simbólicos e junctions nunca são seguidos.

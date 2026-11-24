@@ -420,6 +420,36 @@ mod tests {
     }
 
     #[test]
+    fn risk_items_are_labelled_and_counted_apart() {
+        let mut report = sample();
+        report.items.push(ScanItem {
+            path: PathBuf::from("a/foto.jpg.exe"),
+            verdict: Severity::Risk,
+            findings: vec![Finding {
+                detector: "context",
+                rule: "double-extension".into(),
+                severity: Severity::Risk,
+                detail: ".jpg.exe".into(),
+            }],
+            sha256: "cd".into(),
+            in_archive: None,
+        });
+        let mut out = Vec::new();
+        write_scan(&report, false, &mut out).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Risco: 1"));
+        assert!(s.contains("[RISCO] a/foto.jpg.exe — double-extension"));
+        let mut out = Vec::new();
+        write_scan(&report, true, &mut out).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(v["summary"]["risk"], 1);
+        assert_eq!(v["items"][1]["verdict"], "risk");
+        // Só Risco não muda o código de saída.
+        report.items.remove(0);
+        assert_eq!(report.exit_code(), 0);
+    }
+
+    #[test]
     fn report_text_lists_items_and_errors() {
         let mut out = Vec::new();
         write_scan(&sample(), false, &mut out).unwrap();
