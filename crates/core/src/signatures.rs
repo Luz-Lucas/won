@@ -79,6 +79,17 @@ fn builtin_eicar_hash() -> [u8; 32] {
     out
 }
 
+/// O banco já foi baixado alguma vez e a fonte mais nova tem mais de
+/// `max_age_secs` (horários RFC 3339 em UTC se comparam como texto).
+/// Banco nunca baixado não conta: o primeiro download é do usuário.
+pub fn is_stale(manifest: Option<&Manifest>, now_secs: u64, max_age_secs: u64) -> bool {
+    let Some(newest) = manifest.and_then(|m| m.sources.iter().map(|s| s.fetched_at.as_str()).max())
+    else {
+        return false;
+    };
+    newest < crate::updater::rfc3339_utc(now_secs.saturating_sub(max_age_secs)).as_str()
+}
+
 /// Loads the database from `dir`. Never fails: problems become warnings.
 /// The EICAR hash and rule are always included.
 pub fn load(dir: &Path) -> Database {
@@ -216,6 +227,33 @@ mod tests {
 
     const H2: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const H3: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    #[test]
+    fn signatures_stale_after_24h() {
+        let m = |at: &[&str]| Manifest {
+            sources: at
+                .iter()
+                .map(|a| SourceInfo {
+                    fetched_at: a.to_string(),
+                    ..SourceInfo::default()
+                })
+                .collect(),
+        };
+        // 2026-11-23T12:00:00Z
+        let now = 1_795_435_200;
+        assert_eq!(crate::updater::rfc3339_utc(now), "2026-11-23T12:00:00Z");
+        let day = 24 * 3600;
+        assert!(!is_stale(None, now, day));
+        assert!(!is_stale(Some(&m(&[])), now, day));
+        assert!(!is_stale(Some(&m(&["2026-11-22T13:00:00Z"])), now, day));
+        assert!(is_stale(Some(&m(&["2026-11-22T11:59:59Z"])), now, day));
+        // Vale a fonte mais nova.
+        assert!(!is_stale(
+            Some(&m(&["2026-11-01T00:00:00Z", "2026-11-23T08:00:00Z"])),
+            now,
+            day
+        ));
+    }
 
     fn eicar_hash() -> [u8; 32] {
         Sha256::digest(EICAR).into()

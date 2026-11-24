@@ -14,7 +14,7 @@ use sentinela_core::updater::{self, AuthRequired, Fetcher, UpdateSummary};
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 const AUTH_REJECTED: &str = "A chave da abuse.ch foi recusada. Confira a chave em Ajustes.";
 const SERVER_REFUSED: &str = "O servidor recusou o download das assinaturas.";
@@ -94,8 +94,35 @@ pub fn signatures_update(
     app: AppHandle,
     jobs: State<'_, Arc<JobRegistry>>,
 ) -> Result<JobId, String> {
+    start_update(app, jobs.inner().clone())
+}
+
+/// Banco com mais de um dia: atualiza ao abrir o app.
+const AUTO_UPDATE_AGE: u64 = 24 * 3600;
+
+/// Ao abrir o app: se o banco já foi baixado e tem mais de 24 h, atualiza em
+/// segundo plano (a mesma operação do botão de Ajustes). Banco nunca baixado
+/// espera o usuário.
+pub fn auto_update(app: &AppHandle) {
+    let Some(jobs) = app.try_state::<Arc<JobRegistry>>() else {
+        return;
+    };
+    let jobs = jobs.inner().clone();
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let db = signatures::load(&signatures::default_db_dir());
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        if signatures::is_stale(db.manifest.as_ref(), now, AUTO_UPDATE_AGE) {
+            let _ = start_update(app, jobs);
+        }
+    });
+}
+
+fn start_update(app: AppHandle, jobs: Arc<JobRegistry>) -> Result<JobId, String> {
     spawn_job(
-        jobs.inner().clone(),
+        jobs,
         Arc::new(TauriSink(app)),
         JobKind::Update,
         move |_, _, _| {

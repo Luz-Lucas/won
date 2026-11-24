@@ -6,6 +6,7 @@ pub mod guard;
 pub mod hash;
 pub mod pe;
 pub mod risk;
+pub mod schedule;
 pub mod targets;
 pub mod yara;
 

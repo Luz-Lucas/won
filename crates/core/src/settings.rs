@@ -15,6 +15,11 @@ pub struct Settings {
     pub close_to_tray: bool,
     /// O aviso "continua rodando na bandeja" já foi mostrado.
     pub tray_notice_shown: bool,
+    /// Verificação agendada põe em quarentena, sozinha, o malware confirmado
+    /// por hash (fora da pasta do Windows e de processos abertos).
+    pub auto_quarantine_hash: bool,
+    /// A oferta de agendar a verificação semanal já foi mostrada.
+    pub scan_schedule_offered: bool,
 }
 
 impl Default for Settings {
@@ -23,6 +28,8 @@ impl Default for Settings {
             start_with_windows: true,
             close_to_tray: true,
             tray_notice_shown: false,
+            auto_quarantine_hash: false,
+            scan_schedule_offered: false,
         }
     }
 }
@@ -147,6 +154,8 @@ mod tests {
             start_with_windows: false,
             close_to_tray: false,
             tray_notice_shown: true,
+            auto_quarantine_hash: true,
+            scan_schedule_offered: true,
         };
         save(&p, &s).unwrap();
         assert_eq!(load(&p), s);
