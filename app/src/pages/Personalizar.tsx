@@ -210,6 +210,7 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
             />
             <span>{t.title}</span>
           </label>
+          {applied(i) && <span className="tweak-badge">Aplicado</span>}
           {badges(i)}
         </div>
         {external && <p className="muted clean-warning">{EXTERNAL}</p>}
@@ -237,6 +238,7 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
           </label>
         ))}
       </fieldset>
+      {row.options.some(applied) && <span className="tweak-badge">Aplicado</span>}
       {row.options[0] && badges(row.options[0])}
       {row.options.map((i) => (
         <div key={i.tweak.id}>{blockedNote(i)}</div>

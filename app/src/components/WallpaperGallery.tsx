@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   wallpaperGallery,
+  wallpaperMonitors,
   wallpaperOpen,
   wallpaperPauseModeSet,
 } from "../api";
-import type { WallpaperItem, WallpaperPauseMode, WallpaperStatus } from "../api";
+import type {
+  WallpaperItem,
+  WallpaperMonitor,
+  WallpaperPauseMode,
+  WallpaperStatus,
+} from "../api";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 
@@ -14,12 +20,18 @@ const PAUSE_OPTIONS: { mode: WallpaperPauseMode; label: string; hint: string }[]
   { mode: "off", label: "Não mexer", hint: "o Sentinela não toca no Wallpaper Engine" },
 ];
 
+const monitorLabel = (m: WallpaperMonitor) =>
+  `Monitor ${m.index + 1}${m.primary ? " (principal)" : ""}: ${m.width}×${m.height}`;
+
 /** Wallpapers da Oficina e a pausa durante jogos. Só lê a Oficina; nunca grava nela. */
 export default function WallpaperGallery({ status }: { status: WallpaperStatus }) {
   const [items, setItems] = useState<WallpaperItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<WallpaperPauseMode>(status.pause_mode);
   const [busy, setBusy] = useState<string | null>(null);
+  const [monitors, setMonitors] = useState<WallpaperMonitor[]>([]);
+  // `null` = todos os monitores.
+  const [target, setTarget] = useState<number | null>(null);
 
   const load = useCallback(() => {
     wallpaperGallery().then(
@@ -33,11 +45,15 @@ export default function WallpaperGallery({ status }: { status: WallpaperStatus }
 
   useEffect(load, [load]);
 
+  useEffect(() => {
+    wallpaperMonitors().then(setMonitors, () => setMonitors([]));
+  }, []);
+
   const use = async (id: string) => {
     setBusy(id);
     setError(null);
     try {
-      await wallpaperOpen(id);
+      await wallpaperOpen(id, target);
       load();
     } catch (e) {
       setError(errorText(e));
@@ -78,6 +94,31 @@ export default function WallpaperGallery({ status }: { status: WallpaperStatus }
         ))}
         <p className="muted">O wallpaper volta sozinho quando o jogo fechar ou o Sentinela for fechado.</p>
       </fieldset>
+      {monitors.length > 1 && (
+        <fieldset className="choice-group">
+          <legend>Aplicar em</legend>
+          <label className="clean-check">
+            <input
+              type="radio"
+              name="wallpaper-monitor"
+              checked={target === null}
+              onChange={() => setTarget(null)}
+            />
+            <span>Todos os monitores</span>
+          </label>
+          {monitors.map((m) => (
+            <label key={m.index} className="clean-check">
+              <input
+                type="radio"
+                name="wallpaper-monitor"
+                checked={target === m.index}
+                onChange={() => setTarget(m.index)}
+              />
+              <span>{monitorLabel(m)}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       {error && (
         <p role="alert" className="form-error">
           {error}
@@ -100,9 +141,14 @@ export default function WallpaperGallery({ status }: { status: WallpaperStatus }
               )}
               <span className="wallpaper-title">{w.title}</span>
               {w.kind && <span className="tweak-badge">{w.kind}</span>}
-              {w.active ? (
-                <span className="tweak-badge">Em uso</span>
-              ) : (
+              {w.active && (
+                <span className="tweak-badge">
+                  {monitors.length > 1 && w.active_on.length > 0
+                    ? `Em uso: ${w.active_on.map((n) => `monitor ${n + 1}`).join(", ")}`
+                    : "Em uso"}
+                </span>
+              )}
+              {!(target === null ? w.active && w.active_on.length >= Math.max(monitors.length, 1) : w.active_on.includes(target)) && (
                 <button
                   type="button"
                   className="btn"

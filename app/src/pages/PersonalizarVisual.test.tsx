@@ -31,6 +31,7 @@ vi.mock("../api", () => ({
   wallpaperStatus: vi.fn(),
   wallpaperGallery: vi.fn(),
   wallpaperOpen: vi.fn(),
+  wallpaperMonitors: vi.fn(),
   wallpaperPauseModeSet: vi.fn(),
   themeList: vi.fn(),
   themePreview: vi.fn(),
@@ -75,6 +76,7 @@ describe("Personalizar: papel de parede e temas", () => {
       restore_point_done: false,
     });
     vi.mocked(api.themeList).mockResolvedValue({ themes: [MIN], history: [] });
+    vi.mocked(api.wallpaperMonitors).mockResolvedValue([]);
   });
 
   it("gallery_hidden_without_wallpaper_engine", async () => {
@@ -87,8 +89,8 @@ describe("Personalizar: papel de parede e temas", () => {
   it("gallery_lists_workshop_and_uses_a_wallpaper", async () => {
     vi.mocked(api.wallpaperStatus).mockResolvedValue(status(true));
     vi.mocked(api.wallpaperGallery).mockResolvedValue([
-      { id: "1", dir: "d", title: "Chuva", kind: "scene", preview: null, thumb: null, active: true },
-      { id: "2", dir: "d", title: "Neve", kind: null, preview: null, thumb: "data:image/jpeg;base64,AA==", active: false },
+      { id: "1", dir: "d", title: "Chuva", kind: "scene", preview: null, thumb: null, active: true, active_on: [0] },
+      { id: "2", dir: "d", title: "Neve", kind: null, preview: null, thumb: "data:image/jpeg;base64,AA==", active: false, active_on: [] },
     ]);
     vi.mocked(api.wallpaperOpen).mockResolvedValue(undefined);
     render(<Personalizar />);
@@ -97,7 +99,28 @@ describe("Personalizar: papel de parede e temas", () => {
     expect(screen.getByText("Em uso")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Usar Chuva" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Usar Neve" }));
-    expect(api.wallpaperOpen).toHaveBeenCalledWith("2");
+    expect(api.wallpaperOpen).toHaveBeenCalledWith("2", null);
+  });
+
+  it("gallery_applies_to_one_monitor", async () => {
+    vi.mocked(api.wallpaperStatus).mockResolvedValue(status(true));
+    vi.mocked(api.wallpaperMonitors).mockResolvedValue([
+      { index: 0, name: "A", width: 1920, height: 1080, primary: true, current: null },
+      { index: 1, name: "B", width: 2560, height: 1440, primary: false, current: null },
+    ]);
+    vi.mocked(api.wallpaperGallery).mockResolvedValue([
+      { id: "1", dir: "d", title: "Chuva", kind: null, preview: null, thumb: null, active: true, active_on: [0] },
+      { id: "2", dir: "d", title: "Neve", kind: null, preview: null, thumb: null, active: false, active_on: [] },
+    ]);
+    vi.mocked(api.wallpaperOpen).mockResolvedValue(undefined);
+    render(<Personalizar />);
+    await goTo("Papel de parede");
+    expect(await screen.findByText("Em uso: monitor 1")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: /Monitor 2/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Usar Neve" }));
+    expect(api.wallpaperOpen).toHaveBeenCalledWith("2", 1);
+    // Chuva já está no monitor 1 e ainda pode ir para o 2.
+    expect(screen.getByRole("button", { name: "Usar Chuva" })).toBeInTheDocument();
   });
 
   it("pause_mode_setting", async () => {

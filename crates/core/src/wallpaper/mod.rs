@@ -28,3 +28,15 @@ pub fn current_file(install: &Install) -> Option<String> {
     let text = std::fs::read_to_string(install.dir.join("config.json")).ok()?;
     palette::current_wallpaper(&text)
 }
+
+/// Wallpaper de cada monitor (índice, `file`), lido do `config.json`.
+pub fn current_by_monitor(install: &Install) -> Vec<(u32, String)> {
+    std::fs::read_to_string(install.dir.join("config.json"))
+        .map(|t| palette::wallpapers_by_monitor(&t))
+        .unwrap_or_default()
+}
+
+/// O `file` aponta para a pasta do item `id` da Oficina?
+pub fn file_is_item(file: &str, id: &str) -> bool {
+    file.split(['\\', '/']).any(|part| part == id)
+}

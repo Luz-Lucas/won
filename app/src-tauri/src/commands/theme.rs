@@ -20,6 +20,8 @@ pub struct ThemeInfo {
     pub description: String,
     pub toml: String,
     pub builtin: bool,
+    /// Tudo do tema já está assim no sistema agora.
+    pub applied: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -51,6 +53,7 @@ fn info(t: &Theme, builtin: bool) -> ThemeInfo {
         description: t.description.clone(),
         toml: theme::to_toml(t),
         builtin,
+        applied: false,
     }
 }
 
@@ -93,13 +96,23 @@ fn with_env<T>(state: &TweaksState, f: impl FnOnce(&Env) -> T) -> T {
 }
 
 #[tauri::command]
-pub async fn theme_list() -> Result<ThemesPage, String> {
-    blocking(|| {
-        Ok(ThemesPage {
-            themes: theme::builtin::all()
+pub async fn theme_list(state: State<'_, TweaksState>) -> Result<ThemesPage, String> {
+    let state = state.inner().clone();
+    blocking(move || {
+        // "Aplicado" é lido de volta do sistema: a prévia não acha nada a mudar.
+        let themes = with_env(&state, |env| {
+            theme::builtin::all()
                 .iter()
-                .map(|t| info(t, true))
-                .collect(),
+                .map(|t| {
+                    let p = theme::preview(t, env);
+                    let mut i = info(t, true);
+                    i.applied = !p.items.is_empty() && p.items.iter().all(|x| !x.change);
+                    i
+                })
+                .collect()
+        });
+        Ok(ThemesPage {
+            themes,
             history: theme::history(&theme::default_history_path()),
         })
     })

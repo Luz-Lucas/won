@@ -4,4 +4,6 @@
 ; do mesmo PC não são alcançadas.
 !macro NSIS_HOOK_POSTUNINSTALL
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Sentinela"
+  ; Tarefa agendada de início automático (o app abre como administrador).
+  nsExec::Exec 'schtasks /Delete /TN "Sentinela" /F'
 !macroend
