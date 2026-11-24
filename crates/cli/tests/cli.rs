@@ -404,6 +404,17 @@ fn quarantine_list_empty_and_restore_unknown_id() {
 }
 
 #[test]
+fn quarantine_delete_unknown_id_exits_2() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = tmp.path().join("db");
+    quarantine_cmd(tmp.path(), &db)
+        .args(["quarantine", "--delete", "nope"])
+        .assert()
+        .code(2)
+        .stderr(contains("nope"));
+}
+
+#[test]
 fn tweak_list_shows_catalog_ids() {
     Command::cargo_bin("sentinela")
         .unwrap()

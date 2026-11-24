@@ -105,6 +105,9 @@ enum Command {
     Quarantine {
         #[arg(long)]
         json: bool,
+        /// Apaga definitivamente o arquivo com este id (não tem volta)
+        #[arg(long, value_name = "ID")]
+        delete: Option<String>,
     },
     /// Restaura um arquivo da quarentena para o local original
     Restore {
@@ -206,7 +209,14 @@ fn dispatch(command: Command) -> Result<i32> {
             Ok(0)
         }
         Command::Full { json, root } => cmd_full(json, root),
-        Command::Quarantine { json } => {
+        Command::Quarantine {
+            delete: Some(id), ..
+        } => {
+            let e = quarantine::delete(&quarantine::default_quarantine_dir(), &id)?;
+            println!("Apagado definitivamente: {}", e.original_path.display());
+            Ok(0)
+        }
+        Command::Quarantine { json, delete: None } => {
             let entries = quarantine::list(&quarantine::default_quarantine_dir());
             report::write_quarantine_list(&entries, json, &mut io::stdout().lock())?;
             Ok(0)
