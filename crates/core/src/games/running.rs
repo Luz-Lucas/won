@@ -10,6 +10,7 @@ use super::path_key;
 /// caminho completo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Process {
+    pub pid: u32,
     pub name: String,
     pub path: Option<PathBuf>,
 }
@@ -108,6 +109,7 @@ pub fn processes() -> Vec<Process> {
             .position(|&c| c == 0)
             .unwrap_or(e.szExeFile.len());
         out.push(Process {
+            pid: e.th32ProcessID,
             name: String::from_utf16_lossy(&e.szExeFile[..len]),
             path: full_path(e.th32ProcessID),
         });
@@ -130,6 +132,7 @@ mod tests {
 
     fn p(name: &str, path: Option<&str>) -> Process {
         Process {
+            pid: 0,
             name: name.into(),
             path: path.map(PathBuf::from),
         }

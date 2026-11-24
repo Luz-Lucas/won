@@ -50,6 +50,29 @@ fn open(root: HKEY, path: &str, access: u32) -> Result<Option<KeyGuard>, String>
     }
 }
 
+/// Valores de texto de uma chave qualquer (vazio se ela não existe). Usado
+/// pela verificação rápida para `RunOnce` e para os serviços.
+pub(crate) fn key_strings(
+    hklm: bool,
+    path: &str,
+    wow32: bool,
+) -> Result<Vec<(String, String)>, String> {
+    let root = if hklm {
+        HKEY_LOCAL_MACHINE
+    } else {
+        HKEY_CURRENT_USER
+    };
+    let view = if wow32 {
+        KEY_WOW64_32KEY
+    } else {
+        KEY_WOW64_64KEY
+    };
+    match open(root, path, KEY_QUERY_VALUE | view)? {
+        Some(key) => string_values(&key),
+        None => Ok(Vec::new()),
+    }
+}
+
 /// Chave e visão de registro da lista `Run` da origem.
 fn run_key(source: StartupSource) -> Option<(HKEY, u32)> {
     match source {

@@ -132,6 +132,8 @@ pub fn run_full(opts: &FullOptions) -> FullReport {
         &engine,
         &ScanOptions {
             roots: opts.roots.clone(),
+            files: Vec::new(),
+            risky_only: false,
             walk: WalkOptions::default(),
             max_size: opts.max_size,
         },
@@ -209,6 +211,7 @@ mod tests {
             path: path.to_path_buf(),
             verdict,
             findings,
+            sha256: String::new(),
         }
     }
 

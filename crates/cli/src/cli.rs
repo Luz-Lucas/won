@@ -287,6 +287,8 @@ fn cmd_scan(paths: Vec<PathBuf>, json: bool, max_size: u64, exclude: Vec<String>
 
     let opts = ScanOptions {
         roots: paths,
+        files: Vec::new(),
+        risky_only: false,
         walk: WalkOptions {
             excludes,
             ..WalkOptions::default()

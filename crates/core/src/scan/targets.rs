@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use super::areas::QuickAreas;
 use super::detector::Severity;
 use super::{ScanItem, ScanReport};
 use crate::walker::WalkError;
@@ -22,42 +23,65 @@ pub enum ScanTarget {
 
 #[derive(Debug)]
 pub struct Resolved {
+    /// Pastas percorridas.
     pub roots: Vec<PathBuf>,
+    /// Arquivos avulsos, sempre lidos.
+    pub files: Vec<PathBuf>,
+    /// Nas pastas, só arquivos de risco (verificação rápida).
+    pub risky_only: bool,
+    /// Caminhos pedidos que não existem.
     pub missing: Vec<PathBuf>,
+    /// Fontes que não puderam ser lidas (entram em "Não verificados").
+    pub unreadable: Vec<WalkError>,
 }
 
-/// `quick` e `drives` vêm de fora para o teste não depender da máquina.
+/// `quick` e `drives` vêm de fora para o teste não depender da máquina;
+/// `quick` só é chamado na verificação rápida.
 pub fn resolve(
     target: &ScanTarget,
-    quick: &[PathBuf],
+    quick: &dyn Fn() -> QuickAreas,
     drives: &[PathBuf],
 ) -> Result<Resolved, String> {
-    let (candidates, check_exists): (&[PathBuf], bool) = match target {
-        ScanTarget::Quick => (quick, true),
-        ScanTarget::Full => (drives, false),
-        ScanTarget::Custom { paths } => (paths, true),
-    };
-    let mut roots = Vec::new();
-    let mut missing = Vec::new();
-    for p in candidates {
-        if check_exists && std::fs::symlink_metadata(p).is_err() {
-            missing.push(p.clone());
-        } else {
-            roots.push(p.clone());
+    let resolved = match target {
+        ScanTarget::Quick => {
+            let a = quick();
+            Resolved {
+                roots: a.roots,
+                files: a.files,
+                risky_only: true,
+                missing: Vec::new(),
+                unreadable: a.unreadable,
+            }
         }
-    }
-    if roots.is_empty() {
+        ScanTarget::Full => Resolved {
+            roots: drives.to_vec(),
+            files: Vec::new(),
+            risky_only: false,
+            missing: Vec::new(),
+            unreadable: Vec::new(),
+        },
+        ScanTarget::Custom { paths } => {
+            let mut r = Resolved {
+                roots: Vec::new(),
+                files: Vec::new(),
+                risky_only: false,
+                missing: Vec::new(),
+                unreadable: Vec::new(),
+            };
+            for p in paths {
+                match std::fs::symlink_metadata(p) {
+                    Err(_) => r.missing.push(p.clone()),
+                    Ok(m) if m.is_file() => r.files.push(p.clone()),
+                    Ok(_) => r.roots.push(p.clone()),
+                }
+            }
+            r
+        }
+    };
+    if resolved.roots.is_empty() && resolved.files.is_empty() {
         return Err(NO_ROOTS.to_string());
     }
-    Ok(Resolved { roots, missing })
-}
-
-/// Downloads e Área de Trabalho, quando o sistema os informa.
-pub fn quick_folders() -> Vec<PathBuf> {
-    [dirs::download_dir(), dirs::desktop_dir()]
-        .into_iter()
-        .flatten()
-        .collect()
+    Ok(resolved)
 }
 
 pub const ITEMS_LIMIT: usize = 1000;
@@ -126,38 +150,61 @@ mod tests {
     use crate::walker::WalkOptions;
     use std::sync::atomic::AtomicBool;
 
+    fn no_quick() -> QuickAreas {
+        QuickAreas::default()
+    }
+
     #[test]
-    fn quick_skips_missing_folders_and_reports_them() {
+    fn quick_uses_the_critical_areas() {
         let d = tempfile::tempdir().unwrap();
-        let gone = d.path().join("sumiu");
-        let r = resolve(
-            &ScanTarget::Quick,
-            &[d.path().to_path_buf(), gone.clone()],
-            &[],
-        )
-        .unwrap();
+        let exe = d.path().join("a.exe");
+        let areas = || QuickAreas {
+            roots: vec![d.path().to_path_buf()],
+            files: vec![exe.clone()],
+            unreadable: vec![WalkError {
+                path: PathBuf::from("Tasks"),
+                reason: "admin".into(),
+            }],
+        };
+        let r = resolve(&ScanTarget::Quick, &areas, &[]).unwrap();
+        assert!(r.risky_only);
         assert_eq!(r.roots, [d.path().to_path_buf()]);
-        assert_eq!(r.missing, [gone]);
+        assert_eq!(r.files, std::slice::from_ref(&exe));
+        assert_eq!(r.unreadable.len(), 1);
     }
 
     #[test]
     fn nothing_left_is_an_error_not_a_clean_result() {
-        let e = resolve(&ScanTarget::Quick, &[PathBuf::from("Z:\\nao\\existe")], &[]).unwrap_err();
+        let e = resolve(&ScanTarget::Quick, &no_quick, &[]).unwrap_err();
         assert_eq!(e, "Nenhuma pasta disponível para verificar.");
     }
 
     #[test]
     fn full_uses_the_drives() {
         let d = tempfile::tempdir().unwrap();
-        let r = resolve(&ScanTarget::Full, &[], &[d.path().to_path_buf()]).unwrap();
+        let r = resolve(&ScanTarget::Full, &no_quick, &[d.path().to_path_buf()]).unwrap();
         assert_eq!(r.roots, [d.path().to_path_buf()]);
+        assert!(!r.risky_only);
         assert!(r.missing.is_empty());
     }
 
     #[test]
     fn custom_with_no_paths_is_an_error() {
-        let e = resolve(&ScanTarget::Custom { paths: vec![] }, &[], &[]).unwrap_err();
+        let e = resolve(&ScanTarget::Custom { paths: vec![] }, &no_quick, &[]).unwrap_err();
         assert_eq!(e, "Nenhuma pasta disponível para verificar.");
+    }
+
+    #[test]
+    fn custom_splits_folders_and_files_and_reports_missing() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("x.exe");
+        std::fs::write(&f, b"MZ").unwrap();
+        let gone = d.path().join("sumiu");
+        let paths = vec![d.path().to_path_buf(), f.clone(), gone.clone()];
+        let r = resolve(&ScanTarget::Custom { paths }, &no_quick, &[]).unwrap();
+        assert_eq!(r.roots, [d.path().to_path_buf()]);
+        assert_eq!(r.files, [f]);
+        assert_eq!(r.missing, [gone]);
     }
 
     #[test]
@@ -178,6 +225,7 @@ mod tests {
                 severity: verdict,
                 detail: String::new(),
             }],
+            sha256: String::new(),
         }
     }
 
@@ -228,7 +276,7 @@ mod tests {
             &ScanTarget::Custom {
                 paths: vec![d.path().to_path_buf()],
             },
-            &[],
+            &no_quick,
             &[],
         )
         .unwrap();
@@ -238,6 +286,8 @@ mod tests {
         let (engine, warnings) = Engine::from_database(&db);
         let opts = ScanOptions {
             roots: r.roots,
+            files: r.files,
+            risky_only: false,
             walk: WalkOptions::default(),
             max_size: 256 * 1024 * 1024,
         };

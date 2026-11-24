@@ -1,7 +1,7 @@
 //! Safe directory traversal: never follows symlinks or junctions.
 
 use std::fs::Metadata;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use serde::Serialize;
@@ -37,6 +37,26 @@ pub struct WalkOptions {
     /// mtime alone (tests with backdated mtimes, which can't backdate
     /// creation time too) leave this `false` to keep creation out of it.
     pub use_creation_time: bool,
+    /// Pastas que nunca são percorridas (comparação sem diferenciar maiúsculas).
+    pub skip_dirs: Vec<PathBuf>,
+}
+
+/// `path` é `dir` ou está dentro dele. No Windows compara sem diferenciar
+/// maiúsculas e aceita `/` e `\`.
+pub fn is_under(path: &Path, dir: &Path) -> bool {
+    if cfg!(windows) {
+        let norm = |p: &Path| {
+            PathBuf::from(
+                p.to_string_lossy()
+                    .replace('/', "\\")
+                    .trim_end_matches('\\')
+                    .to_lowercase(),
+            )
+        };
+        norm(path).starts_with(norm(dir))
+    } else {
+        path.starts_with(dir)
+    }
 }
 
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
@@ -110,6 +130,9 @@ pub fn walk<'a>(
             .filter_entry(move |e| {
                 if e.depth() == 0 {
                     return true;
+                }
+                if e.file_type().is_dir() && opts.skip_dirs.iter().any(|d| is_under(e.path(), d)) {
+                    return false;
                 }
                 match &opts.excludes {
                     Some(set) => !set.is_match(e.path()),
@@ -297,6 +320,37 @@ mod tests {
         let items: Vec<_> = walk(&roots, &WalkOptions::default()).collect();
         assert_eq!(items.len(), 1);
         assert!(matches!(items[0], WalkItem::Error(_)));
+    }
+
+    #[test]
+    fn skip_dirs_are_not_walked() {
+        let d = tempfile::tempdir().unwrap();
+        fs::create_dir_all(d.path().join("Proprio/db")).unwrap();
+        fs::write(d.path().join("Proprio/db/regras.yar"), b"x").unwrap();
+        fs::write(d.path().join("fica.txt"), b"x").unwrap();
+        let roots = vec![d.path().to_path_buf()];
+        let skip = d
+            .path()
+            .join(if cfg!(windows) { "PROPRIO" } else { "Proprio" });
+        let opts = WalkOptions {
+            skip_dirs: vec![skip],
+            ..WalkOptions::default()
+        };
+        let v = files_of(walk(&roots, &opts).collect());
+        assert_eq!(v.len(), 1);
+        assert!(v[0].path.ends_with("fica.txt"));
+    }
+
+    #[test]
+    fn is_under_ignores_case_and_separators() {
+        assert!(is_under(
+            Path::new(r"C:\Users\A\x.txt"),
+            Path::new("c:/users/a/")
+        ));
+        assert!(!is_under(
+            Path::new(r"C:\Users\Ab\x.txt"),
+            Path::new(r"C:\Users\A")
+        ));
     }
 
     #[test]

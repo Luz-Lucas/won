@@ -389,6 +389,7 @@ mod tests {
                     severity: Severity::Malicious,
                     detail: "d".into(),
                 }],
+                sha256: "ab".into(),
             }],
             errors: vec![WalkError {
                 path: PathBuf::from("a/locked"),
