@@ -1,6 +1,7 @@
 //! Vigia de jogos abertos: a cada poucos segundos lê os processos e entrega à
 //! `GameSession` do core, que liga a rota escolhida para o jogo e segura o
-//! Wi‑Fi. Ao sair do app, desfaz o que a sessão ligou.
+//! Wi‑Fi. Ao sair do app, desfaz o que a sessão ligou. Enquanto uma
+//! verificação roda, também a pausa sozinha se algum jogo estiver aberto.
 
 use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::net::game_session::{self, Event, GameSession, event_text};
@@ -63,6 +64,12 @@ fn run(app: AppHandle, stop: Arc<AtomicBool>) {
     use sentinela_core::net::routes::windows::SystemRoutes;
     use sentinela_core::net::wifi::SystemWifiHold;
 
+    use crate::commands::scan::{ScanState, emit_pause};
+    use sentinela_core::scan::pause::GamePause;
+    use tauri::Manager;
+
+    let pause = app.try_state::<ScanState>().map(|s| s.pause.clone());
+    let mut game_pause = GamePause::default();
     let mut session = GameSession::default();
     let mut wifi = SystemWifiHold::default();
     let mut exes = Vec::new();
@@ -71,7 +78,8 @@ fn run(app: AppHandle, stop: Arc<AtomicBool>) {
     loop {
         let settings = game_session::load(&game_session::default_settings_path());
         let wanted = !settings.routes.is_empty() || settings.wifi_hold;
-        if wanted || !session.open_games().is_empty() {
+        let scanning = pause.as_ref().is_some_and(|p| p.active());
+        if wanted || scanning || !session.open_games().is_empty() {
             if scanned.is_none_or(|t| t.elapsed() >= RESCAN) {
                 let games = installed_games();
                 names = games
@@ -81,14 +89,26 @@ fn run(app: AppHandle, stop: Arc<AtomicBool>) {
                 exes = games.into_iter().map(|g| g.exe).collect();
                 scanned = Some(Instant::now());
             }
-            let now: BTreeSet<String> = if wanted {
+            let running: BTreeSet<String> = if wanted || scanning {
                 running_of(&exes, &processes())
             } else {
                 BTreeSet::new()
             };
-            let routes = SystemRoutes::new(is_elevated());
-            let events = session.update(now, &settings, &routes, &mut wifi);
-            report(&app, &events, &names);
+            if let Some(p) = &pause
+                && let Some(paused) = game_pause.update(scanning && !running.is_empty())
+            {
+                emit_pause(&app, p.set_game(paused));
+            }
+            if wanted || !session.open_games().is_empty() {
+                let now = if wanted { running } else { BTreeSet::new() };
+                let routes = SystemRoutes::new(is_elevated());
+                let events = session.update(now, &settings, &routes, &mut wifi);
+                report(&app, &events, &names);
+            }
+        } else if let Some(p) = &pause
+            && let Some(paused) = game_pause.update(false)
+        {
+            emit_pause(&app, p.set_game(paused));
         }
         // Dorme em passos curtos para sair rápido.
         let start = Instant::now();

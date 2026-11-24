@@ -31,6 +31,7 @@ fn label(s: Severity) -> &'static str {
     match s {
         Severity::Malicious => "[MALICIOSO]",
         Severity::Suspicious => "[SUSPEITO]",
+        Severity::Risk => "[RISCO]",
         Severity::Info => "[INFO]",
     }
 }
@@ -39,6 +40,7 @@ pub fn write_scan(report: &ScanReport, json: bool, out: &mut dyn Write) -> std::
     let count = |s: Severity| report.items.iter().filter(|i| i.verdict == s).count();
     let malicious = count(Severity::Malicious);
     let suspicious = count(Severity::Suspicious);
+    let risk = count(Severity::Risk);
     if json {
         let doc = json!({
             "version": 1,
@@ -46,6 +48,7 @@ pub fn write_scan(report: &ScanReport, json: bool, out: &mut dyn Write) -> std::
                 "scanned": report.scanned,
                 "malicious": malicious,
                 "suspicious": suspicious,
+                "risk": risk,
                 "errors": report.errors.len(),
                 "interrupted": report.interrupted,
             },
@@ -57,10 +60,11 @@ pub fn write_scan(report: &ScanReport, json: bool, out: &mut dyn Write) -> std::
 
     writeln!(
         out,
-        "Verificados: {} | Maliciosos: {} | Suspeitos: {} | Erros: {}",
+        "Verificados: {} | Maliciosos: {} | Suspeitos: {} | Risco: {} | Erros: {}",
         report.scanned,
         malicious,
         suspicious,
+        risk,
         report.errors.len()
     )?;
     if report.interrupted {
@@ -390,6 +394,7 @@ mod tests {
                     detail: "d".into(),
                 }],
                 sha256: "ab".into(),
+                in_archive: None,
             }],
             errors: vec![WalkError {
                 path: PathBuf::from("a/locked"),
@@ -412,6 +417,36 @@ mod tests {
         assert_eq!(v["summary"]["interrupted"], false);
         assert_eq!(v["items"][0]["verdict"], "malicious");
         assert_eq!(v["errors"][0]["reason"], "acesso negado");
+    }
+
+    #[test]
+    fn risk_items_are_labelled_and_counted_apart() {
+        let mut report = sample();
+        report.items.push(ScanItem {
+            path: PathBuf::from("a/foto.jpg.exe"),
+            verdict: Severity::Risk,
+            findings: vec![Finding {
+                detector: "context",
+                rule: "double-extension".into(),
+                severity: Severity::Risk,
+                detail: ".jpg.exe".into(),
+            }],
+            sha256: "cd".into(),
+            in_archive: None,
+        });
+        let mut out = Vec::new();
+        write_scan(&report, false, &mut out).unwrap();
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("Risco: 1"));
+        assert!(s.contains("[RISCO] a/foto.jpg.exe — double-extension"));
+        let mut out = Vec::new();
+        write_scan(&report, true, &mut out).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        assert_eq!(v["summary"]["risk"], 1);
+        assert_eq!(v["items"][1]["verdict"], "risk");
+        // Só Risco não muda o código de saída.
+        report.items.remove(0);
+        assert_eq!(report.exit_code(), 0);
     }
 
     #[test]

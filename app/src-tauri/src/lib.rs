@@ -6,6 +6,7 @@ pub mod tray;
 use commands::settings::{SettingsState, sync_autostart};
 use commands::system::{CloseAction, MINIMIZED_ARG, on_window_close, parse_minimized};
 use jobs::{JobRegistry, Sink};
+use sentinela_core::scan::explorer::parse_scan_arg;
 use sentinela_core::scan::schedule::parse_scheduled;
 use sentinela_core::settings::default_settings_path;
 use std::sync::Arc;
@@ -31,6 +32,8 @@ pub fn run() {
             // (exceto se for outro início automático).
             if parse_scheduled(&args) {
                 commands::scan::start_scheduled(app, false);
+            } else if let Some(path) = parse_scan_arg(&args) {
+                commands::scan::push_request(app, path);
             } else if !parse_minimized(&args) {
                 tray::show_main(app);
             }
@@ -58,6 +61,9 @@ pub fn run() {
                 eprintln!("Sentinela: sem ícone na bandeja: {e}");
             }
             sync_autostart(app.handle());
+            commands::settings::sync_explorer_menu(app.handle());
+            // Antes da vigia de jogos, que pausa a verificação enquanto um jogo roda.
+            app.manage(commands::scan::ScanState::default());
             app.manage(game_watch::GameWatch::start(app.handle().clone()));
             // A janela nasce escondida (tauri.conf) e aparece quando o frontend
             // avisa que carregou; só o início automático a mantém escondida.
@@ -74,6 +80,9 @@ pub fn run() {
             }
             if scheduled {
                 commands::scan::start_scheduled(app.handle(), true);
+            } else if let Some(path) = parse_scan_arg(std::env::args_os()) {
+                // Aberto pelo clique direito: a janela aparece e começa a verificar.
+                commands::scan::push_request(app.handle(), path);
             }
             commands::signatures::auto_update(app.handle());
             Ok(())
@@ -109,6 +118,11 @@ pub fn run() {
             commands::disk::disk_find_large,
             commands::disk::disk_find_dupes,
             commands::scan::scan_start,
+            commands::scan::scan_pause,
+            commands::scan::scan_pause_state,
+            commands::scan::scan_request_take,
+            commands::settings::explorer_menu_get,
+            commands::settings::explorer_menu_set,
             commands::scan::quarantine_list,
             commands::scan::quarantine_restore,
             commands::scan::quarantine_delete,

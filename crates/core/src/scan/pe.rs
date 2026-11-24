@@ -4,6 +4,7 @@ use goblin::pe::PE;
 use goblin::pe::options::{ParseMode, ParseOptions};
 use goblin::pe::section_table::{IMAGE_SCN_MEM_EXECUTE, IMAGE_SCN_MEM_WRITE};
 
+use crate::scan::authenticode::Trust;
 use crate::scan::detector::{Detector, FileData, Finding, Severity};
 
 pub const SUSPICIOUS_THRESHOLD: u32 = 4;
@@ -36,8 +37,11 @@ pub fn shannon_entropy(data: &[u8]) -> f64 {
 
 #[derive(Debug, Clone)]
 pub struct PeReport {
+    /// Pontos sem contar a assinatura (veja `score_with_trust`).
     pub score: u32,
     pub signals: Vec<String>,
+    /// Há tabela de certificado (assinatura embutida, válida ou não).
+    pub has_certificate: bool,
 }
 
 /// Returns `None` when `bytes` is not a parseable PE.
@@ -96,19 +100,44 @@ pub fn analyze(bytes: &[u8]) -> Option<PeReport> {
         }
     }
 
-    let signed = pe
+    let has_certificate = pe
         .header
         .optional_header
         .and_then(|oh| oh.data_directories.get_certificate_table().copied())
         .is_some_and(|d| d.size != 0);
-    if !signed {
-        score += 1;
-        signals.push("no Authenticode signature".to_string());
-    }
 
-    Some(PeReport { score, signals })
+    Some(PeReport {
+        score,
+        signals,
+        has_certificate,
+    })
 }
 
+/// Pontos da assinatura: válida tira 3, presente mas inválida soma 2,
+/// ausente soma 1.
+pub fn score_with_trust(report: &PeReport, trust: &Trust) -> PeReport {
+    let mut r = report.clone();
+    match trust {
+        Trust::Valid { signer } => {
+            r.score = r.score.saturating_sub(3);
+            r.signals
+                .push(format!("valid Authenticode signature ({signer})"));
+        }
+        Trust::Invalid => {
+            r.score += 2;
+            r.signals.push("invalid Authenticode signature".to_string());
+        }
+        Trust::Unsigned => {
+            r.score += 1;
+            r.signals.push("no Authenticode signature".to_string());
+        }
+    }
+    r
+}
+
+/// Heurística de PE. A assinatura só é consultada quando muda a decisão
+/// (pontuação perto do limiar), porque custa caro; só mexe nos pontos da
+/// própria heurística, nunca em hash ou YARA.
 #[derive(Default)]
 pub struct PeDetector;
 
@@ -121,14 +150,27 @@ impl Detector for PeDetector {
         let Some(bytes) = file.bytes else {
             return Ok(Vec::new());
         };
-        Ok(match analyze(bytes) {
-            Some(r) if r.score >= SUSPICIOUS_THRESHOLD => vec![Finding {
+        let Some(base) = analyze(bytes) else {
+            return Ok(Vec::new());
+        };
+        let worst = base.score + if base.has_certificate { 2 } else { 1 };
+        let best = base.score.saturating_sub(3);
+        let report = if worst < SUSPICIOUS_THRESHOLD {
+            return Ok(Vec::new());
+        } else if best >= SUSPICIOUS_THRESHOLD {
+            base
+        } else {
+            score_with_trust(&base, file.trust())
+        };
+        Ok(if report.score >= SUSPICIOUS_THRESHOLD {
+            vec![Finding {
                 detector: "pe",
                 rule: "pe-heuristics".to_string(),
                 severity: Severity::Suspicious,
-                detail: r.signals.join("; "),
-            }],
-            _ => Vec::new(),
+                detail: report.signals.join("; "),
+            }]
+        } else {
+            Vec::new()
         })
     }
 }
@@ -252,14 +294,72 @@ mod tests {
             .collect()
     }
 
-    fn inspect(bytes: &[u8]) -> Vec<Finding> {
+    fn inspect_with(bytes: &[u8], verify: crate::scan::authenticode::TrustFn) -> Vec<Finding> {
         PeDetector
-            .inspect(&FileData {
-                path: Path::new("x.exe"),
-                bytes: Some(bytes),
-                sha256: [0; 32],
-            })
+            .inspect(&FileData::with_trust(
+                Path::new("x.exe"),
+                Some(bytes),
+                [0; 32],
+                Some(verify),
+            ))
             .unwrap()
+    }
+
+    fn inspect(bytes: &[u8]) -> Vec<Finding> {
+        inspect_with(bytes, |_| Trust::Unsigned)
+    }
+
+    fn valid(_: &Path) -> Trust {
+        Trust::Valid {
+            signer: "Contoso Ltda".into(),
+        }
+    }
+
+    #[test]
+    fn signature_lowers_pe_score_but_never_hash() {
+        // 6 pontos sem a assinatura: válida derruba para 3 (limpo).
+        let b = build_pe(&[("UPX1", WX, noise(4096))], 0x1000, true);
+        assert_eq!(analyze(&b).unwrap().score, 6);
+        assert!(inspect_with(&b, valid).is_empty());
+        assert_eq!(inspect_with(&b, |_| Trust::Invalid).len(), 1);
+        // Muito acima do limiar: nem consulta, continua suspeito.
+        let heavy = build_pe(
+            &[("UPX0", WX, noise(4096)), (".vmp0", WX, noise(4096))],
+            0xF0000,
+            true,
+        );
+        assert!(analyze(&heavy).unwrap().score >= 7);
+        let f = inspect_with(&heavy, valid);
+        assert_eq!(f.len(), 1);
+        assert!(!f[0].detail.contains("valid Authenticode"));
+    }
+
+    #[test]
+    fn invalid_signature_adds_points() {
+        // Só a seção gravável+executável: 2 pontos.
+        let b = build_pe(&[(".text", WX, vec![0x90; 2048])], 0x1000, true);
+        let r = analyze(&b).unwrap();
+        assert_eq!(r.score, 2);
+        assert!(r.has_certificate);
+        let f = inspect_with(&b, |_| Trust::Invalid);
+        assert_eq!(f.len(), 1);
+        assert!(f[0].detail.contains("invalid Authenticode signature"));
+        assert!(inspect_with(&b, |_| Trust::Unsigned).is_empty());
+        assert_eq!(score_with_trust(&r, &Trust::Unsigned).score, 3);
+        assert_eq!(score_with_trust(&r, &valid(Path::new("x"))).score, 0);
+    }
+
+    #[test]
+    fn trust_only_consulted_near_threshold() {
+        let consulted = |b: &[u8]| {
+            let data = FileData::with_trust(Path::new("x.exe"), Some(b), [0; 32], Some(valid));
+            PeDetector.inspect(&data).unwrap();
+            data.trust.consulted()
+        };
+        let clean = build_pe(&[(".text", TEXT, vec![0x90; 2048])], 0x1000, false);
+        assert!(!consulted(&clean));
+        let near = build_pe(&[("UPX1", WX, noise(4096))], 0x1000, false);
+        assert!(consulted(&near));
     }
 
     #[test]
@@ -369,11 +469,7 @@ mod tests {
     #[test]
     fn no_bytes_no_findings() {
         let f = PeDetector
-            .inspect(&FileData {
-                path: Path::new("x.exe"),
-                bytes: None,
-                sha256: [0; 32],
-            })
+            .inspect(&FileData::new(Path::new("x.exe"), None, [0; 32]))
             .unwrap();
         assert!(f.is_empty());
     }

@@ -34,6 +34,8 @@ pub struct QuickAreas {
     pub roots: Vec<PathBuf>,
     /// Arquivos avulsos sempre lidos.
     pub files: Vec<PathBuf>,
+    /// Dos `files`, os que iniciam sozinhos (comandos e pasta Inicializar).
+    pub autostart: Vec<PathBuf>,
     pub unreadable: Vec<WalkError>,
 }
 
@@ -116,22 +118,30 @@ pub fn collect(s: &Sources, var: &dyn Fn(&str) -> Option<String>) -> QuickAreas 
 
     let mut seen = HashSet::new();
     let mut files = Vec::new();
-    let mut push = |p: PathBuf| {
-        if p.is_file() && seen.insert(key(&p)) {
+    let mut auto_seen = HashSet::new();
+    let mut autostart = Vec::new();
+    let mut push = |p: PathBuf, starts: bool| {
+        if !p.is_file() {
+            return;
+        }
+        if starts && auto_seen.insert(key(&p)) {
+            autostart.push(p.clone());
+        }
+        if seen.insert(key(&p)) {
             files.push(p);
         }
     };
     for p in &s.processes {
-        push(p.clone());
+        push(p.clone(), false);
     }
     for c in &s.commands {
         let normalized = normalize_image_path(c, &system_root);
         for f in command_files(&normalized, var) {
-            push(f);
+            push(f, true);
         }
     }
     for f in &s.startup_files {
-        push(f.clone());
+        push(f.clone(), true);
     }
     for d in &s.drives {
         let Ok(rd) = std::fs::read_dir(d) else {
@@ -145,12 +155,13 @@ pub fn collect(s: &Sources, var: &dyn Fn(&str) -> Option<String>) -> QuickAreas 
             .collect();
         loose.sort();
         for p in loose {
-            push(p);
+            push(p, false);
         }
     }
     QuickAreas {
         roots,
         files,
+        autostart,
         unreadable: s.unreadable.clone(),
     }
 }
@@ -409,7 +420,9 @@ mod tests {
         };
         let a = collect(&s, &env(&vars));
         assert_eq!(a.roots, [local]);
-        assert_eq!(a.files, [app, drive.join("solto.exe")]);
+        assert_eq!(a.files, [app.clone(), drive.join("solto.exe")]);
+        // O processo também está no `Run`: inicia sozinho.
+        assert_eq!(a.autostart, [app]);
         assert_eq!(a.unreadable.len(), 1);
     }
 

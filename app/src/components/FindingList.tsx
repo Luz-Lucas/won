@@ -5,6 +5,7 @@ import type { ScanItem, Severity } from "../api";
 const LEVELS: { level: Severity; label: string }[] = [
   { level: "malicious", label: "Malicioso" },
   { level: "suspicious", label: "Suspeito" },
+  { level: "risk", label: "Risco" },
 ];
 
 export const virusTotalUrl = (sha256: string) => `https://www.virustotal.com/gui/file/${sha256}`;
@@ -34,7 +35,7 @@ interface Props {
 }
 
 /**
- * Achados agrupados por nível (Malicioso antes de Suspeito), com o motivo em
+ * Achados agrupados por nível (Malicioso, Suspeito e Risco, nessa ordem), com o motivo em
  * linguagem simples e as ações por achado. Nada aqui move arquivos: marcar só
  * escolhe o que vai para a quarentena quando o usuário pedir.
  */
@@ -68,6 +69,9 @@ export default function FindingList({ items, selected, onToggle, onIgnore }: Pro
                       />
                       <span className="finding-path">{item.path}</span>
                     </label>
+                    {item.in_archive && (
+                      <span className="muted">{`dentro do compactado: ${item.in_archive}`}</span>
+                    )}
                     {item.recommended && <span className="badge">Quarentena recomendada</span>}
                   </div>
                   <ul className="finding-rules">

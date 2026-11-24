@@ -1,13 +1,18 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useRef, useState } from "react";
 import {
+  relaunchElevated,
   scanExceptionAdd,
   scanGuard,
+  scanPause,
+  scanPauseState,
   scanQuarantine,
   scanScheduleDismiss,
   scanScheduleGet,
   scanScheduleSet,
   scanStart,
+  type PauseState,
   type QuarantineOutcome,
   type QuarantineRequest,
   type ScanItem,
@@ -40,18 +45,52 @@ interface InUse {
   names: string[];
 }
 
+interface Signed {
+  path: string;
+  signer: string;
+}
+
 /** Quarentena em andamento: as travas que ainda pedem resposta. */
 interface Pending {
   items: ScanItem[];
+  archives: ScanItem[];
   system: string[];
+  signed: Signed[];
   inUse: InUse[];
-  step: "system" | "in_use";
+  step: "archive" | "system" | "in_use";
 }
+
+/** Pedido do menu "Verificar com o Sentinela" do Explorador. */
+export interface ExplorerRequest {
+  id: number;
+  paths: string[];
+}
+
+/** Erro de leitura por falta de permissão (o Windows traduz a mensagem). */
+const accessDenied = (reason: string) =>
+  /os error 5\b|negado|denied|administrador/i.test(reason);
+
+/** A próxima trava depois de `from`, ou nenhuma (pode mover). */
+const nextStep = (p: Pending, from: Pending["step"] | null): Pending["step"] | null => {
+  const order: Pending["step"][] = ["archive", "system", "in_use"];
+  const has = (st: Pending["step"]) =>
+    st === "archive"
+      ? p.archives.length > 0
+      : st === "system"
+        ? p.system.length > 0 || p.signed.length > 0
+        : p.inUse.length > 0;
+  return order.slice(from ? order.indexOf(from) + 1 : 0).find(has) ?? null;
+};
 
 export default function Seguranca({
   onNavigate,
+  explorerRequest,
+  elevated = true,
 }: {
   onNavigate?: (page: Page) => void;
+  explorerRequest?: ExplorerRequest | null;
+  /** O app roda como administrador (desconhecido vale como sim: não oferece reiniciar). */
+  elevated?: boolean;
 }) {
   const job = useJob<ScanSummary>("scan");
   const [picking, setPicking] = useState(false);
@@ -67,6 +106,9 @@ export default function Seguranca({
   const [ignoring, setIgnoring] = useState<ScanItem | null>(null);
   const [schedule, setSchedule] = useState<ScheduleView | null>(null);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [pause, setPause] = useState<PauseState>({ paused: false, reason: null });
+  const [elevateError, setElevateError] = useState<string | null>(null);
+  const handled = useRef<number | null>(null);
 
   const running = job.state === "running";
   const busy = running || picking || moving;
@@ -78,7 +120,35 @@ export default function Seguranca({
 
   useEffect(() => {
     scanScheduleGet().then(setSchedule, () => setSchedule(null));
+    scanPauseState().then(
+      (p) => p && setPause(p),
+      () => undefined,
+    );
   }, []);
+
+  // A pausa muda pelo botão e, sozinha, quando um jogo abre ou fecha.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void listen<PauseState>("scan:paused", (e) => setPause(e.payload)).then((un) => {
+      if (disposed) un();
+      else unlisten = un;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // Pedido do menu do Explorador: começa uma verificação personalizada do item.
+  useEffect(() => {
+    if (!explorerRequest || handled.current === explorerRequest.id) return;
+    handled.current = explorerRequest.id;
+    setShowErrors(false);
+    void job.start(() => scanStart({ kind: "custom", paths: explorerRequest.paths }));
+    // `job.start` muda a cada render: só o pedido novo interessa.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [explorerRequest]);
 
   // Resultado novo: só malware confirmado por hash vem marcado.
   useEffect(() => {
@@ -111,6 +181,22 @@ export default function Seguranca({
   const cancel = () => {
     setCancelling(true);
     job.cancel().catch(() => setCancelling(false));
+  };
+
+  const togglePause = () => {
+    scanPause(!pause.paused).then(
+      (p) => p && setPause(p),
+      () => undefined,
+    );
+  };
+
+  const elevate = async () => {
+    setElevateError(null);
+    try {
+      await relaunchElevated();
+    } catch (e) {
+      setElevateError(errorText(e));
+    }
   };
 
   const toggle = (path: string) =>
@@ -152,14 +238,21 @@ export default function Seguranca({
       const system = guards
         .filter((g) => g.guards.some((x) => x.kind === "system_folder"))
         .map((g) => g.path);
+      const signed: Signed[] = guards.flatMap((g) =>
+        g.guards.flatMap((x) =>
+          x.kind === "microsoft_signed" ? [{ path: g.path, signer: x.signer }] : [],
+        ),
+      );
+      const archives = chosen.filter((i) => i.in_archive);
       const inUse: InUse[] = guards.flatMap((g) =>
         g.guards.flatMap((x) =>
           x.kind === "in_use" ? [{ path: g.path, pids: x.pids, names: x.names }] : [],
         ),
       );
       setMoving(false);
-      if (system.length > 0) setPending({ items: chosen, system, inUse, step: "system" });
-      else if (inUse.length > 0) setPending({ items: chosen, system, inUse, step: "in_use" });
+      const p: Pending = { items: chosen, archives, system, signed, inUse, step: "archive" };
+      const first = nextStep(p, null);
+      if (first) setPending({ ...p, step: first });
       else await move(chosen, []);
     } catch (e) {
       setMoving(false);
@@ -199,10 +292,13 @@ export default function Seguranca({
     !result.interrupted &&
     result.scanned > 0 &&
     result.malicious === 0 &&
-    result.suspicious === 0;
+    result.suspicious === 0 &&
+    result.risk === 0;
   const offerSchedule =
     result !== null && schedule !== null && !schedule.offered && !schedule.scheduled;
   const quarantined = outcome?.done.filter((d) => d.status === "quarantined").length ?? 0;
+  const deniedCount = result ? result.errors.filter((e) => accessDenied(e.reason)).length : 0;
+  const offerElevate = result !== null && !elevated && deniedCount > 0;
 
   return (
     <section className="page">
@@ -255,9 +351,26 @@ export default function Seguranca({
       {running && (
         <div className="scan-running">
           <ProgressBar progress={job.progress} />
-          <button type="button" className="btn" disabled={cancelling} onClick={cancel}>
-            Cancelar
-          </button>
+          {pause.paused && (
+            <p className="notice" role="status">
+              {pause.reason === "game"
+                ? "Verificação pausada: jogo aberto. Ela continua quando o jogo fechar."
+                : "Verificação pausada."}
+            </p>
+          )}
+          <div className="scan-actions">
+            <button
+              type="button"
+              className="btn"
+              disabled={cancelling || pause.reason === "game"}
+              onClick={togglePause}
+            >
+              {pause.reason === "user" ? "Continuar" : "Pausar"}
+            </button>
+            <button type="button" className="btn" disabled={cancelling} onClick={cancel}>
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 
@@ -278,7 +391,7 @@ export default function Seguranca({
             <p className="notice">Verificação interrompida: resultado parcial.</p>
           )}
           <p>
-            {`${number.format(result.scanned)} arquivos verificados · ${result.malicious} maliciosos · ${result.suspicious} suspeitos`}
+            {`${number.format(result.scanned)} arquivos verificados · ${result.malicious} maliciosos · ${result.suspicious} suspeitos · ${result.risk} em risco`}
           </p>
           {nothingFound && (
             <p className="notice">Nenhuma ameaça conhecida encontrada nos arquivos verificados.</p>
@@ -287,6 +400,23 @@ export default function Seguranca({
             <p className="muted">
               {`${ignored} ${ignored === 1 ? "achado ignorado" : "achados ignorados"} por "Ignorar sempre" (a lista fica em Ajustes).`}
             </p>
+          )}
+          {offerElevate && (
+            <div className="notice" role="status">
+              <p>
+                {`${deniedCount} ${deniedCount === 1 ? "pasta ou arquivo ficou" : "pastas ou arquivos ficaram"} de fora por acesso negado. Como administrador, o Sentinela consegue ler mais do sistema.`}
+              </p>
+              <div className="scan-actions">
+                <button type="button" className="btn" onClick={() => void elevate()}>
+                  Reiniciar como administrador
+                </button>
+              </div>
+              {elevateError && (
+                <p role="alert" className="form-error">
+                  {elevateError}
+                </p>
+              )}
+            </div>
           )}
           {result.missing.map((p) => (
             <p key={p} className="notice">
@@ -301,8 +431,9 @@ export default function Seguranca({
           {items.length > 0 && (
             <>
               <p className="muted">
-                Só o malware confirmado por hash vem marcado. Os outros podem ser falso positivo:
-                marque o que quiser pôr em quarentena. Nada é movido sem você pedir.
+                Só o malware confirmado por hash vem marcado. Os outros podem ser falso positivo, e
+                os de Risco só chamaram atenção pelo lugar ou pelo nome do arquivo: marque o que
+                quiser pôr em quarentena. Nada é movido sem você pedir.
               </p>
               <div className="scan-actions">
                 <button
@@ -403,25 +534,72 @@ export default function Seguranca({
         </div>
       )}
 
-      {pending?.step === "system" && (
+      {pending?.step === "archive" && (
         <ConfirmDialog
-          title="Arquivos da pasta do Windows"
-          confirmLabel="Colocar em quarentena mesmo assim"
+          title="Achado dentro de um compactado"
+          confirmLabel="Colocar o compactado em quarentena"
           onConfirm={() => {
-            if (pending.inUse.length > 0) setPending({ ...pending, step: "in_use" });
+            const next = nextStep(pending, "archive");
+            if (next) setPending({ ...pending, step: next });
             else void move(pending.items, []);
           }}
           onCancel={() => setPending(null)}
         >
           <p>
-            Estes arquivos estão dentro da pasta do Windows. Se forem do próprio sistema, tirá-los
-            do lugar pode impedir o Windows de funcionar. Só continue se tiver certeza.
+            A quarentena move o arquivo compactado inteiro, não só o item que casou. O que estiver
+            nele sai do lugar junto.
           </p>
           <ul>
-            {pending.system.map((p) => (
-              <li key={p}>{p}</li>
+            {pending.archives.map((i) => (
+              <li key={i.path}>{`${i.path} — item: ${i.in_archive}`}</li>
             ))}
           </ul>
+        </ConfirmDialog>
+      )}
+      {pending?.step === "system" && (
+        <ConfirmDialog
+          title={
+            pending.signed.length === 0
+              ? "Arquivos da pasta do Windows"
+              : pending.system.length === 0
+                ? "Arquivos assinados pela Microsoft"
+                : "Arquivos do Windows ou da Microsoft"
+          }
+          confirmLabel="Colocar em quarentena mesmo assim"
+          onConfirm={() => {
+            const next = nextStep(pending, "system");
+            if (next) setPending({ ...pending, step: next });
+            else void move(pending.items, []);
+          }}
+          onCancel={() => setPending(null)}
+        >
+          {pending.system.length > 0 && (
+            <>
+              <p>
+                Estes arquivos estão dentro da pasta do Windows. Se forem do próprio sistema, tirá-los
+                do lugar pode impedir o Windows de funcionar. Só continue se tiver certeza.
+              </p>
+              <ul>
+                {pending.system.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {pending.signed.length > 0 && (
+            <>
+              <p>
+                Estes arquivos têm assinatura válida da Microsoft. Programas assim quase nunca são
+                malware, e mover um deles pode quebrar o Windows ou um programa seu. Só continue se
+                tiver certeza.
+              </p>
+              <ul>
+                {pending.signed.map((x) => (
+                  <li key={x.path}>{`${x.path} — assinado por ${x.signer}`}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </ConfirmDialog>
       )}
       {pending?.step === "in_use" && (

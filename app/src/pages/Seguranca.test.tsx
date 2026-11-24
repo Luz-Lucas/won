@@ -1,4 +1,4 @@
-import { render as rtlRender, screen, within } from "@testing-library/react";
+import { cleanup, render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,9 @@ import { JobsProvider } from "../jobs";
 const render = (ui: React.ReactElement) => rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
+  scanPause: vi.fn(),
+  scanPauseState: vi.fn(),
+  relaunchElevated: vi.fn(),
   scanStart: vi.fn(),
   scanGuard: vi.fn(),
   scanQuarantine: vi.fn(),
@@ -47,6 +50,7 @@ const summary = (over: Partial<ScanSummary> = {}): ScanSummary => ({
   interrupted: false,
   malicious: 0,
   suspicious: 0,
+  risk: 0,
   items: [],
   items_total: 0,
   ignored: 0,
@@ -68,6 +72,7 @@ const hashItem = (path = "C:\\x\\mal.exe", sha256 = SHA_A): ScanItem => ({
   sha256,
   recommended: true,
   why: ["O SHA-256 deste arquivo está na lista pública de malware conhecido."],
+  in_archive: null,
 });
 
 const peItem = (path = "C:\\x\\estranho.exe", sha256 = SHA_B): ScanItem => ({
@@ -77,7 +82,19 @@ const peItem = (path = "C:\\x\\estranho.exe", sha256 = SHA_B): ScanItem => ({
   sha256,
   recommended: false,
   why: ["Executável com sinais incomuns: packed."],
+  in_archive: null,
 });
+
+const riskItem = (path = "C:\\x\\foto.jpg.exe", sha256 = "c".repeat(64)): ScanItem => ({
+  path,
+  verdict: "risk",
+  findings: [{ detector: "context", rule: "double-extension", severity: "risk", detail: ".jpg.exe" }],
+  sha256,
+  recommended: false,
+  why: ["O nome tem extensão dupla (.jpg.exe): parece um documento."],
+  in_archive: null,
+});
+
 
 const finish = async (result: ScanSummary, job = 5) => {
   await act(async () => {
@@ -94,6 +111,7 @@ const withFindings = (...items: ScanItem[]) =>
   summary({
     malicious: items.filter((i) => i.verdict === "malicious").length,
     suspicious: items.filter((i) => i.verdict === "suspicious").length,
+    risk: items.filter((i) => i.verdict === "risk").length,
     items,
     items_total: items.length,
   });
@@ -108,8 +126,11 @@ describe("Segurança", () => {
       api.scanScheduleSet,
       api.scanScheduleDismiss,
       api.jobCancel,
+      api.scanPause,
+      api.relaunchElevated,
     ])
       vi.mocked(f).mockReset();
+    vi.mocked(api.scanPauseState).mockReset().mockResolvedValue({ paused: false, reason: null });
     vi.mocked(api.scanScheduleGet)
       .mockReset()
       .mockResolvedValue({ scheduled: false, auto_quarantine: false, offered: true });
@@ -404,5 +425,152 @@ describe("Segurança", () => {
     render(<Seguranca onNavigate={onNavigate} />);
     await userEvent.click(screen.getByRole("button", { name: "Ver quarentena" }));
     expect(onNavigate).toHaveBeenCalledWith("quarentena");
+  });
+
+  it("risk_level_is_listed_unchecked", async () => {
+    render(<Seguranca />);
+    await startQuick();
+    await finish(withFindings(hashItem(), riskItem()));
+    const risk = await screen.findByText(/^Risco \(1\)/);
+    const mal = screen.getByText(/^Malicioso/);
+    expect(mal.compareDocumentPosition(risk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/extensão dupla/)).toBeVisible();
+    expect(screen.getByText(/1 em risco/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Selecionar C:\\x\\foto.jpg.exe" }),
+    ).not.toBeChecked();
+    // Só com achados de Risco não promete que nada foi encontrado.
+    await finish(withFindings(riskItem()), 5);
+    expect(screen.queryByText(/Nenhuma ameaça conhecida encontrada/)).toBeNull();
+  });
+
+  it("archive_warning_before_quarantine", async () => {
+    const zip = { ...hashItem("C:\\x\\baixado.zip"), in_archive: "pasta/m.bin" };
+    vi.mocked(api.scanGuard).mockResolvedValue([{ path: zip.path, guards: [] }]);
+    vi.mocked(api.scanQuarantine).mockResolvedValue({ done: [], not_ended: [] });
+    render(<Seguranca />);
+    await startQuick();
+    await finish(withFindings(zip));
+    expect(await screen.findByText("dentro do compactado: pasta/m.bin")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Colocar em quarentena (1)" }));
+    const dialog = screen.getByRole("dialog", { name: "Achado dentro de um compactado" });
+    expect(dialog).toHaveTextContent("move o arquivo compactado inteiro");
+    expect(dialog).toHaveTextContent("item: pasta/m.bin");
+    expect(api.scanQuarantine).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Colocar o compactado em quarentena" }),
+    );
+    expect(api.scanQuarantine).toHaveBeenCalledTimes(1);
+  });
+
+  it("microsoft_signed_asks_again", async () => {
+    const p = "C:\\x\\assinado.exe";
+    vi.mocked(api.scanGuard).mockResolvedValue([
+      { path: p, guards: [{ kind: "microsoft_signed", signer: "Microsoft Corporation" }] },
+    ]);
+    vi.mocked(api.scanQuarantine).mockResolvedValue({ done: [], not_ended: [] });
+    render(<Seguranca />);
+    await startQuick();
+    await finish(withFindings(hashItem(p)));
+    await userEvent.click(await screen.findByRole("button", { name: "Colocar em quarentena (1)" }));
+    const dialog = screen.getByRole("dialog", { name: "Arquivos assinados pela Microsoft" });
+    expect(dialog).toHaveTextContent("assinatura válida da Microsoft");
+    expect(dialog).toHaveTextContent(`${p} — assinado por Microsoft Corporation`);
+    expect(api.scanQuarantine).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Colocar em quarentena mesmo assim" }),
+    );
+    expect(api.scanQuarantine).toHaveBeenCalledTimes(1);
+  });
+
+  it("pause_and_resume", async () => {
+    vi.mocked(api.scanPause)
+      .mockResolvedValueOnce({ paused: true, reason: "user" })
+      .mockResolvedValueOnce({ paused: false, reason: null });
+    render(<Seguranca />);
+    await startQuick();
+    await userEvent.click(screen.getByRole("button", { name: "Pausar" }));
+    expect(api.scanPause).toHaveBeenLastCalledWith(true);
+    expect(await screen.findByText("Verificação pausada.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    expect(api.scanPause).toHaveBeenLastCalledWith(false);
+    expect(screen.queryByText("Verificação pausada.")).toBeNull();
+  });
+
+  it("paused_by_game", async () => {
+    render(<Seguranca />);
+    await startQuick();
+    await act(async () => {
+      listeners.get("scan:paused")!({ payload: { paused: true, reason: "game" } });
+    });
+    expect(screen.getByText(/pausada: jogo aberto/)).toBeInTheDocument();
+    // O usuário não "continua" por cima do jogo.
+    expect(screen.getByRole("button", { name: "Pausar" })).toBeDisabled();
+    await act(async () => {
+      listeners.get("scan:paused")!({ payload: { paused: false, reason: null } });
+    });
+    expect(screen.queryByText(/pausada: jogo aberto/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Pausar" })).toBeEnabled();
+  });
+
+  it("elevate_offer_on_access_denied", async () => {
+    vi.mocked(api.relaunchElevated).mockResolvedValue(undefined);
+    const denied = {
+      errors: [
+        { path: "C:\\Windows\\Tasks", reason: "Acesso negado. (os error 5)" },
+        { path: "C:\\x", reason: "arquivo em uso" },
+      ],
+      errors_total: 2,
+    };
+    render(<Seguranca elevated={false} />);
+    await startQuick();
+    await finish(summary(denied));
+    expect(await screen.findByText(/1 pasta ou arquivo ficou de fora por acesso negado/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Reiniciar como administrador" }));
+    expect(api.relaunchElevated).toHaveBeenCalled();
+  });
+
+  it("não oferece administrador quando já é administrador ou sem acesso negado", async () => {
+    render(<Seguranca />);
+    await startQuick();
+    await finish(
+      summary({
+        errors: [{ path: "C:\\a", reason: "Acesso negado. (os error 5)" }],
+        errors_total: 1,
+      }),
+    );
+    await screen.findByText(/^10 arquivos verificados/);
+    expect(screen.queryByRole("button", { name: "Reiniciar como administrador" })).toBeNull();
+    // Sem administrador, mas sem acesso negado nos erros: também não.
+    cleanup();
+    render(<Seguranca elevated={false} />);
+    await startQuick();
+    await finish(summary({ errors: [{ path: "C:\\a", reason: "em uso" }], errors_total: 1 }), 5);
+    await screen.findByText(/^10 arquivos verificados/);
+    expect(screen.queryByRole("button", { name: "Reiniciar como administrador" })).toBeNull();
+  });
+
+  it("explorer_request_starts_custom_scan", async () => {
+    vi.mocked(api.scanStart).mockResolvedValue(5);
+    const { rerender } = render(<Seguranca explorerRequest={null} />);
+    expect(api.scanStart).not.toHaveBeenCalled();
+    rerender(
+      <JobsProvider>
+        <Seguranca explorerRequest={{ id: 1, paths: ["C:\\Downloads\\x.exe"] }} />
+      </JobsProvider>,
+    );
+    await vi.waitFor(() =>
+      expect(api.scanStart).toHaveBeenCalledWith({
+        kind: "custom",
+        paths: ["C:\\Downloads\\x.exe"],
+      }),
+    );
+    // O mesmo pedido não começa duas verificações.
+    rerender(
+      <JobsProvider>
+        <Seguranca explorerRequest={{ id: 1, paths: ["C:\\Downloads\\x.exe"] }} />
+      </JobsProvider>,
+    );
+    expect(api.scanStart).toHaveBeenCalledTimes(1);
   });
 });

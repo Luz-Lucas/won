@@ -250,6 +250,7 @@ mod tests {
                 detail: String::new(),
             }],
             sha256: "ab".repeat(32),
+            in_archive: None,
         };
         SummaryItem {
             recommended: explain::recommended(&item),
@@ -270,6 +271,7 @@ mod tests {
                 .iter()
                 .filter(|i| i.item.verdict == Severity::Suspicious)
                 .count(),
+            risk: 0,
             items_total: items.len(),
             items,
             ignored: 0,

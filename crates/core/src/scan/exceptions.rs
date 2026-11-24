@@ -118,6 +118,7 @@ mod tests {
             verdict: Severity::Suspicious,
             findings: vec![],
             sha256: sha.into(),
+            in_archive: None,
         };
         let (kept, ignored) = filter(vec![item(&"a".repeat(64)), item(&b)], &list);
         assert_eq!(ignored, 1);

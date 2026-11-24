@@ -29,6 +29,8 @@ pub struct Resolved {
     pub roots: Vec<PathBuf>,
     /// Arquivos avulsos, sempre lidos.
     pub files: Vec<PathBuf>,
+    /// Arquivos que iniciam sozinhos (verificação rápida).
+    pub autostart: Vec<PathBuf>,
     /// Nas pastas, só arquivos de risco (verificação rápida).
     pub risky_only: bool,
     /// Caminhos pedidos que não existem.
@@ -50,6 +52,7 @@ pub fn resolve(
             Resolved {
                 roots: a.roots,
                 files: a.files,
+                autostart: a.autostart,
                 risky_only: true,
                 missing: Vec::new(),
                 unreadable: a.unreadable,
@@ -58,6 +61,7 @@ pub fn resolve(
         ScanTarget::Full => Resolved {
             roots: drives.to_vec(),
             files: Vec::new(),
+            autostart: Vec::new(),
             risky_only: false,
             missing: Vec::new(),
             unreadable: Vec::new(),
@@ -66,6 +70,7 @@ pub fn resolve(
             let mut r = Resolved {
                 roots: Vec::new(),
                 files: Vec::new(),
+                autostart: Vec::new(),
                 risky_only: false,
                 missing: Vec::new(),
                 unreadable: Vec::new(),
@@ -105,6 +110,8 @@ pub struct ScanSummary {
     pub interrupted: bool,
     pub malicious: usize,
     pub suspicious: usize,
+    /// Nível Risco: contexto ruim, sem nada casar (vem desmarcado).
+    pub risk: usize,
     /// Ordenados: Malicious primeiro, depois por caminho; no máximo `ITEMS_LIMIT`.
     pub items: Vec<SummaryItem>,
     pub items_total: usize,
@@ -134,6 +141,7 @@ pub fn summarize(
     let count = |v: Severity| items.iter().filter(|i| i.verdict == v).count();
     let malicious = count(Severity::Malicious);
     let suspicious = count(Severity::Suspicious);
+    let risk = count(Severity::Risk);
     let items_total = items.len();
     items.sort_by(|a, b| b.verdict.cmp(&a.verdict).then_with(|| a.path.cmp(&b.path)));
     items.truncate(ITEMS_LIMIT);
@@ -144,6 +152,7 @@ pub fn summarize(
         interrupted,
         malicious,
         suspicious,
+        risk,
         items: items
             .into_iter()
             .map(|item| SummaryItem {
@@ -171,7 +180,6 @@ mod tests {
     use super::super::{Engine, NoProgress, ScanOptions, run_scan_with_progress};
     use super::*;
     use crate::signatures;
-    use crate::walker::WalkOptions;
     use std::sync::atomic::AtomicBool;
 
     fn no_quick() -> QuickAreas {
@@ -185,6 +193,7 @@ mod tests {
         let areas = || QuickAreas {
             roots: vec![d.path().to_path_buf()],
             files: vec![exe.clone()],
+            autostart: vec![exe.clone()],
             unreadable: vec![WalkError {
                 path: PathBuf::from("Tasks"),
                 reason: "admin".into(),
@@ -250,6 +259,7 @@ mod tests {
                 detail: String::new(),
             }],
             sha256: String::new(),
+            in_archive: None,
         }
     }
 
@@ -313,9 +323,8 @@ mod tests {
         let opts = ScanOptions {
             roots: r.roots,
             files: r.files,
-            risky_only: false,
-            walk: WalkOptions::default(),
             max_size: 256 * 1024 * 1024,
+            ..ScanOptions::default()
         };
         let cancel = AtomicBool::new(false);
         let report = run_scan_with_progress(&engine, &opts, &cancel, &NoProgress);

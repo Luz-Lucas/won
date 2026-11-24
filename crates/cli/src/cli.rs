@@ -327,8 +327,8 @@ fn cmd_scan(
     }
 
     let var = |n: &str| std::env::var(n).ok().filter(|v| !v.is_empty());
-    let (roots, files, risky_only, unreadable) = match quick {
-        None => (paths, Vec::new(), false, Vec::new()),
+    let (roots, files, autostart, risky_only, unreadable) = match quick {
+        None => (paths, Vec::new(), Vec::new(), false, Vec::new()),
         Some(test_roots) => {
             let sources = if test_roots.is_empty() {
                 areas::system_sources()
@@ -339,12 +339,13 @@ fn cmd_scan(
                 }
             };
             let a = areas::collect(&sources, &var);
-            (a.roots, a.files, true, a.unreadable)
+            (a.roots, a.files, a.autostart, true, a.unreadable)
         }
     };
     let opts = ScanOptions {
         roots,
         files,
+        autostart,
         risky_only,
         walk: WalkOptions {
             excludes,
@@ -356,6 +357,10 @@ fn cmd_scan(
             ..WalkOptions::default()
         },
         max_size,
+        // O CLI não usa o cache de verificados, nem pausa, nem segundo plano.
+        cache: None,
+        pause: None,
+        background: false,
     };
     let progress = make_progress(json);
     let mut scan = run_scan_with_progress(&engine, &opts, &cancel, &*progress);
