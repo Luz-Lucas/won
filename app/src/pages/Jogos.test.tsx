@@ -23,6 +23,9 @@ vi.mock("../api", () => ({
   startupSetEnabled: vi.fn(),
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),
+  gameSessionStatus: vi.fn().mockResolvedValue(null),
+  gameSessionStart: vi.fn(),
+  gameSessionEnd: vi.fn(),
 }));
 
 type Listener = (e: { payload: unknown }) => void;

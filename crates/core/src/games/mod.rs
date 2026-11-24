@@ -15,6 +15,7 @@ pub mod epic;
 pub mod qos;
 pub mod riot;
 pub mod running;
+pub mod session;
 pub mod steam;
 #[cfg(windows)]
 pub mod windows;

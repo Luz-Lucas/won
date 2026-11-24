@@ -1,6 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useState } from "react";
 import {
+  appUpdateCheck,
   abuseKeyClear,
   abuseKeyPresent,
   abuseKeySet,
@@ -8,6 +9,7 @@ import {
   settingsSet,
   signaturesUpdate,
   systemStatus,
+  type AppUpdate,
   type DbStatus,
   type KeySource,
   type SettingsView,
@@ -30,6 +32,23 @@ export default function Ajustes() {
   const [keyInput, setKeyInput] = useState("");
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+
+  const [appUpd, setAppUpd] = useState<AppUpdate | null>(null);
+  const [appUpdError, setAppUpdError] = useState<string | null>(null);
+  const [appUpdBusy, setAppUpdBusy] = useState(false);
+
+  const checkApp = async () => {
+    setAppUpdBusy(true);
+    setAppUpdError(null);
+    setAppUpd(null);
+    try {
+      setAppUpd(await appUpdateCheck());
+    } catch (e) {
+      setAppUpdError(errorText(e));
+    } finally {
+      setAppUpdBusy(false);
+    }
+  };
 
   const [prefs, setPrefs] = useState<SettingsView | null>(null);
   const [prefsError, setPrefsError] = useState<string | null>(null);
@@ -153,6 +172,29 @@ export default function Ajustes() {
         <p role="alert" className="form-error">
           {prefsError}
         </p>
+      )}
+
+      <h2 className="section-title">Versão do Sentinela</h2>
+      <p>
+        <button type="button" className="btn" disabled={appUpdBusy} onClick={() => void checkApp()}>
+          Procurar atualização
+        </button>
+      </p>
+      {appUpdError && (
+        <p role="alert" className="form-error">
+          {`Não foi possível verificar: ${appUpdError}`}
+        </p>
+      )}
+      {appUpd && !appUpd.available && (
+        <p className="muted">{`Você está na versão mais recente (${appUpd.current}).`}</p>
+      )}
+      {appUpd?.available && (
+        <div className="notice">
+          <p>{`Versão ${appUpd.latest} disponível (você tem a ${appUpd.current}).`}</p>
+          <button type="button" className="btn" onClick={() => void openUrl(appUpd.url)}>
+            Abrir a página da versão
+          </button>
+        </div>
       )}
 
       <ScanSettings />

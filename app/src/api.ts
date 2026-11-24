@@ -999,3 +999,21 @@ export const desktopConfigCheck = (text: string) =>
   invoke<string[]>("desktop_config_check", { text });
 export const desktopConfigWrite = (text: string) =>
   invoke<void>("desktop_config_write", { text });
+
+export interface AppUpdate {
+  current: string;
+  latest: string;
+  available: boolean;
+  url: string;
+}
+
+export const appUpdateCheck = () => invoke<AppUpdate>("app_update_check");
+
+export interface GameSession {
+  previous_scheme: string;
+  started_at: string;
+}
+
+export const gameSessionStatus = () => invoke<GameSession | null>("game_session_status");
+export const gameSessionStart = () => invoke<GameSession>("game_session_start");
+export const gameSessionEnd = () => invoke<void>("game_session_end");
