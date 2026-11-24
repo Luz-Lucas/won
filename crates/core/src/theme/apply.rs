@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::model::{Accent, Theme};
+use crate::terminal::profile::{self, Shell};
+use crate::terminal::wt_settings::{self, Setting, Target};
+use crate::terminal::{backup, omp, scheme};
 use crate::tweaks::engine::{self, ItemResult};
 use crate::tweaks::model::{Action, Effect, Evidence, Group, Hive, RegValue, Tweak};
 use crate::tweaks::state::{TweakStatus, view};
@@ -34,6 +37,18 @@ pub struct Env<'a> {
     pub journal: &'a Path,
     pub history: &'a Path,
     pub wallpaper: Option<WallpaperCtx<'a>>,
+    pub terminal: Option<TerminalCtx<'a>>,
+}
+
+/// Onde o terminal do usuário vive (perfis, `settings.json`, backups).
+pub struct TerminalCtx<'a> {
+    pub store: &'a backup::Store,
+    /// Perfis do PowerShell que existem nesta máquina.
+    pub profiles: Vec<(Shell, PathBuf)>,
+    pub wt_settings: Vec<PathBuf>,
+    /// Pasta dos temas do prompt que o Sentinela gerencia.
+    pub prompts_dir: PathBuf,
+    pub omp_installed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -112,27 +127,168 @@ fn workshop_link(id: &str) -> String {
 fn resolve_accent(theme: &Theme, env: &Env, warnings: &mut Vec<String>) -> Option<Rgb> {
     match theme.accent.as_ref()? {
         Accent::Fixed(c) => Some(*c),
-        Accent::FromWallpaper => {
-            let item = match &theme.wallpaper {
-                Some(w) => project_json(env, &w.workshop_id).map(|(_, i)| i),
-                None => env.wallpaper.as_ref().and_then(|w| {
-                    let file = PathBuf::from(w.current.as_ref()?);
-                    gallery::read_item(file.parent()?)
-                }),
-            };
-            let c = item
-                .and_then(|i| i.preview)
-                .and_then(|p| std::fs::read(p).ok())
-                .and_then(|b| accent_from_image(&b));
-            if c.is_none() {
-                warnings.push(
-                    "não consegui tirar a cor do papel de parede; a cor de destaque fica como está"
-                        .into(),
-                );
-            }
-            c
+        Accent::FromWallpaper => color_from_wallpaper(theme, env, warnings),
+    }
+}
+
+/// Cor dominante da miniatura do wallpaper do tema (ou do que está em uso).
+fn color_from_wallpaper(theme: &Theme, env: &Env, warnings: &mut Vec<String>) -> Option<Rgb> {
+    let item = match &theme.wallpaper {
+        Some(w) => project_json(env, &w.workshop_id).map(|(_, i)| i),
+        None => env.wallpaper.as_ref().and_then(|w| {
+            let file = PathBuf::from(w.current.as_ref()?);
+            gallery::read_item(file.parent()?)
+        }),
+    };
+    let c = item
+        .and_then(|i| i.preview)
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|b| accent_from_image(&b));
+    if c.is_none() {
+        warnings.push(
+            "não consegui tirar a cor do papel de parede; as cores que dependem dele ficam como estão"
+                .into(),
+        );
+    }
+    c
+}
+
+const SCHEME_NAME: &str = "Sentinela";
+
+fn slug(name: &str) -> String {
+    let s: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let s = s.trim_matches('-');
+    if s.is_empty() {
+        "tema".into()
+    } else {
+        s.chars().take(40).collect()
+    }
+}
+
+fn terminal_preview(
+    theme: &Theme,
+    env: &Env,
+    items: &mut Vec<PreviewItem>,
+    warnings: &mut Vec<String>,
+) {
+    let Some(t) = &theme.terminal else { return };
+    if env.terminal.is_none() {
+        warnings.push("o terminal não está disponível nesta máquina: a parte do terminal do tema foi ignorada".into());
+        return;
+    }
+    let ctx = env.terminal.as_ref();
+    if t.prompt.is_some() {
+        items.push(PreviewItem {
+            kind: "terminal",
+            label: "Tema do prompt (Oh My Posh)".into(),
+            change: true,
+            detail: "entra no perfil do PowerShell, entre os marcadores do Sentinela".into(),
+        });
+        if ctx.is_some_and(|c| !c.omp_installed) {
+            warnings.push("o Oh My Posh não está instalado; instale-o em Personalizar → Terminal para o prompt aparecer".into());
         }
     }
+    if let Some(f) = t.font.as_deref().and_then(omp::font_face) {
+        items.push(PreviewItem {
+            kind: "terminal",
+            label: format!("Fonte do Windows Terminal: {f}"),
+            change: true,
+            detail: "a fonte precisa estar instalada (Personalizar → Terminal)".into(),
+        });
+    }
+    if t.scheme_from_wallpaper {
+        items.push(PreviewItem {
+            kind: "terminal",
+            label: "Cores do Windows Terminal a partir do wallpaper".into(),
+            change: true,
+            detail: format!("esquema \"{SCHEME_NAME}\""),
+        });
+    }
+}
+
+/// Aplica a parte do terminal; devolve os números dos registros de backup.
+fn terminal_apply(theme: &Theme, env: &Env, warnings: &mut Vec<String>) -> Vec<u64> {
+    let (Some(t), Some(ctx)) = (&theme.terminal, &env.terminal) else {
+        if theme.terminal.is_some() {
+            warnings.push("o terminal não está disponível nesta máquina: a parte do terminal do tema foi ignorada".into());
+        }
+        return Vec::new();
+    };
+    let mut seqs = Vec::new();
+    let mut note = |r: Result<Option<backup::Record>, String>, warnings: &mut Vec<String>| match r {
+        Ok(Some(rec)) => seqs.push(rec.seq),
+        Ok(None) => {}
+        Err(e) => warnings.push(e),
+    };
+
+    if let Some(prompt) = &t.prompt {
+        let file = ctx
+            .prompts_dir
+            .join(format!("{}.omp.json", slug(&theme.name)));
+        let label = format!("Tema do prompt: {}", theme.name);
+        note(
+            backup::write(ctx.store, &label, &file, prompt.as_bytes()),
+            warnings,
+        );
+        for (shell, path) in &ctx.profiles {
+            let old = std::fs::read(path)
+                .ok()
+                .map(|b| String::from_utf8_lossy(&b).into_owned())
+                .unwrap_or_default();
+            let new = profile::block_for(&file, &[]).and_then(|b| profile::apply(&old, &b));
+            match new {
+                Ok(text) => note(
+                    backup::write(
+                        ctx.store,
+                        &format!("Perfil do {}", shell.label()),
+                        path,
+                        text.as_bytes(),
+                    ),
+                    warnings,
+                ),
+                Err(e) => warnings.push(format!("perfil do {} não alterado: {e}", shell.label())),
+            }
+        }
+    }
+
+    let mut settings = Vec::new();
+    if let Some(face) = t.font.as_deref().and_then(omp::font_face) {
+        settings.push(Setting::FontFace(face.to_string()));
+    }
+    let mut sc = None;
+    if t.scheme_from_wallpaper
+        && let Some(c) = color_from_wallpaper(theme, env, warnings)
+    {
+        sc = Some(scheme::from_accent(SCHEME_NAME, c));
+        settings.push(Setting::ColorScheme(SCHEME_NAME.into()));
+    }
+    if !settings.is_empty() {
+        for path in &ctx.wt_settings {
+            let Ok(bytes) = std::fs::read(path) else {
+                continue;
+            };
+            let old = String::from_utf8_lossy(&bytes).into_owned();
+            match wt_settings::apply(&old, &Target::Defaults, &settings, sc.as_ref()) {
+                Ok(text) => note(
+                    backup::write(
+                        ctx.store,
+                        "Windows Terminal (settings.json)",
+                        path,
+                        text.as_bytes(),
+                    ),
+                    warnings,
+                ),
+                Err(e) => warnings.push(format!(
+                    "settings.json do Windows Terminal não alterado: {e}"
+                )),
+            }
+        }
+    }
+    seqs
 }
 
 /// Catálogo com o ajuste da cor, e os ids a aplicar.
@@ -217,6 +373,7 @@ pub fn preview(theme: &Theme, env: &Env) -> Preview {
         }
     }
     items.extend(wallpaper_note(theme, env, &mut warnings));
+    terminal_preview(theme, env, &mut items, &mut warnings);
     Preview { items, warnings }
 }
 
@@ -236,6 +393,9 @@ pub struct Record {
     /// Só os ajustes que este tema de fato mudou (os que já estavam assim ficam de fora).
     pub tweak_ids: Vec<String>,
     pub wallpaper: Option<WallpaperChange>,
+    /// Registros do backup do terminal feitos por este tema (do mais antigo ao mais novo).
+    #[serde(default)]
+    pub terminal_seqs: Vec<u64>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -330,8 +490,10 @@ pub fn apply(theme: &Theme, env: &Env) -> Applied {
         }
     }
 
+    let terminal_seqs = terminal_apply(theme, env, &mut warnings);
+
     let mut record = None;
-    if !tweak_ids.is_empty() || wallpaper.is_some() {
+    if !tweak_ids.is_empty() || wallpaper.is_some() || !terminal_seqs.is_empty() {
         let mut h = load_history(env.history);
         let r = Record {
             seq: h.records.last().map_or(1, |r| r.seq + 1),
@@ -339,6 +501,7 @@ pub fn apply(theme: &Theme, env: &Env) -> Applied {
             applied_at: crate::updater::now_rfc3339(),
             tweak_ids,
             wallpaper,
+            terminal_seqs,
         };
         h.records.push(r.clone());
         let excess = h.records.len().saturating_sub(HISTORY_LIMIT);
@@ -406,7 +569,30 @@ pub fn undo_last(env: &Env) -> Result<Undone, String> {
         }
     }
 
-    let remaining = (!rec.tweak_ids.is_empty() || rec.wallpaper.is_some()).then_some(rec);
+    if let (false, Some(ctx)) = (rec.terminal_seqs.is_empty(), &env.terminal) {
+        while let Some(&seq) = rec.terminal_seqs.last() {
+            let last = backup::history(ctx.store).last().map(|r| r.seq);
+            if last != Some(seq) {
+                warnings.push("o terminal foi alterado depois deste tema; desfaça pelo histórico em Personalizar → Terminal".into());
+                break;
+            }
+            match backup::undo_last(ctx.store, false) {
+                Ok(_) => {
+                    rec.terminal_seqs.pop();
+                }
+                Err(e) => {
+                    warnings.push(format!("terminal não voltou: {e:?}"));
+                    break;
+                }
+            }
+        }
+    } else if !rec.terminal_seqs.is_empty() {
+        warnings.push("o terminal não está disponível: as mudanças dele ficaram".into());
+    }
+
+    let remaining =
+        (!rec.tweak_ids.is_empty() || rec.wallpaper.is_some() || !rec.terminal_seqs.is_empty())
+            .then_some(rec);
     if let Some(r) = &remaining {
         h.records.push(r.clone());
     }
@@ -485,6 +671,7 @@ accent = "wallpaper"
                 workshop: &f.workshop,
                 current: current.map(String::from),
             }),
+            terminal: None,
         }
     }
 
@@ -659,5 +846,74 @@ accent = "wallpaper"
             }),
             0xFF0A_84FF
         );
+    }
+
+    const TERM: &str = r##"
+version = 1
+[theme]
+name = "Com terminal"
+[terminal]
+font = "Meslo"
+prompt_json = """{"blocks": []}"""
+"##;
+
+    #[test]
+    fn terminal_apply_and_undo_restore_files() {
+        let f = fx();
+        let cat = Catalog::embedded().clone();
+        let d = tempfile::tempdir().unwrap();
+        let store = backup::Store {
+            backups: d.path().join("bk"),
+            history: d.path().join("hist.json"),
+        };
+        let profile_path = d.path().join("profile.ps1");
+        fs::write(&profile_path, "Write-Host oi\r\n").unwrap();
+        let wt = d.path().join("settings.json");
+        let wt_text = "{\n  // meu\n  \"profiles\": { \"defaults\": {} }\n}\n";
+        fs::write(&wt, wt_text).unwrap();
+        let mut e = env(&f, &cat, None);
+        e.terminal = Some(TerminalCtx {
+            store: &store,
+            profiles: vec![(Shell::PowerShell7, profile_path.clone())],
+            wt_settings: vec![wt.clone()],
+            prompts_dir: d.path().join("prompts"),
+            omp_installed: true,
+        });
+        let t = theme(TERM);
+        let p = preview(&t, &e);
+        assert!(p.items.iter().any(|i| i.kind == "terminal"));
+        let a = apply(&t, &e);
+        assert!(a.warnings.is_empty(), "{:?}", a.warnings);
+        let rec = a.record.unwrap();
+        assert_eq!(rec.terminal_seqs.len(), 3, "prompt, perfil e settings");
+        assert!(
+            fs::read_to_string(&profile_path)
+                .unwrap()
+                .contains("oh-my-posh")
+        );
+        assert!(
+            fs::read_to_string(&wt)
+                .unwrap()
+                .contains("MesloLGM Nerd Font")
+        );
+        assert!(d.path().join("prompts/com-terminal.omp.json").exists());
+
+        let u = undo_last(&e).unwrap();
+        assert!(u.warnings.is_empty(), "{:?}", u.warnings);
+        assert!(u.remaining.is_none());
+        assert_eq!(
+            fs::read_to_string(&profile_path).unwrap(),
+            "Write-Host oi\r\n"
+        );
+        assert_eq!(fs::read_to_string(&wt).unwrap(), wt_text);
+    }
+
+    #[test]
+    fn terminal_part_is_skipped_without_context() {
+        let f = fx();
+        let cat = Catalog::embedded().clone();
+        let a = apply(&theme(TERM), &env(&f, &cat, None));
+        assert!(a.record.is_none());
+        assert!(a.warnings.iter().any(|w| w.contains("terminal")));
     }
 }

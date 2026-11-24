@@ -1,7 +1,7 @@
 //! Temas prontos que vêm no programa. Só ajustes nativos e a cor de destaque;
 //! nenhum traz wallpaper (a Oficina é de cada pessoa).
 
-use super::model::{Accent, Theme};
+use super::model::{Accent, TerminalSpec, Theme};
 
 fn ids(v: &[&str]) -> Vec<String> {
     v.iter().map(|s| (*s).to_string()).collect()
@@ -23,10 +23,11 @@ pub fn all() -> Vec<Theme> {
             ]),
             wallpaper: None,
             accent: None,
+            terminal: None,
         },
         Theme {
             name: "Translúcido".into(),
-            description: "Escuro, barra centralizada com ícone de busca e a cor de destaque tirada do papel de parede.".into(),
+            description: "Escuro, barra centralizada com ícone de busca e a cor de destaque tirada do papel de parede e, no terminal, fonte Meslo e cores do wallpaper.".into(),
             tweaks: ids(&[
                 "theme-apps-dark",
                 "theme-system-dark",
@@ -35,6 +36,11 @@ pub fn all() -> Vec<Theme> {
             ]),
             wallpaper: None,
             accent: Some(Accent::FromWallpaper),
+            terminal: Some(TerminalSpec {
+                font: Some("Meslo".into()),
+                scheme_from_wallpaper: true,
+                prompt: None,
+            }),
         },
     ]
 }

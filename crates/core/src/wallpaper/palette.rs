@@ -30,7 +30,7 @@ impl Rgb {
     }
 
     /// (matiz 0..360, saturação 0..1, valor 0..1)
-    fn hsv(self) -> (f32, f32, f32) {
+    pub(crate) fn hsv(self) -> (f32, f32, f32) {
         let (r, g, b) = (
             f32::from(self.r) / 255.0,
             f32::from(self.g) / 255.0,

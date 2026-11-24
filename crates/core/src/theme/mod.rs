@@ -12,4 +12,6 @@ pub use apply::{
     history, preview, undo_last,
 };
 pub use archive::{EXTENSION, Imported, export, import, snapshot_current};
-pub use model::{Accent, Parsed, Theme, WallpaperRef, parse, to_toml};
+pub use model::{
+    Accent, PROMPT_FILE, Parsed, TerminalSpec, Theme, WallpaperRef, parse, to_toml, to_toml_archive,
+};
