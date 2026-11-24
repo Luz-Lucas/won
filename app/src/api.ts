@@ -980,3 +980,22 @@ export const terminalDisablePrompt = () => invoke<number>("terminal_disable_prom
 export const terminalHistory = () => invoke<TerminalHistoryItem[]>("terminal_history");
 export const terminalUndo = (force: boolean) =>
   invoke<TerminalUndo>("terminal_undo", { force });
+
+export interface DesktopStatus {
+  installed: boolean;
+  running: boolean;
+  config_path: string;
+  config_exists: boolean;
+  errors: string[];
+  hotkeys: number;
+  rules: number;
+}
+
+export const desktopStatus = () => invoke<DesktopStatus>("desktop_status");
+export const desktopStart = () => invoke<void>("desktop_start");
+export const desktopStop = () => invoke<void>("desktop_stop");
+export const desktopConfigRead = () => invoke<string>("desktop_config_read");
+export const desktopConfigCheck = (text: string) =>
+  invoke<string[]>("desktop_config_check", { text });
+export const desktopConfigWrite = (text: string) =>
+  invoke<void>("desktop_config_write", { text });

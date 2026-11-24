@@ -4919,6 +4919,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentinela-desktop"
+version = "0.1.0"
+dependencies = [
+ "dirs 7.0.0",
+ "serde",
+ "tempfile",
+ "toml 1.2.2+spec-1.1.0",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "sentinela-gui"
 version = "0.1.0"
 dependencies = [
@@ -4926,6 +4937,7 @@ dependencies = [
  "base64 0.22.1",
  "rayon",
  "sentinela-core",
+ "sentinela-desktop",
  "serde",
  "serde_json",
  "tauri",

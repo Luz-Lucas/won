@@ -1,7 +1,8 @@
 {
   "bundle": {
     "resources": {
-      "bin/sentinela.exe": "sentinela.exe"
+      "bin/sentinela.exe": "sentinela.exe",
+      "bin/sentinela-desktop.exe": "sentinela-desktop.exe"
     }
   }
 }

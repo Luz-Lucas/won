@@ -8,9 +8,11 @@ import {
   tweaksList,
   tweaksUndo,
   terminalStatus,
+  desktopStatus,
 } from "../api";
 import type {
   ApplyReport,
+  DesktopStatus,
   TweakArea,
   TweakEffect,
   TweakItem,
@@ -20,6 +22,7 @@ import type {
   WallpaperStatus,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Desktop from "../components/Desktop";
 import Terminal from "../components/Terminal";
 import Themes from "../components/Themes";
 import WallpaperGallery from "../components/WallpaperGallery";
@@ -405,7 +408,7 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
   );
 }
 
-type Section = "ajustes" | "wallpaper" | "temas" | "terminal";
+type Section = "ajustes" | "wallpaper" | "temas" | "terminal" | "desktop";
 
 /** Ajustes do Windows, papel de parede (só com o Wallpaper Engine) e temas. */
 export default function Personalizar() {
@@ -417,6 +420,12 @@ export default function Personalizar() {
   useEffect(() => {
     wallpaperStatus().then(setEngine, () => setEngine(null));
   }, []);
+
+  const [desk, setDesk] = useState<DesktopStatus | null>(null);
+  const loadDesk = useCallback(() => {
+    desktopStatus().then(setDesk, () => setDesk(null));
+  }, []);
+  useEffect(loadDesk, [loadDesk]);
 
   const loadTerm = useCallback(() => {
     terminalStatus().then(setTerm, () => setTerm(null));
@@ -430,6 +439,7 @@ export default function Personalizar() {
     ...(term && (term.profiles.length > 0 || term.windows_terminal)
       ? [{ id: "terminal" as const, label: "Terminal" }]
       : []),
+    ...(desk?.installed ? [{ id: "desktop" as const, label: "Desktop" }] : []),
   ];
   // Se o Wallpaper Engine sumir com a aba aberta, volta para os ajustes.
   const current: Section = tabs.some((t) => t.id === section) ? section : "ajustes";
@@ -457,6 +467,7 @@ export default function Personalizar() {
       {nav}
       {current === "wallpaper" && engine && <WallpaperGallery status={engine} />}
       {current === "temas" && <Themes engine={engine?.installed ?? false} />}
+      {current === "desktop" && desk && <Desktop status={desk} onChanged={loadDesk} />}
       {current === "terminal" && term && (
         <Terminal status={term} engine={engine?.installed ?? false} onChanged={loadTerm} />
       )}

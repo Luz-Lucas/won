@@ -30,6 +30,7 @@ vi.mock("../api", () => ({
   themeExport: vi.fn(),
   themeImport: vi.fn(),
   terminalStatus: vi.fn(),
+  desktopStatus: vi.fn().mockRejectedValue("sem desktop"),
   terminalInstallOmp: vi.fn(),
   terminalInstallFont: vi.fn(),
   terminalThemes: vi.fn(),
