@@ -77,3 +77,15 @@ describe("tiling por monitor", () => {
     expect(out.match(/\[\[tiling\.monitor\]\]/g)).toHaveLength(1);
   });
 });
+
+describe("barra em duas ilhas", () => {
+  it("lê e grava as opções das ilhas", () => {
+    const text = `[bar]\nislands = true\nisland_radius = 20\nisland_margin = 8\nisland_align = "left"\n`;
+    const b = readSections(text)!.bar!;
+    expect(b).toMatchObject({ islands: true, islandRadius: 20, islandMargin: 8, islandAlign: "left" });
+    const out = applySections(text, { ...readSections(text)!, bar: { ...b, islandRadius: 10 } });
+    expect(out).toContain("islands = true");
+    expect(out).toContain("island_radius = 10");
+    expect(out).toContain('island_align = "left"');
+  });
+});

@@ -22,6 +22,11 @@ export interface BarModel {
   center: Module[];
   right: Module[];
   clockFormat: string;
+  /** Duas ilhas: janelas abertas (largura ajustada) e módulos à direita. */
+  islands: boolean;
+  islandRadius: number;
+  islandMargin: number;
+  islandAlign: "center" | "left";
 }
 
 /** Regra de um monitor: 1 = o mais à esquerda. */
@@ -74,6 +79,10 @@ export const DEFAULT_BAR: BarModel = {
   center: [],
   right: ["cpu", "ram", "clock"],
   clockFormat: "%H:%M",
+  islands: false,
+  islandRadius: 12,
+  islandMargin: 6,
+  islandAlign: "center",
 };
 export const DEFAULT_TILING: TilingModel = {
   layout: "master-stack",
@@ -116,6 +125,10 @@ export function readSections(text: string): Sections | null {
       center: mods(b.center, DEFAULT_BAR.center),
       right: mods(b.right, DEFAULT_BAR.right),
       clockFormat: str(b.clock_format, DEFAULT_BAR.clockFormat),
+      islands: b.islands === true,
+      islandRadius: num(b.island_radius, DEFAULT_BAR.islandRadius),
+      islandMargin: num(b.island_margin, DEFAULT_BAR.islandMargin),
+      islandAlign: b.island_align === "left" ? "left" : "center",
     },
     // `enabled = false` no arquivo equivale a tiling desligado.
     tiling:
@@ -178,6 +191,10 @@ function barToml(b: BarModel): string {
     `center = ${list(b.center)}`,
     `right = ${list(b.right)}`,
     `clock_format = ${q(b.clockFormat)}`,
+    `islands = ${b.islands}`,
+    `island_radius = ${Math.round(b.islandRadius)}`,
+    `island_margin = ${Math.round(b.islandMargin)}`,
+    `island_align = ${q(b.islandAlign)}`,
   ].join("\n");
 }
 

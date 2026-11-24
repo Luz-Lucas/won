@@ -176,6 +176,11 @@ struct RawBar {
     center: Option<Vec<Module>>,
     right: Option<Vec<Module>>,
     clock_format: Option<String>,
+    #[serde(default)]
+    islands: bool,
+    island_radius: Option<u32>,
+    island_margin: Option<u32>,
+    island_align: Option<bar::IslandAlign>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -383,7 +388,16 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
     if left.len() + center.len() + right.len() > 12 {
         errors.push("bar: no máximo 12 módulos".into());
     }
+    let island_radius = b.island_radius.unwrap_or(12);
+    let island_margin = b.island_margin.unwrap_or(6);
+    if island_radius > 40 || island_margin > 40 {
+        errors.push("bar: island_radius e island_margin vão de 0 a 40".into());
+    }
     (errors.len() == before).then_some(BarConfig {
+        islands: b.islands,
+        island_radius,
+        island_margin,
+        island_align: b.island_align.unwrap_or(bar::IslandAlign::Center),
         edge: b.edge.unwrap_or(Edge::Top),
         height,
         background,
@@ -652,6 +666,10 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # right = ["cpu", "ram", "clock"]
 # clock_format = "%H:%M"       # %H %M %S %d %m %Y %y
 # hide_native_taskbar = false  # esconde a barra do Windows enquanto o programa roda
+# islands = false              # duas ilhas: janelas abertas (largura ajustada) e módulos à direita
+# island_radius = 12           # 0 a 40
+# island_margin = 6            # 0 a 40
+# island_align = "center"      # center ou left (ilha de janelas)
 "##;
 
 #[cfg(test)]
@@ -741,6 +759,9 @@ mod tests {
         assert!(parse("[bar]\nleft=[\"coisa\"]\n").is_err());
         assert!(parse("[bar]\nedge=\"left\"\n").is_err());
         assert!(parse("[bar]\nmagia=1\n").is_err());
+        let b = parse("[bar]\nislands=true\nisland_radius=20\nisland_align=\"left\"\n").unwrap().bar.unwrap();
+        assert!(b.islands && b.island_radius == 20 && b.island_align == bar::IslandAlign::Left);
+        assert!(parse("[bar]\nisland_margin=99\n").is_err());
     }
 
     #[test]

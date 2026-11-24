@@ -22,6 +22,13 @@ pub enum Module {
     Ram,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IslandAlign {
+    Center,
+    Left,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BarConfig {
     pub edge: Edge,
@@ -35,6 +42,13 @@ pub struct BarConfig {
     pub center: Vec<Module>,
     pub right: Vec<Module>,
     pub clock_format: String,
+    /// Modo de duas ilhas: uma com as janelas abertas (largura ajustada ao conteúdo) e outra,
+    /// à direita, com os módulos `center` e `right`. Os módulos `left` não aparecem.
+    pub islands: bool,
+    pub island_radius: u32,
+    /// Folga entre as ilhas e as bordas da barra.
+    pub island_margin: u32,
+    pub island_align: IslandAlign,
 }
 
 pub const MIN_HEIGHT: u32 = 20;
@@ -109,6 +123,42 @@ pub fn layout(total: i32, widths: [i32; 3], pad: i32) -> [i32; 3] {
         .max(left + l + pad)
         .min((right - pad - c).max(left + l + pad));
     [left, center, right]
+}
+
+/// Larguras finais dos itens da ilha de janelas: ficam como pedidas se couberem em `avail`;
+/// senão encolhem juntas, sem passar de `min`.
+pub fn fit_items(want: &[i32], avail: i32, gap: i32, min: i32) -> Vec<i32> {
+    if want.is_empty() {
+        return Vec::new();
+    }
+    let gaps = gap * (want.len() as i32 - 1);
+    let total: i32 = want.iter().sum();
+    if total + gaps <= avail {
+        return want.to_vec();
+    }
+    let room = (avail - gaps).max(0);
+    want.iter()
+        .map(|w| ((i64::from(*w) * i64::from(room) / i64::from(total.max(1))) as i32).max(min))
+        .collect()
+}
+
+/// Posição x das duas ilhas: a da direita cola na margem direita; a de janelas fica centrada
+/// (ou à esquerda), sem passar por cima da outra.
+pub fn island_positions(
+    total: i32,
+    apps_w: i32,
+    right_w: i32,
+    margin: i32,
+    gap: i32,
+    align: IslandAlign,
+) -> (i32, i32) {
+    let right_x = (total - margin - right_w).max(margin);
+    let wanted = match align {
+        IslandAlign::Left => margin,
+        IslandAlign::Center => (total - apps_w) / 2,
+    };
+    let latest = (right_x - gap - apps_w).max(margin);
+    (wanted.clamp(margin, latest), right_x)
 }
 
 /// Uso de CPU entre duas leituras de `GetSystemTimes` (ociosa, núcleo, usuário;
@@ -208,5 +258,20 @@ mod tests {
         assert_eq!(truncate("curto", 10), "curto");
         assert_eq!(truncate("um título bem longo", 8), "um títu…");
         assert_eq!(truncate("áéíóú", 5), "áéíóú");
+    }
+
+    #[test]
+    fn islands_adapt_and_never_overlap() {
+        assert_eq!(fit_items(&[100, 100], 500, 4, 40), vec![100, 100]);
+        let f = fit_items(&[200, 200, 200], 300, 4, 40);
+        assert!(f.iter().sum::<i32>() + 8 <= 300, "{f:?}");
+        assert!(fit_items(&[200; 10], 100, 4, 40).iter().all(|w| *w >= 40));
+        let (a, r) = island_positions(1920, 400, 200, 8, 8, IslandAlign::Center);
+        assert_eq!((a, r), (760, 1712));
+        let (a, r) = island_positions(1920, 400, 200, 8, 8, IslandAlign::Left);
+        assert_eq!((a, r), (8, 1712));
+        // Ilha de janelas larga demais: recua para não cobrir a da direita.
+        let (a, r) = island_positions(1000, 900, 200, 8, 8, IslandAlign::Center);
+        assert!(a + 900 + 8 <= r || a == 8, "{a} {r}");
     }
 }

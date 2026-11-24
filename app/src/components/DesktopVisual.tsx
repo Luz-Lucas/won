@@ -75,9 +75,36 @@ function BarPreview({ bar }: { bar: BarModel }) {
           fontSize: `${Math.max(7, bar.fontSize * 0.7)}px`,
         }}
       >
-        {zone("left")}
-        {zone("center")}
-        {zone("right")}
+        {bar.islands ? (
+          <>
+            <span
+              className="dv-zone"
+              style={{
+                background: "rgba(255,255,255,0.12)",
+                borderRadius: bar.islandRadius,
+                padding: "0 6px",
+                margin: "0 auto",
+              }}
+            >
+              <span>Navegador</span>
+              <span>Terminal</span>
+            </span>
+            <span
+              className="dv-zone"
+              style={{ background: "rgba(255,255,255,0.12)", borderRadius: bar.islandRadius, padding: "0 6px" }}
+            >
+              {[...bar.center, ...bar.right].map((m) => (
+                <span key={m}>{sample(m)}</span>
+              ))}
+            </span>
+          </>
+        ) : (
+          <>
+            {zone("left")}
+            {zone("center")}
+            {zone("right")}
+          </>
+        )}
       </div>
       {!bar.hideNative && <div className="sp-taskbar dv-native">Barra nativa do Windows</div>}
       <div className="sp-window sp-window-small" style={{ top: bar.edge === "top" ? "24%" : "8%" }}>
@@ -266,6 +293,37 @@ export default function DesktopVisual({
                 />
                 <span>Ocultar a barra de tarefas do Windows</span>
               </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  aria-label="Duas ilhas"
+                  checked={bar.islands}
+                  onChange={(e) => setBar({ islands: e.target.checked })}
+                />
+                <span>Duas ilhas: janelas abertas à esquerda e relógio e uso à direita</span>
+              </label>
+              {bar.islands && (
+                <>
+                  <p className="muted">
+                    A ilha de janelas ajusta a largura ao número de janelas abertas e cada botão
+                    ativa ou minimiza a janela. A ilha da direita mostra os módulos do centro e da
+                    direita; a bandeja do sistema (rede, som) não é espelhada.
+                  </p>
+                  <Range label="Cantos das ilhas" value={bar.islandRadius} min={0} max={40} onChange={(v) => setBar({ islandRadius: v })} format={(v) => `${v} px`} />
+                  <Range label="Folga em volta das ilhas" value={bar.islandMargin} min={0} max={40} onChange={(v) => setBar({ islandMargin: v })} format={(v) => `${v} px`} />
+                  <label className="dv-field">
+                    <span>Posição da ilha de janelas</span>
+                    <select
+                      aria-label="Posição da ilha de janelas"
+                      value={bar.islandAlign}
+                      onChange={(e) => setBar({ islandAlign: e.target.value as "center" | "left" })}
+                    >
+                      <option value="center">Centralizada</option>
+                      <option value="left">À esquerda</option>
+                    </select>
+                  </label>
+                </>
+              )}
               <fieldset className="choice-group">
                 <legend>Módulos</legend>
                 {MODULES.map((m) => (
