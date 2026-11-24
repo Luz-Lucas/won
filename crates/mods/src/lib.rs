@@ -67,6 +67,10 @@ pub fn eject(dir: &Path, filter: Option<&str>) -> Result<usize> {
             keep.push(i);
             continue;
         }
+        if i.mod_name == XAML_MOD_NAME {
+            // A DLL do XAML não descarrega (o XAML guarda ponteiros): o marcador a manda restaurar tudo.
+            let _ = std::fs::write(dir.join(XAML_EJECT_MARKER), b"1");
+        }
         // Falhar aqui normalmente significa que o processo já fechou: nada a desfazer.
         let _ = inject::unload(i.pid, &i.dll);
         n += 1;
@@ -211,3 +215,71 @@ pub fn enable_shell_theme_session(
         experimental,
     )
 }
+
+/// Mods 6/7 (fase 13): estilo da barra via XAML (método Windhawk/TranslucentTB). Não usa RVA nem
+/// escreve em memória do Explorer: a DLL só chama `InitializeXamlDiagnosticsEx`. Passa pelas
+/// mesmas travas (`shell::may_enable`); religar remove o marcador de eject, que o desligar cria.
+pub fn enable_shell_xaml(
+    dir: &Path,
+    exe: &Path,
+    dll: &Path,
+    build: u32,
+    tested_builds: &[u32],
+    experimental: bool,
+) -> Result<Vec<Injection>> {
+    if !dll.is_file() {
+        bail!("DLL não encontrada: {}", dll.display());
+    }
+    let sys = System::new_all();
+    let anticheat = policy::anticheat_running(
+        sys.processes()
+            .values()
+            .map(|p| p.name().to_str().unwrap_or("")),
+    );
+    let safe_mode = dir.join("shell-safemode").exists();
+    recovery::write(exe, dir)?;
+    if let Err(b) = shell::may_enable(
+        "explorer.exe",
+        build,
+        tested_builds,
+        experimental,
+        safe_mode,
+        anticheat,
+        true,
+    ) {
+        bail!("trava do agente do shell: {b:?}");
+    }
+    std::fs::create_dir_all(dir)?;
+    let _ = std::fs::remove_file(dir.join(XAML_EJECT_MARKER));
+    let cfg = dir.join("xaml-barra.cfg");
+    if !cfg.exists() {
+        std::fs::write(
+            &cfg,
+            "# Estilo da barra (mod 6). Cores ARGB hex; margin = esquerda,topo,direita,base.\n\
+             enabled=true\nfill=#C81C1C24\nradius=14\nmargin=0,0,0,0\nhide_border=false\n",
+        )?;
+    }
+    let mut state = registry::load_state(dir);
+    let mut done = Vec::new();
+    for p in sys.processes().values() {
+        let name = p.name().to_string_lossy().into_owned();
+        if !name.eq_ignore_ascii_case("explorer.exe") {
+            continue;
+        }
+        let pid = p.pid().as_u32();
+        inject::load(pid, dll)?;
+        let inj = Injection {
+            mod_name: XAML_MOD_NAME.into(),
+            pid,
+            process: name,
+            dll: dll.to_path_buf(),
+        };
+        state.push(inj.clone());
+        registry::save_state(dir, &state)?;
+        done.push(inj);
+    }
+    Ok(done)
+}
+
+pub const XAML_MOD_NAME: &str = "xaml-barra";
+pub const XAML_EJECT_MARKER: &str = "xaml-barra.eject";
