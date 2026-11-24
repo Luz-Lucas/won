@@ -130,6 +130,7 @@ describe("Personalizar", () => {
     vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
     vi.mocked(api.tweaksApply).mockResolvedValue(7);
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     const sw = await screen.findByRole("switch", { name: "Título a" });
     expect(sw).not.toBeChecked();
     await userEvent.click(sw);
@@ -146,6 +147,7 @@ describe("Personalizar", () => {
     );
     vi.mocked(api.tweaksUndo).mockResolvedValue(7);
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     const sw = await screen.findByRole("switch", { name: "Título a" });
     expect(sw).toBeChecked();
     await userEvent.click(sw);
@@ -160,6 +162,7 @@ describe("Personalizar", () => {
     );
     vi.mocked(api.tweaksApplyChoice).mockResolvedValue(7);
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     const group = await screen.findByRole("group", {
       name: "Alinhamento da barra de tarefas",
     });
@@ -178,6 +181,7 @@ describe("Personalizar", () => {
       page([option("left", "Esquerda"), option("center", "Centro")]),
     );
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     const group = await screen.findByRole("group", {
       name: "Alinhamento da barra de tarefas",
     });
@@ -189,6 +193,7 @@ describe("Personalizar", () => {
       page([item("a", { view: { status: "applied" }, in_journal: false })]),
     );
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     const sw = await screen.findByRole("switch", { name: "Título a" });
     expect(sw).toBeChecked();
     expect(sw).toBeDisabled();
@@ -202,6 +207,7 @@ describe("Personalizar", () => {
     vi.mocked(api.tweaksApply).mockResolvedValue(7);
     vi.mocked(api.restartExplorer).mockResolvedValue(undefined);
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     await userEvent.click(await screen.findByRole("switch", { name: "Título a" }));
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
     await waitFor(() => expect(api.tweaksApply).toHaveBeenCalled());
@@ -227,6 +233,7 @@ describe("Personalizar", () => {
     vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
     vi.mocked(api.tweaksApply).mockResolvedValue(7);
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     await userEvent.click(await screen.findByRole("switch", { name: "Título a" }));
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
     await waitFor(() => expect(api.tweaksApply).toHaveBeenCalled());
@@ -251,6 +258,7 @@ describe("Personalizar", () => {
       ),
     );
     render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     expect(await screen.findByRole("switch", { name: "Título w" })).toBeDisabled();
     expect(screen.getByRole("switch", { name: "Título a" })).toBeEnabled();
     expect(screen.getByText("Requer administrador")).toBeInTheDocument();
@@ -262,7 +270,7 @@ describe("Personalizar", () => {
     ).toBeInTheDocument();
   });
 
-  it("tabs show each area and the visual items under Aparência", async () => {
+  it("hub lists the areas and each one shows only its own items", async () => {
     vi.mocked(api.tweaksList).mockResolvedValue(
       page([
         item("a"),
@@ -272,18 +280,32 @@ describe("Personalizar", () => {
       ]),
     );
     render(<Personalizar />);
+    expect(screen.getByRole("heading", { level: 1, name: "Estilização" })).toBeInTheDocument();
+    for (const n of ["Barra de tarefas", "Menu Iniciar", "Explorador de Arquivos", "Cores e aparência", "Temas", "Sistema"])
+      expect(await screen.findByRole("button", { name: n })).toBeEnabled();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Barra de tarefas" }));
     expect(await screen.findByRole("switch", { name: "Título a" })).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "Título dark" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("tab", { name: "Aparência" }));
-    expect(screen.getByRole("switch", { name: "Título dark" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("switch", { name: "Título transparency-off" }),
-    ).toBeInTheDocument();
-    for (const tab of screen.getAllByRole("tab")) {
-      await userEvent.click(tab);
-      expect(
-        screen.queryByRole("switch", { name: "Título game-mode" }),
-      ).not.toBeInTheDocument();
-    }
+    expect(screen.getByRole("img", { name: "Prévia da barra de tarefas" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "← Todas as áreas" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cores e aparência" }));
+    expect(await screen.findByRole("switch", { name: "Título dark" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Título transparency-off" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Título game-mode" })).not.toBeInTheDocument();
+  });
+
+  it("preview reacts to the option under the pointer", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(
+      page([option("taskbar-align-left", "Esquerda"), option("taskbar-align-center", "Centro", true)]),
+    );
+    render(<Personalizar />);
+    await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
+    const img = await screen.findByRole("img", { name: "Prévia da barra de tarefas" });
+    expect(img.querySelector(".sp-taskbar")).toHaveAttribute("data-align", "center");
+    await userEvent.hover(screen.getByRole("radio", { name: "Esquerda" }));
+    expect(img.querySelector(".sp-taskbar")).toHaveAttribute("data-align", "left");
+    await userEvent.unhover(screen.getByRole("radio", { name: "Esquerda" }));
+    expect(img.querySelector(".sp-taskbar")).toHaveAttribute("data-align", "center");
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   netBufferbloat,
   netDnsApply,
@@ -6,7 +6,6 @@ import {
   netDnsPreview,
   netMeasure,
   netPage,
-  netTargetAdd,
   netTargetRemove,
   netTrace,
   relaunchElevated,
@@ -57,6 +56,13 @@ const HISTORY_KIND: Record<NetHistoryEntry["kind"], string> = {
 
 const ADMIN = "requer administrador";
 
+/** Passos do assistente "Analisar minha rede", na ordem. */
+const AUTO_STEPS: { label: string; run: () => Promise<number> }[] = [
+  { label: "Latência", run: () => netMeasure(null) },
+  { label: "Bufferbloat", run: netBufferbloat },
+  { label: "DNS", run: netDnsBench },
+];
+
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 
 /** "23,4 ms" (ou "—" sem resposta). */
@@ -82,7 +88,10 @@ export default function Rede() {
   const [tweaks, setTweaks] = useState<TweakItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [spec, setSpec] = useState("");
+  // Assistente automático: índice do passo em andamento (null = parado).
+  const [auto, setAuto] = useState<number | null>(null);
+  const autoRef = useRef<number | null>(null);
+  const [autoDone, setAutoDone] = useState(false);
   const [measured, setMeasured] = useState<Map<string, Measurement>>(new Map());
   const [trace, setTrace] = useState<Trace | null>(null);
   const [bloat, setBloat] = useState<BufferbloatResult | null>(null);
@@ -124,7 +133,30 @@ export default function Rede() {
     else if (r.op === "bufferbloat") setBloat(r.result);
     else if (r.op === "dns") setDns(r.report);
     netPage().then(setPage, () => {});
+    // Assistente: cada passo termina e dispara o seguinte.
+    const at = autoRef.current;
+    if (at !== null && AUTO_STEPS[at]) {
+      const next = at + 1;
+      if (next < AUTO_STEPS.length) {
+        autoRef.current = next;
+        setAuto(next);
+        void net.start(AUTO_STEPS[next]!.run);
+      } else {
+        autoRef.current = null;
+        setAuto(null);
+        setAutoDone(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [net.state, net.result]);
+
+  // Falha no meio do assistente: para onde está.
+  useEffect(() => {
+    if (net.state === "error" && autoRef.current !== null) {
+      autoRef.current = null;
+      setAuto(null);
+    }
+  }, [net.state]);
 
   useEffect(() => {
     if (tweakJob.state === "done" && tweakJob.result) loadTweaks();
@@ -138,16 +170,12 @@ export default function Rede() {
     void net.start(fn);
   };
 
-  const add = async () => {
-    const s = spec.trim();
-    if (!s) return;
+  const startAuto = () => {
     setActionError(null);
-    try {
-      setPage(await netTargetAdd(s));
-      setSpec("");
-    } catch (e) {
-      setActionError(errorText(e));
-    }
+    setAutoDone(false);
+    autoRef.current = 0;
+    setAuto(0);
+    void net.start(AUTO_STEPS[0]!.run);
   };
 
   const remove = async (label: string) => {
@@ -307,6 +335,32 @@ export default function Rede() {
 
       {page && (
         <>
+          <article className="card auto-card" aria-label="Análise automática">
+            <h2>Análise automática</h2>
+            <p className="muted">
+              Mede latência, bufferbloat e DNS em sequência e mostra o que vale ajustar. Nada é
+              alterado sem você confirmar.
+            </p>
+            <ol className="auto-steps" aria-label="Passos">
+              {AUTO_STEPS.map((st, n) => (
+                <li key={st.label} aria-current={auto === n ? "step" : undefined}>
+                  {auto !== null && n < auto ? "✓ " : ""}
+                  {st.label}
+                </li>
+              ))}
+            </ol>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={running}
+              onClick={startAuto}
+            >
+              Analisar minha rede
+            </button>
+            {autoDone && !running && (
+              <p>Análise concluída. Veja os resultados abaixo e as recomendações de DNS e rota.</p>
+            )}
+          </article>
           <h2>Medir</h2>
           <table className="net-table">
             <thead>
@@ -363,21 +417,10 @@ export default function Rede() {
             >
               Medir
             </button>
-            <label>
-              Novo destino{" "}
-              <input
-                value={spec}
-                placeholder="servidor ou servidor:porta"
-                onChange={(e) => setSpec(e.target.value)}
-              />
-            </label>
-            <button type="button" className="btn" onClick={() => void add()}>
-              Adicionar destino
-            </button>
           </div>
           <p className="muted">
-            Destinos com porta são medidos pelo tempo de conexão (para servidores que não
-            respondem a ping).
+            Os destinos são os servidores de jogos e serviços conhecidos; o Sentinela escolhe e
+            mede sozinho. Destinos com porta são medidos pelo tempo de conexão.
           </p>
 
           {trace && (

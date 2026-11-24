@@ -115,7 +115,7 @@ function Shell() {
   return (
     <div className="shell">
       <Sidebar current={page} onNavigate={setPage} elevated={status?.elevated} />
-      <main className="content">
+      <main className="content" key={page}>
         {page === "inicio" && (
           <Inicio
             status={status}
@@ -128,7 +128,7 @@ function Shell() {
         {page === "limpeza" && <Limpeza />}
         {page === "mods" && <Mods />}
         {page === "aplicativos" && <Aplicativos />}
-        {page === "personalizar" && <Personalizar />}
+        {page === "personalizar" && <Personalizar onNavigate={setPage} />}
         {page === "rede" && <Rede />}
         {page === "seguranca" && (
           <Seguranca

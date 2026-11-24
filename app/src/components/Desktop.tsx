@@ -7,6 +7,7 @@ import {
   desktopStop,
 } from "../api";
 import type { DesktopStatus } from "../api";
+import DesktopVisual from "./DesktopVisual";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 
@@ -108,6 +109,10 @@ export default function Desktop({
         </div>
       )}
 
+      <DesktopVisual text={text} onChange={edit} />
+
+      <details className="style-reference dv-advanced">
+        <summary>Avançado: atalhos e regras no arquivo desktop.toml</summary>
       <h2>desktop.toml</h2>
       <p className="muted">{status.config_path}</p>
       <textarea
@@ -118,6 +123,7 @@ export default function Desktop({
         disabled={text === null}
         onChange={(e) => edit(e.target.value)}
       />
+      </details>
       {problems.length > 0 && (
         <ul aria-label="Problemas" className="form-error">
           {problems.map((p) => (

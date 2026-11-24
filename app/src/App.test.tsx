@@ -181,17 +181,18 @@ describe("App", () => {
     render(<App />);
     const nav = within(screen.getByRole("navigation", { name: "Principal" }));
     expect(
-      nav.getAllByRole("button").slice(0, 11).map((b) => b.textContent),
+      nav.getAllByRole("button").slice(0, 12).map((b) => b.textContent),
     ).toEqual([
       "Início",
-      "Jogos",
+      "Otimização",
       "Limpeza",
+      "Disco",
       "Aplicativos",
-      "Personalizar",
       "Rede",
       "Segurança",
       "Quarentena",
-      "Disco",
+      "Estilização",
+      "Mods",
       "Histórico",
       "Ajustes",
     ]);
@@ -199,7 +200,7 @@ describe("App", () => {
 
   it("mostra as dez páginas e troca de página", async () => {
     render(<App />);
-    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Personalizar", "Rede", "Segurança", "Quarentena", "Disco", "Histórico", "Ajustes"])
+    for (const n of ["Início", "Otimização", "Limpeza", "Disco", "Aplicativos", "Estilização", "Rede", "Segurança", "Quarentena", "Mods", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(

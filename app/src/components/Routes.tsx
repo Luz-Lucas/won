@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import {
   netCompare,
   netGameRouteSet,
   netRouteSet,
   netRoutesPage,
-  netTunnelImport,
   netTunnelRemove,
   netWarpRegister,
   netWarpTunnelCreate,
@@ -37,7 +35,6 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<NetRoute | null>(null);
   const [warpAsk, setWarpAsk] = useState<"register" | "wireguard" | null>(null);
-  const [tunnelName, setTunnelName] = useState("");
   const [target, setTarget] = useState("");
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [comparison, setComparison] = useState<Comparison | null>(null);
@@ -65,23 +62,6 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
       setError(errorText(e));
     } finally {
       setBusy(false);
-    }
-  };
-
-  const importConf = async () => {
-    const name = tunnelName.trim();
-    if (!name) {
-      setError("Dê um nome ao túnel antes de importar.");
-      return;
-    }
-    const path = await open({
-      multiple: false,
-      directory: false,
-      filters: [{ name: "WireGuard", extensions: ["conf"] }],
-    });
-    if (typeof path === "string") {
-      await run(() => netTunnelImport(name, path));
-      setTunnelName("");
     }
   };
 
@@ -118,7 +98,7 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
           {page.routes.length === 0 ? (
             <p className="muted">
               Nenhuma alternativa instalada. Instale o Cloudflare WARP ou o WireGuard pela página
-              Aplicativos, ou importe um túnel.
+              Aplicativos; o Sentinela cuida do resto.
             </p>
           ) : (
             <ul className="clean-list">
@@ -167,19 +147,8 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
               ))}
             </ul>
           )}
-          <div className="clean-footer">
-            <label>
-              Nome do túnel{" "}
-              <input
-                value={tunnelName}
-                placeholder="ex.: vps-sp"
-                onChange={(e) => setTunnelName(e.target.value)}
-              />
-            </label>
-            <button type="button" className="btn" disabled={busy} onClick={() => void importConf()}>
-              Importar .conf…
-            </button>
-            {!page.tunnels.some((t) => t.name === "warp") && (
+          {!page.tunnels.some((t) => t.name === "warp") && (
+            <div className="clean-footer">
               <button
                 type="button"
                 className="btn"
@@ -188,10 +157,11 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
               >
                 Criar túnel WireGuard do WARP
               </button>
-            )}
-          </div>
+            </div>
+          )}
           <p className="muted">
-            O arquivo fica só neste computador; a chave privada não aparece na janela.
+            Tudo é configurado automaticamente. A chave privada fica só neste computador e não
+            aparece na janela.
           </p>
 
           <h3>Comparar</h3>
