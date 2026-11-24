@@ -7,9 +7,9 @@ use crate::TauriSink;
 use crate::jobs::{EventProgress, JobId, JobKind, JobRegistry, spawn_job};
 use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::quarantine::{self, QuarantineEntry};
-use sentinela_core::scan::areas;
 use sentinela_core::scan::targets::{ScanSummary, ScanTarget, resolve, summarize};
 use sentinela_core::scan::{Engine, ScanOptions, run_scan_with_progress};
+use sentinela_core::scan::{areas, exceptions};
 use sentinela_core::walker::WalkOptions;
 use sentinela_core::{platform_fs, signatures};
 use std::sync::Arc;
@@ -65,8 +65,13 @@ pub async fn scan_start(
             let progress = EventProgress::new(id, sink, Duration::from_millis(100));
             let mut report = run_scan_with_progress(&engine, &opts, cancel, &progress);
             report.errors.splice(0..0, resolved.unreadable);
-            let summary: ScanSummary =
-                summarize(report, &resolved.missing, db_initialized, warnings);
+            let summary: ScanSummary = summarize(
+                report,
+                &resolved.missing,
+                db_initialized,
+                warnings,
+                &exceptions::load(&exceptions::default_path()),
+            );
             let _ = activity::append(
                 &activity::default_activity_path(),
                 ActivityKind::Scan,

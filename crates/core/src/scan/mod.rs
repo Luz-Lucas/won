@@ -1,5 +1,8 @@
 pub mod areas;
 pub mod detector;
+pub mod exceptions;
+pub mod explain;
+pub mod guard;
 pub mod hash;
 pub mod pe;
 pub mod risk;

@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use super::areas::QuickAreas;
 use super::detector::Severity;
+use super::exceptions::Exception;
+use super::explain;
 use super::{ScanItem, ScanReport};
 use crate::walker::WalkError;
 
@@ -87,6 +89,16 @@ pub fn resolve(
 pub const ITEMS_LIMIT: usize = 1000;
 pub const ERRORS_LIMIT: usize = 200;
 
+/// Achado como a janela mostra: o item, se vem marcado para quarentena e o
+/// "por quê" de cada achado.
+#[derive(Debug, Serialize)]
+pub struct SummaryItem {
+    #[serde(flatten)]
+    pub item: ScanItem,
+    pub recommended: bool,
+    pub why: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ScanSummary {
     pub scanned: usize,
@@ -94,8 +106,10 @@ pub struct ScanSummary {
     pub malicious: usize,
     pub suspicious: usize,
     /// Ordenados: Malicious primeiro, depois por caminho; no máximo `ITEMS_LIMIT`.
-    pub items: Vec<ScanItem>,
+    pub items: Vec<SummaryItem>,
     pub items_total: usize,
+    /// Achados tirados por estarem em "Ignorar sempre".
+    pub ignored: usize,
     pub errors: Vec<WalkError>,
     pub errors_total: usize,
     pub missing: Vec<String>,
@@ -108,13 +122,15 @@ pub fn summarize(
     missing: &[PathBuf],
     db_initialized: bool,
     warnings: Vec<String>,
+    exceptions: &[Exception],
 ) -> ScanSummary {
     let ScanReport {
         scanned,
-        mut items,
+        items,
         mut errors,
         interrupted,
     } = report;
+    let (mut items, ignored) = super::exceptions::filter(items, exceptions);
     let count = |v: Severity| items.iter().filter(|i| i.verdict == v).count();
     let malicious = count(Severity::Malicious);
     let suspicious = count(Severity::Suspicious);
@@ -128,8 +144,16 @@ pub fn summarize(
         interrupted,
         malicious,
         suspicious,
-        items,
+        items: items
+            .into_iter()
+            .map(|item| SummaryItem {
+                recommended: explain::recommended(&item),
+                why: item.findings.iter().map(explain::why).collect(),
+                item,
+            })
+            .collect(),
         items_total,
+        ignored,
         errors,
         errors_total,
         missing: missing
@@ -246,9 +270,11 @@ mod tests {
                 .collect(),
             interrupted: false,
         };
-        let s = summarize(report, &[PathBuf::from("D:\\gone")], true, vec![]);
+        let s = summarize(report, &[PathBuf::from("D:\\gone")], true, vec![], &[]);
         assert_eq!(s.items.len(), ITEMS_LIMIT);
-        assert_eq!(s.items[0].verdict, Severity::Malicious);
+        assert_eq!(s.items[0].item.verdict, Severity::Malicious);
+        assert!(s.items[0].why[0].contains("test"));
+        assert!(!s.items[0].recommended);
         assert_eq!(s.items_total, 1501);
         assert_eq!(s.malicious, 1);
         assert_eq!(s.suspicious, 1500);
@@ -293,7 +319,7 @@ mod tests {
         };
         let cancel = AtomicBool::new(false);
         let report = run_scan_with_progress(&engine, &opts, &cancel, &NoProgress);
-        let s = summarize(report, &r.missing, false, warnings);
+        let s = summarize(report, &r.missing, false, warnings, &[]);
         assert_eq!(s.malicious, 1);
         assert!(f.exists(), "a verificação não pode mover o arquivo");
     }
