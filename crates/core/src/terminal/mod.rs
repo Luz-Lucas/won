@@ -4,6 +4,7 @@
 
 pub mod backup;
 pub mod omp;
+pub mod plan;
 pub mod profile;
 pub mod scheme;
 pub mod theme_file;
