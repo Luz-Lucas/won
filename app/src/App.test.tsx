@@ -85,6 +85,8 @@ describe("App", () => {
           return 5;
         case "quarantine_list":
           return [];
+        case "scan_schedule_get":
+          return { scheduled: false, auto_quarantine: false, offered: true };
         default:
           return status();
       }
@@ -162,7 +164,7 @@ describe("App", () => {
     });
     render(<App />);
     await screen.findByText("2 na quarentena");
-    await userEvent.click(screen.getByRole("button", { name: "Segurança" }));
+    await userEvent.click(screen.getByRole("button", { name: "Quarentena" }));
     const before = statusCalls();
     await userEvent.click(
       await screen.findByRole("button", { name: "Restaurar" }),
@@ -178,7 +180,7 @@ describe("App", () => {
     render(<App />);
     const nav = within(screen.getByRole("navigation", { name: "Principal" }));
     expect(
-      nav.getAllByRole("button").slice(0, 10).map((b) => b.textContent),
+      nav.getAllByRole("button").slice(0, 11).map((b) => b.textContent),
     ).toEqual([
       "Início",
       "Jogos",
@@ -187,6 +189,7 @@ describe("App", () => {
       "Personalizar",
       "Rede",
       "Segurança",
+      "Quarentena",
       "Disco",
       "Histórico",
       "Ajustes",
@@ -195,7 +198,7 @@ describe("App", () => {
 
   it("mostra as dez páginas e troca de página", async () => {
     render(<App />);
-    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Personalizar", "Rede", "Segurança", "Disco", "Histórico", "Ajustes"])
+    for (const n of ["Início", "Jogos", "Limpeza", "Aplicativos", "Personalizar", "Rede", "Segurança", "Quarentena", "Disco", "Histórico", "Ajustes"])
       expect(screen.getByRole("button", { name: n })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Limpeza" }));
     expect(

@@ -105,6 +105,12 @@ export interface ScanItem {
   path: string;
   verdict: Severity;
   findings: Finding[];
+  /** SHA-256 em hexadecimal minúsculo. */
+  sha256: string;
+  /** Malware confirmado por hash: vem marcado para quarentena. */
+  recommended: boolean;
+  /** O "por quê" de cada achado, na mesma ordem de `findings`. */
+  why: string[];
 }
 
 export interface WalkError {
@@ -119,6 +125,8 @@ export interface ScanSummary {
   suspicious: number;
   items: ScanItem[];
   items_total: number;
+  /** Achados tirados por estarem em "Ignorar sempre". */
+  ignored: number;
   errors: WalkError[];
   errors_total: number;
   missing: string[];
@@ -133,7 +141,62 @@ export interface QuarantineEntry {
   size: number;
   rule: string;
   quarantined_at: string;
+  encoding?: string;
 }
+
+export type Guard =
+  | { kind: "system_folder" }
+  | { kind: "in_use"; pids: number[]; names: string[] };
+
+export interface GuardView {
+  path: string;
+  guards: Guard[];
+}
+
+export interface QuarantineRequest {
+  path: string;
+  sha256: string;
+  rule: string;
+}
+
+export type QuarantineDone = { path: string } & (
+  | { status: "quarantined"; id: string }
+  | { status: "in_use" }
+  | { status: "failed"; reason: string }
+);
+
+export interface QuarantineOutcome {
+  done: QuarantineDone[];
+  not_ended: number[];
+}
+
+export interface ScanException {
+  sha256: string;
+  path: string;
+  rule: string;
+  added_at: string;
+}
+
+export interface ScheduleView {
+  scheduled: boolean;
+  auto_quarantine: boolean;
+  offered: boolean;
+}
+
+export const scanGuard = (paths: string[]) => invoke<GuardView[]>("scan_guard", { paths });
+export const scanQuarantine = (requests: QuarantineRequest[], endPids: number[]) =>
+  invoke<QuarantineOutcome>("scan_quarantine", { requests, endPids });
+export const quarantineDelete = (id: string) => invoke<string>("quarantine_delete", { id });
+export const scanExceptionsList = () => invoke<ScanException[]>("scan_exceptions_list");
+export const scanExceptionAdd = (sha256: string, path: string, rule: string) =>
+  invoke<ScanException[]>("scan_exception_add", { sha256, path, rule });
+export const scanExceptionRemove = (sha256: string) =>
+  invoke<ScanException[]>("scan_exception_remove", { sha256 });
+export const scanScheduleGet = () => invoke<ScheduleView>("scan_schedule_get");
+export const scanScheduleSet = (on: boolean) => invoke<ScheduleView>("scan_schedule_set", { on });
+export const scanScheduleDismiss = () => invoke<ScheduleView>("scan_schedule_dismiss");
+export const scanAutoQuarantineSet = (on: boolean) =>
+  invoke<ScheduleView>("scan_auto_quarantine_set", { on });
 
 export const scanStart = (target: ScanTarget) =>
   invoke<number>("scan_start", { target });

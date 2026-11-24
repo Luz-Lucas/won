@@ -16,6 +16,9 @@
           "url": "https://auth.abuse.ch/"
         },
         {
+          "url": "https://www.virustotal.com/gui/file/*"
+        },
+        {
           "url": "ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1"
         },
         {
