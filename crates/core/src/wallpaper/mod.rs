@@ -3,7 +3,9 @@
 //! oficial. Nada aqui grava na instalação, na Oficina nem na configuração
 //! do Wallpaper Engine.
 
+pub mod gallery;
 pub mod host;
+pub mod palette;
 pub mod steam;
 
 pub use host::{Command, FakeHost, WallpaperHost, WindowsHost};
