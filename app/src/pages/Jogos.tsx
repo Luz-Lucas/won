@@ -13,8 +13,17 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import GpuPerGame from "../components/GpuPerGame";
 import StartupList from "../components/StartupList";
 import { useJob } from "../jobs";
+import {
+  MAX_NAME,
+  MAX_PROFILES,
+  loadProfiles,
+  storeProfiles,
+  upsertProfile,
+  type UserProfile,
+} from "../profiles";
 
-type Profile = "recomendado" | "fps" | "personalizado";
+/** Perfil do app, "personalizado" (marcação manual) ou `user:<id>` (salvo pelo usuário). */
+type Profile = "recomendado" | "fps" | "personalizado" | `user:${string}`;
 
 type Tab = "principais" | "avancado";
 
@@ -92,14 +101,32 @@ const fpsIds = (p: TweaksPage) => {
   return ids;
 };
 
-const profileIds = (profile: Profile, p: TweaksPage) =>
-  profile === "fps" ? fpsIds(p) : recommendedIds(p);
+/** Perfil do usuário: o que ele salvou, só o que ainda é aplicável. */
+const userIds = (saved: UserProfile | undefined, p: TweaksPage) => {
+  const want = new Set(saved?.tweaks ?? []);
+  return new Set(
+    p.tweaks
+      .filter((i) => want.has(i.tweak.id) && selectable(i) && i.view.status !== "applied")
+      .map((i) => i.tweak.id),
+  );
+};
+
+const profileIds = (profile: Profile, p: TweaksPage, users: UserProfile[]) =>
+  profile.startsWith("user:")
+    ? userIds(users.find((u) => `user:${u.id}` === profile), p)
+    : profile === "fps"
+      ? fpsIds(p)
+      : recommendedIds(p);
 
 export default function Jogos() {
   const [data, setData] = useState<TweaksPage | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>("recomendado");
   const profileRef = useRef<Profile>("recomendado");
+  const [users, setUsers] = useState<UserProfile[]>(loadProfiles);
+  const usersRef = useRef(users);
+  const [profileName, setProfileName] = useState("");
+  const [askDelete, setAskDelete] = useState(false);
   const [tab, setTab] = useState<Tab>("principais");
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
@@ -118,7 +145,7 @@ export default function Jogos() {
         // descarta o que deixou de ser selecionável.
         setChecked((old) =>
           profileRef.current !== "personalizado"
-            ? profileIds(profileRef.current, p)
+            ? profileIds(profileRef.current, p, usersRef.current)
             : new Set(
                 p.tweaks
                   .filter(
@@ -165,9 +192,38 @@ export default function Jogos() {
   const chooseProfile = (p: Profile) => {
     profileRef.current = p;
     setProfile(p);
-    if (p !== "personalizado" && data) setChecked(profileIds(p, data));
+    if (p !== "personalizado" && data) setChecked(profileIds(p, data, users));
     // Mostra o que o perfil acrescentou na aba Avançado.
     if (p === "fps") setTab("avancado");
+  };
+
+  const activeUser = users.find((u) => `user:${u.id}` === profile) ?? null;
+
+  const commitUsers = (next: UserProfile[]) => {
+    usersRef.current = next;
+    setUsers(next);
+    storeProfiles(next);
+  };
+
+  /** Guarda a seleção atual com o nome; nome repetido atualiza o perfil. */
+  const saveProfile = (name: string) => {
+    const { list, profile: saved } = upsertProfile(
+      users,
+      name,
+      chosen.map((i) => i.tweak.id),
+    );
+    commitUsers(list);
+    profileRef.current = `user:${saved.id}`;
+    setProfile(`user:${saved.id}`);
+    setProfileName("");
+  };
+
+  const deleteProfile = () => {
+    if (!activeUser) return;
+    commitUsers(users.filter((u) => u.id !== activeUser.id));
+    profileRef.current = "personalizado";
+    setProfile("personalizado");
+    setAskDelete(false);
   };
 
   const toggle = (id: string) => {
@@ -240,7 +296,7 @@ export default function Jogos() {
 
   return (
     <section className="page">
-      <h1>Jogos</h1>
+      <h1>Otimização</h1>
       <GameSessionCard />
       {data && !data.hkcu_allowed && <p className="notice">{OTHER_ACCOUNT}</p>}
       {bannerNeeded && (
@@ -313,6 +369,64 @@ export default function Jogos() {
                   {label}
                 </button>
               ))}
+              {users.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  className="btn"
+                  aria-pressed={profile === `user:${u.id}`}
+                  disabled={running}
+                  onClick={() => chooseProfile(`user:${u.id}`)}
+                >
+                  {u.name}
+                </button>
+              ))}
+            </div>
+            <div className="profile-save">
+              <label>
+                Nome do perfil{" "}
+                <input
+                  type="text"
+                  value={profileName}
+                  maxLength={MAX_NAME}
+                  placeholder="ex.: Jogos pesados"
+                  onChange={(e) => setProfileName(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn"
+                disabled={
+                  running ||
+                  chosen.length === 0 ||
+                  profileName.trim() === "" ||
+                  (users.length >= MAX_PROFILES &&
+                    !users.some((u) => u.name.toLowerCase() === profileName.trim().toLowerCase()))
+                }
+                onClick={() => saveProfile(profileName)}
+              >
+                Salvar seleção como perfil
+              </button>
+              {activeUser && (
+                <>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={running || chosen.length === 0}
+                    onClick={() => saveProfile(activeUser.name)}
+                  >
+                    {`Atualizar "${activeUser.name}"`}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={running}
+                    onClick={() => setAskDelete(true)}
+                  >
+                    Excluir perfil
+                  </button>
+                </>
+              )}
             </div>
             <div className="tweak-profiles" role="tablist" aria-label="Lista">
               {(
@@ -393,6 +507,16 @@ export default function Jogos() {
       </p>
       <GpuPerGame />
       <StartupList />
+      {askDelete && activeUser && (
+        <ConfirmDialog
+          title={`Excluir o perfil "${activeUser.name}"?`}
+          confirmLabel="Excluir"
+          onConfirm={deleteProfile}
+          onCancel={() => setAskDelete(false)}
+        >
+          <p>Só o perfil salvo some; nenhuma otimização já aplicada é desfeita.</p>
+        </ConfirmDialog>
+      )}
       {confirming && (
         <ConfirmDialog
           title={`Aplicar ${chosen.length} otimização(ões)?`}

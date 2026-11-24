@@ -70,7 +70,7 @@ describe("Desktop em Personalizar", () => {
     render(<Personalizar />);
     await screen.findByRole("button", { name: "Temas" });
     await waitFor(() => expect(m.desktopStatus).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: "Desktop" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Desktop" })).toBeDisabled();
   });
 
   it("start_and_stop", async () => {
@@ -110,5 +110,33 @@ describe("Desktop em Personalizar", () => {
     await openDesktop();
     expect(await screen.findByText(/TOML inválido: linha 3/)).toBeTruthy();
     expect(screen.getByText(/continua com a configuração anterior/)).toBeTruthy();
+  });
+});
+
+describe("Editor visual do desktop", () => {
+  it("turns the bar on and writes it into the file", async () => {
+    await openDesktop();
+    const sw = await screen.findByRole("switch", { name: "Usar a barra própria" });
+    await userEvent.click(sw);
+    const box = (await screen.findByLabelText("desktop.toml")) as HTMLTextAreaElement;
+    expect(box.value).toContain("[bar]");
+    expect(box.value).toContain("# vazio");
+    expect(screen.getByRole("img", { name: "Prévia da barra própria" })).toBeTruthy();
+    await userEvent.selectOptions(screen.getByLabelText("Posição de Relógio"), "left");
+    expect((screen.getByLabelText("desktop.toml") as HTMLTextAreaElement).value).toMatch(
+      /left = \["title", "clock"\]/,
+    );
+    expect(m.desktopConfigCheck).toHaveBeenCalled();
+  });
+
+  it("offers tiling and launcher with live previews", async () => {
+    await openDesktop();
+    await userEvent.click(await screen.findByRole("switch", { name: "Usar o tiling" }));
+    expect(screen.getByRole("img", { name: "Prévia do tiling" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("radio", { name: "Grade" }));
+    expect((screen.getByLabelText("desktop.toml") as HTMLTextAreaElement).value).toContain('layout = "grid"');
+    await userEvent.click(screen.getByRole("switch", { name: "Usar o lançador" }));
+    expect(screen.getByRole("img", { name: "Prévia do lançador" })).toBeTruthy();
+    expect((screen.getByLabelText("desktop.toml") as HTMLTextAreaElement).value).toContain('hotkey = "Alt+Space"');
   });
 });

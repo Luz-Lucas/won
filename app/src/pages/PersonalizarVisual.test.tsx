@@ -87,7 +87,7 @@ describe("Personalizar: papel de parede e temas", () => {
     vi.mocked(api.wallpaperStatus).mockResolvedValue(status(false));
     render(<Personalizar />);
     await screen.findByRole("button", { name: "Temas" });
-    expect(screen.queryByRole("button", { name: "Papel de parede" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Papel de parede" })).toBeDisabled();
   });
 
   it("gallery_lists_workshop_and_uses_a_wallpaper", async () => {

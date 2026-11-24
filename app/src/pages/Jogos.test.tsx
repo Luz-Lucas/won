@@ -3,6 +3,7 @@ import {
   render as rtlRender,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -89,6 +90,7 @@ describe("Jogos", () => {
     vi.mocked(api.tweaksList).mockReset();
     vi.mocked(api.tweaksApply).mockReset();
     listeners.clear();
+    window.localStorage.clear();
   });
 
   it("recommended_profile_checks_only_available_recommended", async () => {
@@ -432,5 +434,49 @@ describe("Jogos", () => {
       screen.getAllByRole("button", { name: "Aplicar" }).slice(-1)[0],
     );
     expect(api.tweaksApply).toHaveBeenCalledWith(["a", "sit"]);
+  });
+
+  it("saves_applies_and_deletes_a_user_profile", async () => {
+    vi.mocked(api.tweaksList).mockResolvedValue(
+      page([item("a"), item("b", { tweak: { recommended: false } }), item("c")]),
+    );
+    vi.mocked(api.tweaksApply).mockResolvedValue(7);
+    render(<Jogos />);
+    // Marca só "b" no lugar do recomendado e salva com um nome.
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Título a/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /Título c/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /Título b/ }));
+    const save = screen.getByRole("button", { name: "Salvar seleção como perfil" });
+    expect(save).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Nome do perfil"), "Só o B");
+    await userEvent.click(save);
+    expect(screen.getByRole("button", { name: "Só o B" })).toHaveAttribute("aria-pressed", "true");
+    expect(JSON.parse(window.localStorage.getItem("sentinela.perfis.v1")!)[0]).toMatchObject({
+      name: "Só o B",
+      tweaks: ["b"],
+    });
+    // Outro perfil muda a seleção; voltar ao salvo restaura "b".
+    await userEvent.click(screen.getByRole("button", { name: "Recomendado" }));
+    expect(screen.getByRole("checkbox", { name: /Título b/ })).not.toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Só o B" }));
+    expect(screen.getByRole("checkbox", { name: /Título b/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Título a/ })).not.toBeChecked();
+    // Excluir pede confirmação e não desfaz nada.
+    await userEvent.click(screen.getByRole("button", { name: "Excluir perfil" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Excluir" }));
+    expect(screen.queryByRole("button", { name: "Só o B" })).not.toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem("sentinela.perfis.v1")!)).toEqual([]);
+    // A seleção continua marcada depois de excluir o perfil.
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Aplicar" }));
+    expect(api.tweaksApply).toHaveBeenCalledWith(["b"]);
+  });
+
+  it("ignores_a_corrupted_profile_store", async () => {
+    window.localStorage.setItem("sentinela.perfis.v1", "{nao e json");
+    vi.mocked(api.tweaksList).mockResolvedValue(page([item("a")]));
+    render(<Jogos />);
+    expect(await screen.findByRole("checkbox", { name: /Título a/ })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Salvar seleção como perfil" })).toBeDisabled();
   });
 });

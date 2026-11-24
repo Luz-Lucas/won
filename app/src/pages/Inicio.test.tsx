@@ -33,7 +33,7 @@ describe("Inicio", () => {
     render(<Inicio status={status()} error={null} onNavigate={onNavigate} />);
     expect(screen.getByRole("heading", { name: "Otimização" })).toBeVisible();
     expect(screen.getByText("3 de 12")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Ir para Jogos" }));
+    await userEvent.click(screen.getByRole("button", { name: "Ir para Otimização" }));
     expect(onNavigate).toHaveBeenCalledWith("jogos");
   });
 

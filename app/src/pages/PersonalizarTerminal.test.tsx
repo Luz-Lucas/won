@@ -95,9 +95,9 @@ describe("Terminal em Personalizar", () => {
     m.terminalStatus.mockReturnValue(new Promise((r) => (resolve = r)));
     render(<Personalizar />);
     await screen.findByRole("button", { name: "Temas" });
-    expect(screen.queryByRole("button", { name: "Terminal" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Terminal" })).toBeDisabled();
     resolve(status());
-    expect(await screen.findByRole("button", { name: "Terminal" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Terminal" })).toBeEnabled());
   });
 
   it("stays hidden without PowerShell or Windows Terminal", async () => {
@@ -105,7 +105,7 @@ describe("Terminal em Personalizar", () => {
     render(<Personalizar />);
     await screen.findByRole("button", { name: "Temas" });
     await waitFor(() => expect(m.terminalStatus).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: "Terminal" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Terminal" })).toBeDisabled();
   });
 
   it("shows_diff_before_apply", async () => {

@@ -144,7 +144,7 @@ export default function Inicio({ status, error, onNavigate, onChanged }: InicioP
                 className="btn"
                 onClick={() => onNavigate("jogos")}
               >
-                Ir para Jogos
+                Ir para Otimização
               </button>
             </article>
           </div>

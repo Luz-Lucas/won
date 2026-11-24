@@ -12,7 +12,6 @@ vi.mock("../components/Routes", () => ({ default: () => null }));
 
 vi.mock("../api", () => ({
   netPage: vi.fn(),
-  netTargetAdd: vi.fn(),
   netTargetRemove: vi.fn(),
   netMeasure: vi.fn(),
   netTrace: vi.fn(),
@@ -121,7 +120,6 @@ describe("Rede", () => {
       api.netDnsBench,
       api.netDnsPreview,
       api.netDnsApply,
-      api.netTargetAdd,
       api.tweaksApply,
     ])
       vi.mocked(f).mockReset();
@@ -161,12 +159,44 @@ describe("Rede", () => {
     expect(within(game).getByText("100%")).toBeInTheDocument();
   });
 
-  it("adds a target", async () => {
-    vi.mocked(api.netTargetAdd).mockResolvedValue(netPage());
+  it("has no manual entry fields", async () => {
     render(<Rede />);
-    await userEvent.type(await screen.findByLabelText("Novo destino"), "x.example:443");
-    await userEvent.click(screen.getByRole("button", { name: "Adicionar destino" }));
-    expect(api.netTargetAdd).toHaveBeenCalledWith("x.example:443");
+    await screen.findByRole("button", { name: "Analisar minha rede" });
+    expect(screen.queryByLabelText("Novo destino")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Adicionar destino" })).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("auto_analysis_chains_latency_bufferbloat_and_dns", async () => {
+    vi.mocked(api.netMeasure).mockResolvedValue(7);
+    vi.mocked(api.netBufferbloat).mockResolvedValue(8);
+    vi.mocked(api.netDnsBench).mockResolvedValue(9);
+    render(<Rede />);
+    await userEvent.click(await screen.findByRole("button", { name: "Analisar minha rede" }));
+    expect(api.netMeasure).toHaveBeenCalledWith(null);
+    await finish({ op: "measure", results: [measurement(target("192.168.0.1"), 0.7)] }, 7);
+    await waitFor(() => expect(api.netBufferbloat).toHaveBeenCalledTimes(1));
+    expect(api.netDnsBench).not.toHaveBeenCalled();
+    await finish(
+      {
+        op: "bufferbloat",
+        result: {
+          idle: measurement(target("192.168.0.1"), 2),
+          loaded: measurement(target("192.168.0.1"), 10),
+          increase_ms: 8,
+          grade: "good",
+          download_mbps: 100,
+          diagnosis: "Bom.",
+        },
+      },
+      8,
+    );
+    await waitFor(() => expect(api.netDnsBench).toHaveBeenCalledTimes(1));
+    await finish(
+      { op: "dns", report: { rows: [], best: null, keep_current: true, advice: "Mantenha." } },
+      9,
+    );
+    expect(await screen.findByText(/Análise concluída/)).toBeInTheDocument();
   });
 
   it("trace_marks_delay_start", async () => {
