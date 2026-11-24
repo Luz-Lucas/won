@@ -7,6 +7,8 @@ import {
   netRoutesPage,
   netTunnelImport,
   netTunnelRemove,
+  netWarpRegister,
+  netWarpTunnelCreate,
   netWifiHoldSet,
 } from "../api";
 import type { Comparison, NetResult, NetRoute, NetTargetItem, RoutesPage } from "../api";
@@ -15,6 +17,11 @@ import ConfirmDialog from "./ConfirmDialog";
 
 const TUNNEL_WARNING =
   "Com o túnel ligado, o tráfego passa pelo servidor daquele serviço. Alguns jogos e anti-cheats bloqueiam VPN.";
+
+const WARP_TERMS =
+  "Isto cria uma conta gratuita do Cloudflare WARP neste computador e aceita os Termos de Serviço da Cloudflare em seu nome. Continue só se você concorda com eles.";
+const WARP_WG_TERMS =
+  "Isto registra um dispositivo gratuito no Cloudflare WARP (aceitando os Termos de Serviço da Cloudflare) e cria um túnel WireGuard chamado \"warp\". A chave privada fica só neste computador.";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 
@@ -29,6 +36,7 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<NetRoute | null>(null);
+  const [warpAsk, setWarpAsk] = useState<"register" | "wireguard" | null>(null);
   const [tunnelName, setTunnelName] = useState("");
   const [target, setTarget] = useState("");
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -133,6 +141,16 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
                       <span className="clean-check">{r.name}</span>
                     )}
                     <span className="muted">{stateText(r)}</span>
+                    {r.kind === "warp" && r.on === false && !r.controllable && (
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={busy}
+                        onClick={() => setWarpAsk("register")}
+                      >
+                        Ativar WARP
+                      </button>
+                    )}
                     {r.kind === "wireguard" && r.controllable && (
                       <button
                         type="button"
@@ -161,6 +179,16 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
             <button type="button" className="btn" disabled={busy} onClick={() => void importConf()}>
               Importar .conf…
             </button>
+            {!page.tunnels.some((t) => t.name === "warp") && (
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => setWarpAsk("wireguard")}
+              >
+                Criar túnel WireGuard do WARP
+              </button>
+            )}
           </div>
           <p className="muted">
             O arquivo fica só neste computador; a chave privada não aparece na janela.
@@ -309,6 +337,20 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
           onCancel={() => setPending(null)}
         >
           <p>{TUNNEL_WARNING}</p>
+        </ConfirmDialog>
+      )}
+      {warpAsk && (
+        <ConfirmDialog
+          title={warpAsk === "register" ? "Ativar o Cloudflare WARP?" : "Criar o túnel do WARP?"}
+          confirmLabel={warpAsk === "register" ? "Ativar" : "Criar túnel"}
+          onConfirm={() => {
+            const ask = warpAsk;
+            setWarpAsk(null);
+            void run(ask === "register" ? netWarpRegister : () => netWarpTunnelCreate());
+          }}
+          onCancel={() => setWarpAsk(null)}
+        >
+          <p>{warpAsk === "register" ? WARP_TERMS : WARP_WG_TERMS}</p>
         </ConfirmDialog>
       )}
     </section>

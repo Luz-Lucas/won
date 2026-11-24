@@ -8,8 +8,8 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::{
-    PAID, Route, RouteBackend, RouteKind, WarpState, default_tunnels_dir, list_tunnels,
-    parse_warp_status, tunnel_id, valid_tunnel_name,
+    PAID, Route, RouteBackend, RouteKind, WARP_SETUP_NOTE, WarpState, default_tunnels_dir,
+    list_tunnels, parse_warp_status, tunnel_id, valid_tunnel_name,
 };
 use crate::games::running::{any_named, processes};
 
@@ -113,6 +113,37 @@ impl SystemRoutes {
         Ok(parse_warp_status(&out))
     }
 
+    /// Cria a conta gratuita do WARP neste Windows e aceita os termos, só a
+    /// pedido do usuário (a janela e o terminal pedem confirmação antes).
+    pub fn register_warp(&self) -> Result<(), String> {
+        if !self.warp_cli.is_file() {
+            return Err("o Cloudflare WARP não está instalado".into());
+        }
+        if !matches!(
+            self.warp_state()?,
+            WarpState::NotRegistered | WarpState::Other(_)
+        ) {
+            return Ok(());
+        }
+        // `registration new` nas versões atuais; `register` nas antigas.
+        let new = run(&self.warp_cli, &["--accept-tos", "registration", "new"]);
+        if new.is_err() {
+            run(&self.warp_cli, &["--accept-tos", "register"]).map_err(|_| new.unwrap_err())?;
+        }
+        if wait(Duration::from_secs(15), || {
+            self.warp_state().is_ok_and(|s| {
+                matches!(
+                    s,
+                    WarpState::Connected | WarpState::Connecting | WarpState::Disconnected
+                )
+            })
+        }) {
+            Ok(())
+        } else {
+            Err("o WARP não terminou de ativar em 15 s".into())
+        }
+    }
+
     fn tunnel_name<'a>(&self, id: &'a str) -> Result<&'a str, String> {
         let name = id
             .strip_prefix("wg:")
@@ -131,11 +162,9 @@ impl RouteBackend for SystemRoutes {
             let (on, controllable, note) = match self.warp_state() {
                 Ok(WarpState::Connected | WarpState::Connecting) => (Some(true), true, None),
                 Ok(WarpState::Disconnected) => (Some(false), true, None),
-                Ok(WarpState::NotRegistered) => (
-                    Some(false),
-                    false,
-                    Some("Abra o Cloudflare WARP uma vez para ativar.".to_string()),
-                ),
+                Ok(WarpState::NotRegistered) => {
+                    (Some(false), false, Some(WARP_SETUP_NOTE.to_string()))
+                }
                 Ok(WarpState::Other(m)) | Err(m) => (None, false, Some(m)),
             };
             out.push(Route {

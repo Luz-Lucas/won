@@ -795,6 +795,9 @@ export interface Comparison {
 export const netRoutesPage = () => invoke<RoutesPage>("net_routes_page");
 export const netTunnelImport = (name: string, path: string) =>
   invoke<RoutesPage>("net_tunnel_import", { name, path });
+export const netWarpTunnelCreate = (name?: string) =>
+  invoke<RoutesPage>("net_warp_tunnel_create", { name });
+export const netWarpRegister = () => invoke<RoutesPage>("net_warp_register");
 export const netTunnelRemove = (name: string) =>
   invoke<RoutesPage>("net_tunnel_remove", { name });
 export const netRouteSet = (id: string, on: boolean) =>

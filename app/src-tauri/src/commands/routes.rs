@@ -15,6 +15,7 @@ use sentinela_core::net::routes::{
     self, CompareOptions, Route, TunnelInfo, comparison_summary, default_tunnels_dir,
 };
 use sentinela_core::net::session;
+use sentinela_core::net::warp_profile;
 use serde::Serialize;
 use serde_json::json;
 use std::path::{Path, PathBuf};
@@ -119,6 +120,40 @@ pub async fn net_tunnel_import(name: String, path: String) -> Result<RoutesPage,
     blocking(move || {
         let t = import_from(&default_tunnels_dir(), &name, Path::new(&path))?;
         log(&format!("Túnel WireGuard importado: {}", t.name));
+        Ok(page_now())
+    })
+    .await
+}
+
+/// Cria o túnel WireGuard do WARP (perfil novo na Cloudflare) e importa.
+#[tauri::command]
+pub async fn net_warp_tunnel_create(name: Option<String>) -> Result<RoutesPage, String> {
+    blocking(move || {
+        let name = name.unwrap_or_else(|| warp_profile::DEFAULT_NAME.into());
+        let t = warp_profile::create_tunnel(
+            &default_tunnels_dir(),
+            name.trim(),
+            &warp_profile::HttpRegistrar,
+            &warp_profile::now_iso(),
+        )?;
+        log(&format!("Túnel WireGuard do WARP criado: {}", t.name));
+        Ok(page_now())
+    })
+    .await
+}
+
+/// Ativa o aplicativo do WARP (conta gratuita e termos), a pedido do usuário.
+#[tauri::command]
+pub async fn net_warp_register() -> Result<RoutesPage, String> {
+    blocking(move || {
+        #[cfg(windows)]
+        {
+            routes::windows::SystemRoutes::new(is_elevated()).register_warp()?;
+            log("Cloudflare WARP ativado");
+        }
+        #[cfg(not(windows))]
+        return Err("o WARP só roda no Windows".into());
+        #[cfg(windows)]
         Ok(page_now())
     })
     .await

@@ -12,6 +12,8 @@ vi.mock("../api", () => ({
   netRoutesPage: vi.fn(),
   netTunnelImport: vi.fn(),
   netTunnelRemove: vi.fn(),
+  netWarpRegister: vi.fn(),
+  netWarpTunnelCreate: vi.fn(),
   netRouteSet: vi.fn(),
   netGameRouteSet: vi.fn(),
   netWifiHoldSet: vi.fn(),
@@ -187,5 +189,34 @@ describe("Routes", () => {
     render(<Routes targets={targets} />);
     expect(await screen.findByText(/Nenhuma alternativa instalada/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Comparar rotas" })).toBeNull();
+  });
+
+  it("só ativa o WARP depois de confirmar os termos", async () => {
+    const unregistered: NetRoute = { ...warp, controllable: false, note: "ativar" };
+    vi.mocked(api.netRoutesPage).mockResolvedValue(page({ routes: [unregistered] }));
+    vi.mocked(api.netWarpRegister).mockResolvedValue(page());
+    render(<Routes targets={targets} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Ativar WARP" }));
+    expect(api.netWarpRegister).not.toHaveBeenCalled();
+    expect(screen.getByText(/Termos de Serviço da Cloudflare/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Ativar" }));
+    await waitFor(() => expect(api.netWarpRegister).toHaveBeenCalledTimes(1));
+  });
+
+  it("cria o túnel WireGuard do WARP só depois de confirmar", async () => {
+    vi.mocked(api.netRoutesPage).mockResolvedValue(page());
+    vi.mocked(api.netWarpTunnelCreate).mockResolvedValue(
+      page({ tunnels: [{ name: "warp", address: "172.16.0.2/32", endpoint: "x:2408" }] }),
+    );
+    render(<Routes targets={targets} />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Criar túnel WireGuard do WARP" }),
+    );
+    expect(api.netWarpTunnelCreate).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Criar túnel" }));
+    await waitFor(() => expect(api.netWarpTunnelCreate).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByRole("button", { name: "Criar túnel WireGuard do WARP" }),
+    ).not.toBeInTheDocument();
   });
 });
