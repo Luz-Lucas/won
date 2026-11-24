@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build && cargo build --release -p sentinela -p sentinela-desktop && node scripts/copy-cli.mjs",
+    "beforeBuildCommand": "npm run build && cargo build --release -p sentinela -p sentinela-desktop -p sentinela-mods && node scripts/copy-cli.mjs",
     "frontendDist": "../dist"
   },
   "app": {

@@ -17,6 +17,7 @@ import Historico from "./pages/Historico";
 import Inicio from "./pages/Inicio";
 import Jogos from "./pages/Jogos";
 import Limpeza from "./pages/Limpeza";
+import Mods from "./pages/Mods";
 import Personalizar from "./pages/Personalizar";
 import Rede from "./pages/Rede";
 import Quarentena from "./pages/Quarentena";
@@ -125,6 +126,7 @@ function Shell() {
         )}
         {page === "jogos" && <Jogos />}
         {page === "limpeza" && <Limpeza />}
+        {page === "mods" && <Mods />}
         {page === "aplicativos" && <Aplicativos />}
         {page === "personalizar" && <Personalizar />}
         {page === "rede" && <Rede />}

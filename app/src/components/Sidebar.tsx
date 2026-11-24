@@ -12,7 +12,8 @@ export type Page =
   | "quarentena"
   | "disco"
   | "historico"
-  | "ajustes";
+  | "ajustes"
+  | "mods";
 
 const ITEMS: { page: Page; label: string }[] = [
   { page: "inicio", label: "Início" },
@@ -26,6 +27,7 @@ const ITEMS: { page: Page; label: string }[] = [
   { page: "disco", label: "Disco" },
   { page: "historico", label: "Histórico" },
   { page: "ajustes", label: "Ajustes" },
+  { page: "mods", label: "Mods" },
 ];
 
 interface SidebarProps {

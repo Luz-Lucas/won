@@ -1037,3 +1037,34 @@ export interface GameSession {
 export const gameSessionStatus = () => invoke<GameSession | null>("game_session_status");
 export const gameSessionStart = () => invoke<GameSession>("game_session_start");
 export const gameSessionEnd = () => invoke<void>("game_session_end");
+
+export interface ModLoaded {
+  mod_name: string;
+  pid: number;
+  process: string;
+  dll: string;
+}
+
+export interface ModItem {
+  name: string;
+  dll: string;
+  targets: string[];
+  enabled: boolean;
+  dll_exists: boolean;
+  loaded: ModLoaded[];
+}
+
+export interface ModsStatus {
+  installed: boolean;
+  mods: ModItem[];
+  anticheat_running: boolean;
+  registry_path: string;
+  recovery_path: string | null;
+  registry_error: string | null;
+}
+
+export const modsStatus = () => invoke<ModsStatus>("mods_status");
+export const modsInject = (name: string) => invoke<number>("mods_inject", { name });
+export const modsEject = (name: string) => invoke<number>("mods_eject", { name });
+export const modsEjectAll = () => invoke<number>("mods_eject_all");
+export const modsRecoveryWrite = () => invoke<string>("mods_recovery_write");

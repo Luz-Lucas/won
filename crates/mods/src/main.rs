@@ -19,6 +19,11 @@ enum Cmd {
     Eject { name: String },
     /// Descarrega todos os mods
     EjectAll,
+    /// Resolve símbolos públicos de um módulo do Windows (baixa o PDB oficial se preciso)
+    Symbols {
+        module: std::path::PathBuf,
+        names: Vec<String>,
+    },
     /// Grava o script de recuperação e mostra o caminho
     Recovery,
 }
@@ -45,11 +50,17 @@ fn main() -> Result<()> {
             let Some(m) = reg.find(&name) else {
                 bail!("mod {name} não cadastrado")
             };
-            let done = inject_mod(&dir, m)?;
+            let done = inject_mod(&dir, &std::env::current_exe()?, m)?;
             println!("{} carregamento(s)", done.len());
         }
         Cmd::Eject { name } => println!("{} descarregado(s)", eject(&dir, Some(&name))?),
         Cmd::EjectAll => println!("{} descarregado(s)", eject(&dir, None)?),
+        Cmd::Symbols { module, names } => {
+            let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+            for (name, rva) in sentinela_mods::symbols::resolve_module(&dir, &module, &refs)? {
+                println!("{name} = 0x{rva:X}");
+            }
+        }
         Cmd::Recovery => println!(
             "{}",
             recovery::write(&std::env::current_exe()?, &dir)?.display()

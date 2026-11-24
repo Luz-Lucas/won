@@ -5,6 +5,7 @@ pub mod inject;
 pub mod policy;
 pub mod recovery;
 pub mod registry;
+pub mod symbols;
 
 use anyhow::{Result, bail};
 use registry::{Injection, Mod};
@@ -12,7 +13,8 @@ use std::path::Path;
 use sysinfo::System;
 
 /// Carrega o mod em todos os processos permitidos que estiverem rodando.
-pub fn inject_mod(dir: &Path, m: &Mod) -> Result<Vec<Injection>> {
+/// `exe` é o `sentinela-mods.exe` que o script de recuperação chamará.
+pub fn inject_mod(dir: &Path, exe: &Path, m: &Mod) -> Result<Vec<Injection>> {
     if !m.enabled {
         bail!("o mod {} está desativado", m.name);
     }
@@ -28,7 +30,7 @@ pub fn inject_mod(dir: &Path, m: &Mod) -> Result<Vec<Injection>> {
         bail!("há um anticheat em execução; nenhum mod é carregado enquanto ele estiver aberto");
     }
     // O script de recuperação existe antes de qualquer carregamento.
-    recovery::write(&std::env::current_exe()?, dir)?;
+    recovery::write(exe, dir)?;
     let mut state = registry::load_state(dir);
     let mut done = Vec::new();
     for p in sys.processes().values() {
