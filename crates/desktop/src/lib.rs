@@ -6,9 +6,13 @@ pub mod bar;
 pub mod config;
 pub mod keys;
 pub mod rules;
+pub mod tiling;
 
 #[cfg(windows)]
 pub mod win;
 
 #[cfg(windows)]
 pub mod winbar;
+
+#[cfg(windows)]
+pub mod wintile;

@@ -4,6 +4,7 @@
 use crate::bar::{self, BarConfig, Edge, Module};
 use crate::keys::{self, Combo};
 use crate::rules::{Backdrop, Corners, Effects, Rule};
+use crate::tiling::{self, Layout, TilingConfig};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -25,6 +26,14 @@ pub enum Action {
     OpacityDown,
     Center,
     ToggleMaximize,
+    TileToggle,
+    TileNextLayout,
+    FocusNext,
+    FocusPrev,
+    SwapMaster,
+    ToggleFloat,
+    MasterGrow,
+    MasterShrink,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,12 +51,14 @@ pub struct Borders {
     pub inactive: Option<Rgb>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Config {
     pub hotkeys: Vec<Hotkey>,
     pub rules: Vec<Rule>,
     pub borders: Borders,
     pub bar: Option<BarConfig>,
+    /// Presente = tiling ligado ao iniciar (`[tiling]`).
+    pub tiling: Option<TilingConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +70,7 @@ struct RawFile {
     rule: Vec<RawRule>,
     borders: Option<RawBorders>,
     bar: Option<RawBar>,
+    tiling: Option<RawTiling>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,8 +93,25 @@ struct RawRule {
     opacity: Option<u8>,
     #[serde(default)]
     no_titlebar: bool,
+    #[serde(default)]
+    float: bool,
     corners: Option<Corners>,
     backdrop: Option<Backdrop>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTiling {
+    #[serde(default = "yes")]
+    enabled: bool,
+    layout: Option<Layout>,
+    gap: Option<u32>,
+    outer_gap: Option<u32>,
+    master_ratio: Option<f32>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize)]
@@ -149,8 +178,42 @@ fn action(h: &RawHotkey) -> Result<Action, String> {
         "opacity-down" => named(Action::OpacityDown),
         "center" => named(Action::Center),
         "toggle-maximize" => named(Action::ToggleMaximize),
+        "tile-toggle" => named(Action::TileToggle),
+        "tile-next-layout" => named(Action::TileNextLayout),
+        "focus-next" => named(Action::FocusNext),
+        "focus-prev" => named(Action::FocusPrev),
+        "swap-master" => named(Action::SwapMaster),
+        "toggle-float" => named(Action::ToggleFloat),
+        "master-grow" => named(Action::MasterGrow),
+        "master-shrink" => named(Action::MasterShrink),
         other => Err(format!("ação desconhecida \"{other}\"")),
     }
+}
+
+fn parse_tiling(t: &RawTiling, errors: &mut Vec<String>) -> Option<TilingConfig> {
+    if !t.enabled {
+        return None;
+    }
+    let before = errors.len();
+    let gap = t.gap.unwrap_or(8);
+    let outer_gap = t.outer_gap.unwrap_or(8);
+    if gap > 100 || outer_gap > 100 {
+        errors.push("tiling: gap e outer_gap vão de 0 a 100".into());
+    }
+    let master_ratio = t.master_ratio.unwrap_or(0.55);
+    if !(tiling::MIN_RATIO..=tiling::MAX_RATIO).contains(&master_ratio) {
+        errors.push(format!(
+            "tiling: master_ratio deve ficar entre {} e {}",
+            tiling::MIN_RATIO,
+            tiling::MAX_RATIO
+        ));
+    }
+    (errors.len() == before).then_some(TilingConfig {
+        layout: t.layout.unwrap_or(Layout::MasterStack),
+        gap,
+        outer_gap,
+        master_ratio,
+    })
 }
 
 fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
@@ -268,6 +331,7 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
             topmost: r.topmost,
             opacity: r.opacity,
             no_titlebar: r.no_titlebar,
+            float: r.float,
             corners: r.corners,
             backdrop: r.backdrop,
         };
@@ -298,6 +362,10 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
     }
 
     let bar = raw.bar.as_ref().and_then(|b| parse_bar(b, &mut errors));
+    let tiling = raw
+        .tiling
+        .as_ref()
+        .and_then(|t| parse_tiling(t, &mut errors));
 
     if errors.is_empty() {
         Ok(Config {
@@ -305,6 +373,7 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
             rules,
             borders,
             bar,
+            tiling,
         })
     } else {
         Err(errors)
@@ -424,6 +493,15 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # active = "#0A84FF"
 # inactive = "#3A3A3C"
 
+# Tiling: organiza as janelas sem sobreposição (janelas de tamanho fixo e as com float = true ficam soltas).
+# [tiling]
+# layout = "master-stack"      # master-stack, columns, grid, monocle
+# gap = 8
+# outer_gap = 8
+# master_ratio = 0.55          # 0,2 a 0,8
+# Ações de atalho do tiling: tile-toggle, tile-next-layout, focus-next, focus-prev,
+# swap-master, toggle-float, master-grow, master-shrink.
+
 # Barra própria (fica ocupando a borda; janelas maximizadas não passam por baixo dela).
 # [bar]
 # edge = "top"                 # top ou bottom
@@ -461,6 +539,25 @@ mod tests {
         assert_eq!(c.rules.len(), 1);
         assert!(c.borders.active.is_some());
         assert!(c.bar.is_some());
+    }
+
+    #[test]
+    fn tiling_section_and_actions() {
+        let c = parse(
+            "[tiling]\nlayout=\"grid\"\ngap=4\n[[hotkey]]\nkeys=\"Win+J\"\naction=\"focus-next\"\n[[rule]]\nexe=\"a.exe\"\nfloat=true\n",
+        )
+        .unwrap();
+        let t = c.tiling.unwrap();
+        assert_eq!((t.layout, t.gap, t.outer_gap), (Layout::Grid, 4, 8));
+        assert_eq!(c.hotkeys[0].action, Action::FocusNext);
+        assert!(c.rules[0].effects.float);
+        assert!(parse("[tiling]\nenabled=false\n").unwrap().tiling.is_none());
+        assert!(parse("[tiling]\nmaster_ratio=0.95\n").is_err());
+        assert!(parse("[tiling]\ngap=500\n").is_err());
+        assert!(parse("[tiling]\nlayout=\"spiral\"\n").is_err());
+        assert!(
+            parse("[[hotkey]]\nkeys=\"Win+J\"\naction=\"focus-next\"\ncommand=\"x\"\n").is_err()
+        );
     }
 
     #[test]

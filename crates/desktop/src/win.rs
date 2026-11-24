@@ -8,6 +8,7 @@ use crate::config::{Action, Borders, Loader, Reload, Rgb, default_path};
 use crate::keys::EMERGENCY;
 use crate::rules::{self, Backdrop, Corners, Effects, Rect, WindowInfo};
 use crate::winbar;
+use crate::wintile::Tiler;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -27,13 +28,14 @@ use windows_sys::Win32::System::Threading::{
 use windows_sys::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, EnumWindows, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, GetClassNameW,
-    GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW, GetWindowRect, GetWindowTextW,
-    GetWindowThreadProcessId, HWND_NOTOPMOST, HWND_TOPMOST, IsWindow, IsWindowVisible, IsZoomed,
-    KillTimer, LWA_ALPHA, MSG, PostQuitMessage, SW_MAXIMIZE, SW_RESTORE, SWP_FRAMECHANGED,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetLayeredWindowAttributes, SetTimer,
-    SetWindowLongW, SetWindowPos, ShowWindow, TranslateMessage, WM_HOTKEY, WM_TIMER, WS_CAPTION,
-    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    DispatchMessageW, EnumWindows, GA_ROOT, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, GetAncestor,
+    GetClassNameW, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW, GetWindowRect,
+    GetWindowTextW, GetWindowThreadProcessId, HWND_NOTOPMOST, HWND_TOPMOST, IsWindow,
+    IsWindowVisible, IsZoomed, KillTimer, LWA_ALPHA, MSG, PostQuitMessage, SW_MAXIMIZE, SW_RESTORE,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    SetLayeredWindowAttributes, SetTimer, SetWindowLongW, SetWindowPos, ShowWindow,
+    TranslateMessage, WM_HOTKEY, WM_TIMER, WS_CAPTION, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST,
 };
 
 const MUTEX_NAME: &str = "Local\\SentinelaDesktop";
@@ -46,7 +48,11 @@ const TICK_MS: u32 = 1000;
 
 const WINEVENT_OUTOFCONTEXT: u32 = 0;
 const EVENT_SYSTEM_FOREGROUND: u32 = 0x0003;
+const EVENT_SYSTEM_MINIMIZESTART: u32 = 0x0016;
+const EVENT_SYSTEM_MINIMIZEEND: u32 = 0x0017;
+const EVENT_OBJECT_DESTROY: u32 = 0x8001;
 const EVENT_OBJECT_SHOW: u32 = 0x8002;
+const EVENT_OBJECT_HIDE: u32 = 0x8003;
 const OBJID_WINDOW: i32 = 0;
 
 const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
@@ -79,6 +85,7 @@ struct State {
     registered: Vec<(i32, Action)>,
     hooks: Vec<HWINEVENTHOOK>,
     stop: HANDLE,
+    tiler: Tiler,
 }
 
 thread_local! {
@@ -96,7 +103,7 @@ fn colorref(c: Rgb) -> u32 {
     u32::from(c.0) | (u32::from(c.1) << 8) | (u32::from(c.2) << 16)
 }
 
-fn window_info(hwnd: HWND) -> Option<WindowInfo> {
+pub(crate) fn window_info(hwnd: HWND) -> Option<WindowInfo> {
     unsafe {
         let mut buf = [0u16; 512];
         let n = GetClassNameW(hwnd, buf.as_mut_ptr(), 512);
@@ -393,6 +400,10 @@ unsafe extern "system" fn on_event(
     if hwnd.is_null() || id_object != OBJID_WINDOW || id_child != 0 {
         return;
     }
+    // Só janelas de topo: controles internos geram eventos o tempo todo.
+    if unsafe { GetAncestor(hwnd, GA_ROOT) } != hwnd {
+        return;
+    }
     with_state(|st| {
         if event == EVENT_OBJECT_SHOW {
             consider(st, hwnd);
@@ -401,6 +412,8 @@ unsafe extern "system" fn on_event(
             paint_borders(st, hwnd);
             winbar::tick(is_fullscreen(hwnd));
         }
+        let rules = st.loader.config().rules.clone();
+        st.tiler.retile(&rules);
     });
 }
 
@@ -429,6 +442,21 @@ fn register_hotkeys(st: &mut State) {
 fn do_action(st: &mut State, action: &Action) {
     if let Action::Run { command, args } = action {
         let _ = std::process::Command::new(command).args(args).spawn();
+        return;
+    }
+    if matches!(
+        action,
+        Action::TileToggle
+            | Action::TileNextLayout
+            | Action::FocusNext
+            | Action::FocusPrev
+            | Action::SwapMaster
+            | Action::ToggleFloat
+            | Action::MasterGrow
+            | Action::MasterShrink
+    ) {
+        let rules = st.loader.config().rules.clone();
+        st.tiler.action(action, &rules);
         return;
     }
     // Em jogo (janela cobrindo o monitor) nada mexe em janela.
@@ -499,7 +527,7 @@ fn do_action(st: &mut State, action: &Action) {
                     },
                 );
             }
-            Action::Run { .. } => {}
+            _ => {}
         }
     }
 }
@@ -514,6 +542,8 @@ fn reload(st: &mut State) {
             let fg = unsafe { GetForegroundWindow() };
             paint_borders(st, fg);
             winbar::apply(st.loader.config().bar.as_ref());
+            let cfg = st.loader.config().clone();
+            st.tiler.configure(cfg.tiling.as_ref(), &cfg.rules);
         }
         Reload::Unchanged | Reload::Rejected(_) => {}
     }
@@ -521,6 +551,7 @@ fn reload(st: &mut State) {
 
 fn shutdown(st: &mut State) {
     restore_all(st);
+    st.tiler.disable();
     winbar::destroy();
     for (id, _) in st.registered.drain(..) {
         unsafe { UnregisterHotKey(std::ptr::null_mut(), id) };
@@ -587,6 +618,7 @@ pub fn run() {
                 registered: Vec::new(),
                 hooks: Vec::new(),
                 stop,
+                tiler: Tiler::new(),
             });
         });
 
@@ -599,10 +631,14 @@ pub fn run() {
         );
 
         with_state(|st| {
-            for event in [EVENT_SYSTEM_FOREGROUND, EVENT_OBJECT_SHOW] {
+            for (lo, hi) in [
+                (EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND),
+                (EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND),
+                (EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE),
+            ] {
                 let h = SetWinEventHook(
-                    event,
-                    event,
+                    lo,
+                    hi,
                     std::ptr::null_mut(),
                     Some(on_event),
                     0,
@@ -640,6 +676,8 @@ pub fn run() {
                         reload(st);
                         let fg = GetForegroundWindow();
                         winbar::tick(!fg.is_null() && is_fullscreen(fg));
+                        let rules = st.loader.config().rules.clone();
+                        st.tiler.retile(&rules);
                     }
                 }),
                 _ => {

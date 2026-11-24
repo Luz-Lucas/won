@@ -35,6 +35,8 @@ pub struct Effects {
     /// 20 a 100 (%).
     pub opacity: Option<u8>,
     pub no_titlebar: bool,
+    /// Fora do tiling (flutua).
+    pub float: bool,
     pub corners: Option<Corners>,
     pub backdrop: Option<Backdrop>,
 }
@@ -49,6 +51,7 @@ impl Effects {
         self.topmost = o.topmost.or(self.topmost);
         self.opacity = o.opacity.or(self.opacity);
         self.no_titlebar |= o.no_titlebar;
+        self.float |= o.float;
         self.corners = o.corners.or(self.corners);
         self.backdrop = o.backdrop.or(self.backdrop);
     }
