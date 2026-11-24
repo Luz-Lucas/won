@@ -82,3 +82,20 @@ não está instalado e não é scriptável por uma sessão automatizada) para ac
 real, não apenas do PDB. Não tentei chutar o `this`, porque isso é exatamente o tipo de hook que o
 `may_enable` do shell foi desenhado para recusar (`SymbolsMissing` cobre o endereço da função; não
 cobre, e não poderia cobrir, "ponteiro de instância certo").
+
+## Fase 14 aplicada no disco (PC de testes do Lucas, com o risco aceito por ele)
+Patch real aplicado em `C:\Windows\System32\uxtheme.dll` (não cópia, não injeção): `CThemeSignature::Verify`
+(RVA 0x624BC, ver acima) teve o prólogo trocado por `xor eax,eax; ret` (sempre "assinatura válida").
+Passos tomados, nessa ordem:
+1. Backup dos originais com hash em `%LOCALAPPDATA%\Sentinela\mods\backup-sistema\*.original`.
+2. Ponto de restauração nº 216 ("Sentinela fase 14: antes do patch de uxtheme.dll").
+3. Verifiquei que esta máquina não tem Memory Integrity/HVCI ativo (`Win32_DeviceGuard`), o que reduz
+   bastante o risco de o Windows recusar carregar o arquivo modificado por integridade de código.
+4. `takeown` + `icacls` para tomar posse do arquivo (protegido por TrustedInstaller).
+5. Escrita no arquivo não foi direta (o DLL estava em uso): gravei a versão nova num arquivo temporário
+   e troquei por `Move-Item` (renomear por cima funciona mesmo com o DLL mapeado; processos que já tinham
+   o arquivo aberto continuam com a versão antiga até reiniciarem).
+6. Confirmei os bytes gravados e reiniciei o Explorer: subiu normal com o arquivo novo já carregado.
+
+**Ainda não testado:** sobrevivência a um reboot completo (login). Isso só um reboot real confirma.
+`%LOCALAPPDATA%\Sentinela\mods\backup-sistema\uxtheme.dll.original` + ponto nº 216 desfazem se algo falhar.
