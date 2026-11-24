@@ -4952,6 +4952,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sentinela-mod-test"
+version = "0.1.0"
+
+[[package]]
+name = "sentinela-mods"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs 7.0.0",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "toml 1.2.2+spec-1.1.0",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"

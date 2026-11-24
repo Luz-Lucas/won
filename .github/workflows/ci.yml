@@ -33,4 +33,5 @@ jobs:
           npm run build
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo build -p sentinela-mod-test
       - run: cargo test --workspace
