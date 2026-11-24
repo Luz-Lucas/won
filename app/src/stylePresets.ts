@@ -24,6 +24,26 @@ const GUIDE = "ramensoftware/windows-11-taskbar-styling-guide";
 
 export const STYLE_PRESETS: StylePreset[] = [
   {
+    id: "guide-ultrawide-friendly",
+    name: "Duas ilhas (UltraWideFriendly)",
+    repo: GUIDE,
+    credit: "tema UltraWideFriendly, de CryptoProgenitor",
+    approx: true,
+    note: "Barra nativa em duas ilhas: uma atrás dos apps (acompanha a largura dos ícones) e outra atrás da bandeja e do relógio. Feita com o fundo e a borda da barra, sem o layout em colunas do original.",
+    style: {
+      fill: "#202020",
+      alpha: 0xf0,
+      radius: 10,
+      margin: [0, 0, 0, 0],
+      hideBorder: false,
+      islands: true,
+      islandPad: 14,
+      islandTrayPad: 10,
+      islandV: 4,
+      islandEdge: 8,
+    },
+  },
+  {
     id: "guide-translucent",
     name: "Translucent Taskbar",
     repo: GUIDE,

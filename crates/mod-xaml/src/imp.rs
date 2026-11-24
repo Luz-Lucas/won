@@ -109,6 +109,58 @@ unsafe impl Send for Tracked {}
 static TRACKED: Mutex<Vec<Tracked>> = Mutex::new(Vec::new());
 static MODULE: OnceLock<usize> = OnceLock::new();
 
+/// Elementos medidos para as ilhas (só lidos na thread de UI).
+struct Measured(FrameworkElement);
+unsafe impl Send for Measured {}
+static REPEATER: Mutex<Option<Measured>> = Mutex::new(None);
+static TRAY: Mutex<Option<Measured>> = Mutex::new(None);
+
+fn width_of(fe: &FrameworkElement) -> f64 {
+    fe.ActualWidth().unwrap_or(0.0)
+}
+
+/// Largura total da barra: a do primeiro ancestral já medido.
+fn bar_width(fe: &FrameworkElement) -> f64 {
+    let mut cur = fe.clone();
+    for _ in 0..6 {
+        let Ok(p) = VisualTreeHelper::GetParent(&cur) else { break };
+        let Ok(pf) = p.cast::<FrameworkElement>() else { break };
+        let w = width_of(&pf);
+        if w > 0.0 {
+            return w;
+        }
+        cur = pf;
+    }
+    0.0
+}
+
+/// Margens das duas ilhas a partir do que está na tela agora. `None` = ainda sem medidas.
+fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Thickness> {
+    let total = bar_width(fe);
+    if total <= 0.0 {
+        return None;
+    }
+    if is_tray {
+        let tray = TRAY.lock().unwrap();
+        let w = width_of(&tray.as_ref()?.0);
+        if w <= 0.0 {
+            return None;
+        }
+        let left = (total - st.island_edge - w - 2.0 * st.island_tray_pad).max(0.0);
+        return Some(Thickness { Left: left, Top: st.island_v, Right: st.island_edge, Bottom: st.island_v });
+    }
+    let rep = REPEATER.lock().unwrap();
+    let rep = &rep.as_ref()?.0;
+    let w = width_of(rep);
+    if w <= 0.0 {
+        return None;
+    }
+    let x = rep.cast::<UIElement>().ok()?.ActualOffset().ok()?.X as f64;
+    let left = (x - st.island_pad).max(0.0);
+    let right = (total - x - w - st.island_pad).max(0.0);
+    Some(Thickness { Left: left, Top: st.island_v, Right: right, Bottom: st.island_v })
+}
+
 fn mods_dir() -> Option<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("SENTINELA_MODS_DIR") {
         return Some(d.into());
@@ -139,7 +191,17 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
                 opacity: ui.Opacity()?,
             });
         }
-        if t.is_border {
+        if st.islands {
+            let (a, r, g, b) = st.fill;
+            let brush = SolidColorBrush::CreateInstanceWithColor(Color { A: a, R: r, G: g, B: b })?;
+            shape.SetFill(&brush.cast::<Brush>()?)?;
+            t.rect.SetRadiusX(st.radius)?;
+            t.rect.SetRadiusY(st.radius)?;
+            ui.SetOpacity(1.0)?;
+            if let Some(m) = island_margins(&fe, t.is_border, st) {
+                fe.SetMargin(m)?;
+            }
+        } else if t.is_border {
             ui.SetOpacity(if st.hide_border { 0.0 } else { t.orig.as_ref().unwrap().opacity })?;
         } else {
             let (a, r, g, b) = st.fill;
@@ -162,15 +224,16 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
     } else if let Some(o) = t.orig.take() {
         if t.is_border {
             ui.SetOpacity(o.opacity)?;
-        } else {
-            match &o.fill {
-                Some(f) => shape.SetFill(f)?,
-                None => {}
-            }
-            fe.SetMargin(o.margin)?;
-            t.rect.SetRadiusX(o.rx)?;
-            t.rect.SetRadiusY(o.ry)?;
         }
+        // Restaura tudo (as ilhas também mexem no traço), inclusive o "sem preenchimento".
+        match &o.fill {
+            Some(f) => shape.SetFill(f)?,
+            None => shape.SetFill(None::<&Brush>)?,
+        }
+        fe.SetMargin(o.margin)?;
+        t.rect.SetRadiusX(o.rx)?;
+        t.rect.SetRadiusY(o.ry)?;
+        ui.SetOpacity(o.opacity)?;
     }
     Ok(())
 }
@@ -252,6 +315,18 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             START.lock().unwrap().push(t);
             return S_OK;
         }
+        if name == "TaskbarFrameRepeater" || ty.ends_with("SystemTray.SystemTrayFrame") {
+            let mut raw: *mut c_void = std::ptr::null_mut();
+            if unsafe { self.diag.GetIInspectableFromHandle(element.handle, &mut raw) }.is_ok() && !raw.is_null() {
+                let insp: windows::core::IInspectable = unsafe { windows::core::IInspectable::from_raw(raw) };
+                if let Ok(fe) = insp.cast::<FrameworkElement>() {
+                    let slot = if name == "TaskbarFrameRepeater" { &REPEATER } else { &TRAY };
+                    log(&format!("medindo {ty} #{name}"));
+                    *slot.lock().unwrap() = Some(Measured(fe));
+                }
+            }
+            return S_OK;
+        }
         if ty != "Windows.UI.Xaml.Shapes.Rectangle" || !(name == "BackgroundFill" || name == "BackgroundStroke") {
             return S_OK;
         }
@@ -314,7 +389,8 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                 loop {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     let now = want_on();
-                    if last.as_ref() != Some(&now) {
+                    // Com ilhas, reaplica sempre: elas seguem a largura dos apps abertos.
+                    if last.as_ref() != Some(&now) || (now.0 && now.1.islands) {
                         apply_all(now.0, now.1.clone());
                         last = Some(now);
                     }

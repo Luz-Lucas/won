@@ -119,7 +119,7 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
                 onChange={(e) => {
                   const p = STYLE_PRESETS.find((x) => x.id === e.target.value);
                   if (p) {
-                    set({ startFill: null, startRadius: null, ...p.style });
+                    set({ startFill: null, startRadius: null, islands: false, ...p.style });
                     setPicked(p.id);
                   }
                 }}
@@ -197,6 +197,50 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
               />{" "}
               Esconder a borda de cima
             </label>
+          </div>
+          <div className="row">
+            <label>
+              <input
+                type="checkbox"
+                checked={style.islands}
+                onChange={(e) => set({ islands: e.target.checked })}
+              />{" "}
+              Duas ilhas na barra do Windows (apps e bandeja separados)
+            </label>
+            {style.islands && (
+              <>
+                <label>
+                  Folga dos apps{" "}
+                  <input
+                    type="range"
+                    min={0}
+                    max={40}
+                    value={style.islandPad}
+                    onChange={(e) => set({ islandPad: Number(e.target.value) })}
+                  />
+                </label>
+                <label>
+                  Folga da bandeja{" "}
+                  <input
+                    type="range"
+                    min={0}
+                    max={40}
+                    value={style.islandTrayPad}
+                    onChange={(e) => set({ islandTrayPad: Number(e.target.value) })}
+                  />
+                </label>
+                <label>
+                  Flutuar{" "}
+                  <input
+                    type="range"
+                    min={0}
+                    max={20}
+                    value={style.islandV}
+                    onChange={(e) => set({ islandV: Number(e.target.value) })}
+                  />
+                </label>
+              </>
+            )}
           </div>
           <div className="row">
             <label>

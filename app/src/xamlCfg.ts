@@ -9,6 +9,12 @@ export interface XamlStyle {
   startFill: string | null; // #RRGGBB ou null = não mexe
   startAlpha: number;
   startRadius: number | null;
+  /** Duas ilhas na barra nativa (apps + bandeja). Usa a cor e o raio acima. */
+  islands: boolean;
+  islandPad: number;
+  islandTrayPad: number;
+  islandV: number;
+  islandEdge: number;
 }
 
 export const DEFAULT_XAML: XamlStyle = {
@@ -20,6 +26,11 @@ export const DEFAULT_XAML: XamlStyle = {
   startFill: null,
   startAlpha: 230,
   startRadius: null,
+  islands: false,
+  islandPad: 14,
+  islandTrayPad: 10,
+  islandV: 4,
+  islandEdge: 8,
 };
 
 const hex2 = (n: number) =>
@@ -67,6 +78,13 @@ export function parseXamlCfg(text: string): XamlStyle {
         s.startFill = c.rgb;
         s.startAlpha = c.a;
       }
+    } else if (k === "islands") {
+      s.islands = v === "true" || v === "1";
+    } else if (k === "island_pad" || k === "island_tray_pad" || k === "island_v" || k === "island_edge") {
+      const n = Number(v);
+      const key = { island_pad: "islandPad", island_tray_pad: "islandTrayPad", island_v: "islandV", island_edge: "islandEdge" }[k] as
+        | "islandPad" | "islandTrayPad" | "islandV" | "islandEdge";
+      if (Number.isFinite(n)) s[key] = Math.max(0, Math.min(200, n));
     } else if (k === "start_radius") {
       const n = Number(v);
       if (Number.isFinite(n)) s.startRadius = Math.max(0, Math.min(60, n));
@@ -85,6 +103,10 @@ export function buildXamlCfg(s: XamlStyle): string {
     `margin=${s.margin.join(",")}`,
     `hide_border=${s.hideBorder}`,
   ];
+  if (s.islands) {
+    lines.push("islands=true", `island_pad=${s.islandPad}`, `island_tray_pad=${s.islandTrayPad}`);
+    lines.push(`island_v=${s.islandV}`, `island_edge=${s.islandEdge}`);
+  }
   if (s.startFill) lines.push(`start_fill=${argb(s.startFill, s.startAlpha)}`);
   if (s.startRadius !== null) lines.push(`start_radius=${s.startRadius}`);
   return lines.join("\n") + "\n";

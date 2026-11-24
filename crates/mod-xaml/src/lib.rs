@@ -28,6 +28,17 @@ pub struct Style {
     /// Menu Iniciar (mod 7): cor do painel, ARGB, e raio dos cantos; `None` não mexe.
     pub start_fill: Option<(u8, u8, u8, u8)>,
     pub start_radius: Option<f64>,
+    /// Duas ilhas na barra nativa: uma atrás dos apps (largura acompanha os ícones) e outra atrás
+    /// da bandeja/relógio. Usa `fill` e `radius` para as duas.
+    pub islands: bool,
+    /// Folga lateral da ilha dos apps, em volta dos ícones.
+    pub island_pad: f64,
+    /// Folga lateral da ilha da bandeja.
+    pub island_tray_pad: f64,
+    /// Margem de cima e de baixo (as ilhas "flutuam").
+    pub island_v: f64,
+    /// Distância da ilha da bandeja até a borda direita da tela.
+    pub island_edge: f64,
 }
 
 impl Default for Style {
@@ -40,6 +51,11 @@ impl Default for Style {
             hide_border: false,
             start_fill: None,
             start_radius: None,
+            islands: false,
+            island_pad: 14.0,
+            island_tray_pad: 10.0,
+            island_v: 4.0,
+            island_edge: 8.0,
         }
     }
 }
@@ -95,6 +111,13 @@ pub fn parse_style(text: &str) -> Style {
             "hide_border" => st.hide_border = v == "true" || v == "1",
             "start_fill" => st.start_fill = parse_color(v),
             "start_radius" => st.start_radius = v.parse::<f64>().ok().map(|r| r.clamp(0.0, 60.0)),
+            "islands" => st.islands = v == "true" || v == "1",
+            "island_pad" => st.island_pad = v.parse::<f64>().map_or(st.island_pad, |x| x.clamp(0.0, 80.0)),
+            "island_tray_pad" => {
+                st.island_tray_pad = v.parse::<f64>().map_or(st.island_tray_pad, |x| x.clamp(0.0, 80.0))
+            }
+            "island_v" => st.island_v = v.parse::<f64>().map_or(st.island_v, |x| x.clamp(0.0, 30.0)),
+            "island_edge" => st.island_edge = v.parse::<f64>().map_or(st.island_edge, |x| x.clamp(0.0, 200.0)),
             _ => {}
         }
     }
@@ -144,6 +167,11 @@ start_radius=20");
         assert_eq!(s.start_fill, Some((0xCC, 0x10, 0x10, 0x18)));
         assert_eq!(s.start_radius, Some(20.0));
         assert_eq!(Style::default().start_fill, None);
+        let i = parse_style("islands=true\nisland_pad=20\nisland_v=99");
+        assert!(i.islands);
+        assert_eq!(i.island_pad, 20.0);
+        assert_eq!(i.island_v, 30.0);
+        assert!(!Style::default().islands);
     }
 
     #[test]
