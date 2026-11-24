@@ -70,7 +70,7 @@ describe("Desktop em Personalizar", () => {
     render(<Personalizar />);
     await screen.findByRole("button", { name: "Temas" });
     await waitFor(() => expect(m.desktopStatus).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: "Desktop" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Desktop" })).toBeDisabled();
   });
 
   it("start_and_stop", async () => {

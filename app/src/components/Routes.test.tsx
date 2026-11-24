@@ -172,16 +172,12 @@ describe("Routes", () => {
     await waitFor(() => expect(box).toBeChecked());
   });
 
-  it("imports a tunnel with a name", async () => {
-    vi.mocked(api.netTunnelImport).mockResolvedValue(page());
-    openDialog.mockResolvedValue("C:\\Users\\x\\vps.conf");
+  it("offers no manual tunnel import", async () => {
     render(<Routes targets={targets} />);
-    await userEvent.click(await screen.findByRole("button", { name: "Importar .conf…" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Dê um nome ao túnel");
-    expect(openDialog).not.toHaveBeenCalled();
-    await userEvent.type(screen.getByLabelText("Nome do túnel"), "vps-sp");
-    await userEvent.click(screen.getByRole("button", { name: "Importar .conf…" }));
-    expect(api.netTunnelImport).toHaveBeenCalledWith("vps-sp", "C:\\Users\\x\\vps.conf");
+    await screen.findByRole("heading", { name: "Rotas alternativas" });
+    expect(screen.queryByRole("button", { name: "Importar .conf…" })).toBeNull();
+    expect(screen.queryByLabelText("Nome do túnel")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   it("shows when nothing is installed", async () => {

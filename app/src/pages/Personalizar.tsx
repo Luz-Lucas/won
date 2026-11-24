@@ -25,16 +25,11 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import Desktop from "../components/Desktop";
 import Terminal from "../components/Terminal";
 import Themes from "../components/Themes";
+import StylePreview, { effectiveOn } from "../components/StylePreview";
+import type { Page } from "../components/Sidebar";
 import WallpaperGallery from "../components/WallpaperGallery";
+import { AREA_INFO } from "../components/styleAreas";
 import { useJob } from "../jobs";
-
-const AREAS: { id: TweakArea; label: string }[] = [
-  { id: "barra", label: "Barra de tarefas" },
-  { id: "iniciar", label: "Menu Iniciar" },
-  { id: "explorador", label: "Explorador" },
-  { id: "aparencia", label: "Aparência" },
-  { id: "sistema", label: "Sistema" },
-];
 
 /** Ajustes do grupo Visual que a aba Aparência também mostra. */
 const VISUAL_IN_APPEARANCE = ["transparency-off", "animations-off"];
@@ -97,10 +92,12 @@ type Pending =
 
 const EFFECT_ORDER: TweakEffect[] = ["immediate", "explorer", "relogon", "reboot"];
 
-function Ajustes({ nav }: { nav: React.ReactNode }) {
+function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
   const [data, setData] = useState<TweaksPage | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [tab, setTab] = useState<TweakArea>("barra");
+  // A opção sob o cursor ou o foco: a prévia mostra como ficaria.
+  const [hover, setHover] = useState<string | null>(null);
+  const tab = area;
   const [pending, setPending] = useState<Pending | null>(null);
   const [relaunchError, setRelaunchError] = useState<string | null>(null);
   // O job "tweaks" é compartilhado com Jogos e Histórico: só mostra o
@@ -202,7 +199,14 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
     const external = applied(i) && !i.in_journal;
     const disabled = running || !usable(i) || external;
     return (
-      <li key={t.id} className="clean-row">
+      <li
+        key={t.id}
+        className="clean-row"
+        onMouseEnter={() => setHover(t.id)}
+        onMouseLeave={() => setHover(null)}
+        onFocus={() => setHover(t.id)}
+        onBlur={() => setHover(null)}
+      >
         <div className="clean-head">
           <label className="clean-check">
             <input
@@ -230,9 +234,16 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
       <fieldset className="choice-group">
         <legend>{row.label}</legend>
         {row.options.map((i) => (
-          <label key={i.tweak.id} className="clean-check">
+          <label
+            key={i.tweak.id}
+            className="clean-check"
+            onMouseEnter={() => setHover(i.tweak.id)}
+            onMouseLeave={() => setHover(null)}
+          >
             <input
               type="radio"
+              onFocus={() => setHover(i.tweak.id)}
+              onBlur={() => setHover(null)}
               name={row.id}
               checked={applied(i)}
               disabled={running || !usable(i)}
@@ -294,7 +305,6 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
 
   return (
     <section className="page">
-      <h1>Personalizar</h1>
       {nav}
       {data && !data.hkcu_allowed && <p className="notice">{OTHER_ACCOUNT}</p>}
       {bannerNeeded && (
@@ -368,21 +378,19 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
       )}
       {data && (
         <>
-          <div className="tweak-profiles" role="tablist" aria-label="Áreas">
-            {AREAS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                className="btn"
-                aria-selected={tab === id}
-                onClick={() => setTab(id)}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="style-preview" aria-label="Como vai ficar">
+            <h2>Como vai ficar</h2>
+            <StylePreview
+              area={tab}
+              on={effectiveOn(tabItems, hover)}
+              items={tabItems}
+            />
+            <p className="muted">
+              Ilustração do que esta área muda. Passe o mouse ou o foco sobre uma opção para ver
+              o resultado antes de aplicar.
+            </p>
           </div>
-          <div role="tabpanel" aria-label={AREAS.find((a) => a.id === tab)?.label}>
+          <div role="group" aria-label={AREA_INFO[tab].title}>
             {tabItems.length === 0 && <p className="muted">Nada nesta área.</p>}
             <ul className="clean-list">
               {rowsOf(tabItems).map((row) =>
@@ -410,69 +418,140 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
   );
 }
 
-type Section = "ajustes" | "wallpaper" | "temas" | "terminal" | "desktop";
+type View = "hub" | TweakArea | "wallpaper" | "temas" | "terminal" | "desktop";
 
-/** Ajustes do Windows, papel de parede (só com o Wallpaper Engine) e temas. */
-export default function Personalizar() {
-  const [section, setSection] = useState<Section>("ajustes");
+/** Estilização: um menu de áreas; cada uma com referência, prévia e seus controles. */
+export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page) => void }) {
+  const [view, setView] = useState<View>("hub");
   const [engine, setEngine] = useState<WallpaperStatus | null>(null);
-  // A seção do terminal só aparece quando há PowerShell ou Windows Terminal.
   const [term, setTerm] = useState<TerminalStatus | null>(null);
+  const [desk, setDesk] = useState<DesktopStatus | null>(null);
 
   useEffect(() => {
     wallpaperStatus().then(setEngine, () => setEngine(null));
   }, []);
-
-  const [desk, setDesk] = useState<DesktopStatus | null>(null);
   const loadDesk = useCallback(() => {
     desktopStatus().then(setDesk, () => setDesk(null));
   }, []);
   useEffect(loadDesk, [loadDesk]);
-
   const loadTerm = useCallback(() => {
     terminalStatus().then(setTerm, () => setTerm(null));
   }, []);
   useEffect(loadTerm, [loadTerm]);
 
-  const tabs: { id: Section; label: string }[] = [
-    { id: "ajustes", label: "Ajustes" },
-    ...(engine?.installed ? [{ id: "wallpaper" as const, label: "Papel de parede" }] : []),
-    { id: "temas", label: "Temas" },
-    ...(term && (term.profiles.length > 0 || term.windows_terminal)
-      ? [{ id: "terminal" as const, label: "Terminal" }]
-      : []),
-    ...(desk?.installed ? [{ id: "desktop" as const, label: "Desktop" }] : []),
-  ];
-  // Se o Wallpaper Engine sumir com a aba aberta, volta para os ajustes.
-  const current: Section = tabs.some((t) => t.id === section) ? section : "ajustes";
+  /** Motivo de a área não poder abrir agora; `null` = disponível. */
+  const unavailable = (id: View): string | null => {
+    if (id === "wallpaper") return engine?.installed ? null : "Requer o Wallpaper Engine instalado.";
+    if (id === "terminal")
+      return term && (term.profiles.length > 0 || term.windows_terminal)
+        ? null
+        : "Nenhum PowerShell ou Windows Terminal encontrado.";
+    if (id === "desktop") return desk?.installed ? null : "Componente de desktop não instalado.";
+    return null;
+  };
 
-  const nav = (
-    <nav aria-label="Seção" className="tweak-profiles">
-      {tabs.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          className="btn"
-          aria-current={current === t.id ? "page" : undefined}
-          onClick={() => setSection(t.id)}
-        >
-          {t.label}
-        </button>
-      ))}
-    </nav>
+  const info = view === "hub" ? null : AREA_INFO[view];
+  const back = (
+    <div className="style-head">
+      <button type="button" className="btn" onClick={() => setView("hub")}>
+        ← Todas as áreas
+      </button>
+      {info && (
+        <>
+          <h2>{info.title}</h2>
+          <p className="muted">{info.description}</p>
+          <details className="style-reference">
+            <summary>Referências: o que esta área muda</summary>
+            <ul>
+              {info.reference.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </details>
+        </>
+      )}
+    </div>
   );
 
-  if (current === "ajustes") return <Ajustes nav={nav} />;
+  if (view === "hub")
+    return (
+      <section className="page">
+        <h1>Estilização</h1>
+        <p className="muted">
+          Escolha o elemento do desktop que quer mudar. Cada área mostra uma referência e uma
+          prévia de como ele vai ficar, e tudo pode ser desfeito pelo Histórico.
+        </p>
+        <ul className="area-grid" aria-label="Áreas">
+          {HUB_ORDER.map((id) => {
+            const a = AREA_INFO[id];
+            const reason = unavailable(id);
+            return (
+              <li key={id}>
+                <button
+                  type="button"
+                  className="area-card"
+                  aria-label={a.title}
+                  aria-describedby={`area-${id}-desc`}
+                  disabled={reason !== null}
+                  onClick={() => setView(id)}
+                >
+                  <span className="area-thumb" aria-hidden="true">
+                    <StylePreview area={id} on={new Set()} />
+                  </span>
+                  <strong>{a.title}</strong>
+                  <span id={`area-${id}-desc`} className="muted">
+                    {reason ?? a.summary}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {onNavigate && (
+            <li>
+              <button type="button" className="area-card" onClick={() => onNavigate("mods")}>
+                <span className="area-thumb area-thumb-text" aria-hidden="true">
+                  ⚙
+                </span>
+                <strong>Mods avançados</strong>
+                <span className="muted">
+                  Ícones pequenos, rótulos e outros ajustes profundos do Explorer.
+                </span>
+              </button>
+            </li>
+          )}
+        </ul>
+      </section>
+    );
+
+  const isTweakArea = (v: View): v is TweakArea =>
+    v === "barra" || v === "iniciar" || v === "explorador" || v === "aparencia" || v === "sistema";
+
+  if (isTweakArea(view)) return <Ajustes nav={back} area={view} />;
+
   return (
     <section className="page">
-      <h1>Personalizar</h1>
-      {nav}
-      {current === "wallpaper" && engine && <WallpaperGallery status={engine} />}
-      {current === "temas" && <Themes engine={engine?.installed ?? false} />}
-      {current === "desktop" && desk && <Desktop status={desk} onChanged={loadDesk} />}
-      {current === "terminal" && term && (
+      {back}
+      <div className="style-preview" aria-label="Como vai ficar">
+        <StylePreview area={view} on={new Set()} />
+      </div>
+      {view === "wallpaper" && engine && <WallpaperGallery status={engine} />}
+      {view === "temas" && <Themes engine={engine?.installed ?? false} />}
+      {view === "desktop" && desk && <Desktop status={desk} onChanged={loadDesk} />}
+      {view === "terminal" && term && (
         <Terminal status={term} engine={engine?.installed ?? false} onChanged={loadTerm} />
       )}
     </section>
   );
 }
+
+const HUB_ORDER: Exclude<View, "hub">[] = [
+  "barra",
+  "iniciar",
+  "explorador",
+  "aparencia",
+  "temas",
+  "wallpaper",
+  "terminal",
+  "desktop",
+  "sistema",
+];
