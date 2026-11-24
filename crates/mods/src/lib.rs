@@ -80,6 +80,7 @@ pub fn eject(dir: &Path, filter: Option<&str>) -> Result<usize> {
 #[allow(clippy::too_many_arguments)]
 pub fn enable_shell_mod(
     mod_name: &str,
+    target_dll: &str,
     symbol: &str,
     rva_file: &str,
     dir: &Path,
@@ -89,7 +90,6 @@ pub fn enable_shell_mod(
     tested_builds: &[u32],
     experimental: bool,
 ) -> Result<Vec<Injection>> {
-    let _ = ();
     if !dll.is_file() {
         bail!("DLL não encontrada: {}", dll.display());
     }
@@ -102,10 +102,10 @@ pub fn enable_shell_mod(
     let safe_mode = dir.join("shell-safemode").exists();
     // Recuperação gravada antes de qualquer coisa.
     recovery::write(exe, dir)?;
-    let taskbar = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| "C:/Windows".into()))
+    let target = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| "C:/Windows".into()))
         .join("System32")
-        .join("Taskbar.dll");
-    let rva = symbols::resolve_module(dir, &taskbar, &[symbol])
+        .join(target_dll);
+    let rva = symbols::resolve_module(dir, &target, &[symbol])
         .ok()
         .and_then(|m| m.get(symbol).copied());
     if let Err(b) = shell::may_enable(
@@ -153,6 +153,7 @@ pub fn enable_shell_labels(
 ) -> Result<Vec<Injection>> {
     enable_shell_mod(
         "rotulos-barra",
+        "Taskbar.dll",
         "?GetTaskbarGlomLevelFlags@@YAKPEBG@Z",
         "labels.rva",
         dir,
@@ -175,6 +176,7 @@ pub fn enable_shell_icons(
 ) -> Result<Vec<Injection>> {
     enable_shell_mod(
         "icones-pequenos",
+        "Taskbar.dll",
         "?ShouldUseSmallIcons@TrayUI@@UEBAHXZ",
         "icons.rva",
         dir,
@@ -198,6 +200,7 @@ pub fn enable_shell_theme_session(
 ) -> Result<Vec<Injection>> {
     enable_shell_mod(
         "tema-sem-assinatura-sessao",
+        "uxtheme.dll",
         "?Verify@CThemeSignature@@QEAAJPEAX@Z",
         "theme-verify.rva",
         dir,
