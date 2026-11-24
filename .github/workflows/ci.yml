@@ -35,3 +35,5 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo build -p sentinela-mod-test
       - run: cargo test --workspace
+        env:
+          SENTINELA_REQUIRE_SYMBOLS: "1"

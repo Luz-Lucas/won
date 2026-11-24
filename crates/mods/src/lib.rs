@@ -5,6 +5,7 @@ pub mod inject;
 pub mod policy;
 pub mod recovery;
 pub mod registry;
+pub mod symbols;
 
 use anyhow::{Result, bail};
 use registry::{Injection, Mod};
