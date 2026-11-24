@@ -15,6 +15,20 @@ impl Rgb {
         format!("#{:02X}{:02X}{:02X}", self.r, self.g, self.b)
     }
 
+    /// `#RRGGBB` (com ou sem `#`).
+    pub fn from_hex(s: &str) -> Option<Rgb> {
+        let h = s.trim().trim_start_matches('#');
+        if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let v = u32::from_str_radix(h, 16).ok()?;
+        Some(Rgb {
+            r: (v >> 16) as u8,
+            g: (v >> 8) as u8,
+            b: v as u8,
+        })
+    }
+
     /// (matiz 0..360, saturação 0..1, valor 0..1)
     fn hsv(self) -> (f32, f32, f32) {
         let (r, g, b) = (
