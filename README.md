@@ -278,6 +278,8 @@ sentinela net route <id> (on | off)
 - `routes` lista o Cloudflare WARP (`warp`), os túneis WireGuard importados na página Rede (`wg:nome`) e serviços pagos instalados (ExitLag, NoPing: só detectados, o Sentinela não liga nem desliga).
 - `compare` mede a conexão atual e cada rota em rodadas intercaladas (3 por padrão) e recomenda uma só quando a mediana dela fica pelo menos 5 ms menor **e** a diferença passa da soma dos *jitters*, sem perder mais pacotes. Cada rota volta ao estado em que estava. Com o túnel ligado, o tráfego passa pelo servidor daquele serviço; alguns jogos e anti-cheats bloqueiam VPN.
 - `route` liga ou desliga uma rota. O WARP precisa ter sido aberto uma vez (o Sentinela não registra conta nem aceita termos); túnel WireGuard exige o terminal como administrador.
+- `warp-register --accept-tos` ativa o aplicativo Cloudflare WARP (conta gratuita) sem abrir a janela dele.
+- `warp-tunnel --accept-tos [--name warp] [--on]` registra um dispositivo gratuito no WARP, gera o perfil WireGuard (como o `wgcf`) e importa como túnel `wg:warp`; `--on` liga em seguida (administrador). A chave privada nasce no computador e fica só em `%LOCALAPPDATA%\Sentinela\wireguard`. Os dois comandos aceitam em seu nome os Termos de Serviço da Cloudflare, por isso exigem `--accept-tos` (na janela, um diálogo pergunta).
 - Destino inválido ou que não resolve, ou rota desconhecida, encerra com código `2`.
 
 ### `apps`: aplicativos via winget

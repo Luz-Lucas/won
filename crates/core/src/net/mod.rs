@@ -17,6 +17,7 @@ pub mod session;
 pub mod stats;
 pub mod targets;
 pub mod trace;
+pub mod warp_profile;
 pub mod wifi;
 #[cfg(windows)]
 pub mod windows;

@@ -18,7 +18,7 @@ Execute num **PC ou notebook real com Windows 11** (Wi‑Fi e cabo, se possível
 | 2.3 | `Get-DnsClientDohServerAddress` e abrir sites | Os servidores aparecem com o modelo automático; sites abrem normalmente | | |
 | 2.4 | Desfazer pelo Histórico | Volta ao DNS anterior (automático ou fixo) e sem criptografia | | |
 | 3 | **Rotas alternativas** (Rede → Rotas alternativas) | | | |
-| 3.1 | Com o WARP instalado mas nunca aberto | Aparece "Cloudflare WARP" sem interruptor e com "Abra o Cloudflare WARP uma vez para ativar." | | |
+| 3.1 | Com o WARP instalado mas nunca aberto | Aparece "Cloudflare WARP" sem interruptor e com "O WARP ainda não foi ativado…" com o botão **Ativar WARP** | | |
 | 3.2 | Abrir o WARP uma vez, voltar e ligar o interruptor | Diálogo avisa que o tráfego passa pelo servidor e que anti-cheats podem bloquear VPN; ao confirmar, o WARP conecta (ícone na bandeja) | | |
 | 3.3 | Importar um `.conf` com o nome "vps" | O túnel aparece como "WireGuard: vps"; a chave privada não aparece em lugar nenhum; o arquivo está em `%LOCALAPPDATA%\Sentinela\wireguard\vps.conf` | | |
 | 3.4 | Sem administrador | O túnel mostra "Ligar e desligar o túnel exige administrador." | | |

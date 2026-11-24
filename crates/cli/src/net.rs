@@ -80,6 +80,24 @@ pub enum NetCommand {
         #[arg(value_enum, value_name = "on|off")]
         state: OnOff,
     },
+    /// Cria o túnel WireGuard do Cloudflare WARP (registra um dispositivo gratuito e importa; use --on para ligar)
+    WarpTunnel {
+        /// Confirma que você aceita os Termos de Serviço da Cloudflare
+        #[arg(long)]
+        accept_tos: bool,
+        /// Nome do túnel
+        #[arg(long, default_value = "warp")]
+        name: String,
+        /// Liga o túnel em seguida (exige administrador)
+        #[arg(long)]
+        on: bool,
+    },
+    /// Ativa o aplicativo Cloudflare WARP (conta gratuita; exige --accept-tos)
+    WarpRegister {
+        /// Confirma que você aceita os Termos de Serviço da Cloudflare
+        #[arg(long)]
+        accept_tos: bool,
+    },
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -106,6 +124,12 @@ pub fn run(cmd: NetCommand) -> Result<i32> {
             rounds,
             json,
         } => cmd_compare(&target, &routes, rounds, json),
+        NetCommand::WarpTunnel {
+            accept_tos,
+            name,
+            on,
+        } => cmd_warp_tunnel(accept_tos, &name, on),
+        NetCommand::WarpRegister { accept_tos } => cmd_warp_register(accept_tos),
         NetCommand::Route { id, state } => cmd_route(&id, matches!(state, OnOff::On)),
     }
 }
@@ -448,4 +472,47 @@ fn cmd_route(id: &str, on: bool) -> Result<i32> {
 #[cfg(not(windows))]
 fn cmd_route(_id: &str, _on: bool) -> Result<i32> {
     bail!("rotas alternativas só no Windows")
+}
+
+const TOS_NEEDED: &str = "isto aceita os Termos de Serviço da Cloudflare em seu nome; repita com --accept-tos se você concorda";
+
+fn cmd_warp_tunnel(accept_tos: bool, name: &str, on: bool) -> Result<i32> {
+    use sentinela_core::net::routes::{default_tunnels_dir, tunnel_id};
+    use sentinela_core::net::warp_profile::{HttpRegistrar, create_tunnel, now_iso};
+    if !accept_tos {
+        bail!(TOS_NEEDED);
+    }
+    let t = create_tunnel(&default_tunnels_dir(), name, &HttpRegistrar, &now_iso())
+        .map_err(anyhow::Error::msg)?;
+    println!(
+        "Túnel {} criado em {}",
+        t.name,
+        default_tunnels_dir().display()
+    );
+    if on {
+        return cmd_route(&tunnel_id(&t.name), true);
+    }
+    println!(
+        "Ligue com: sentinela net route {} on (como administrador)",
+        tunnel_id(&t.name)
+    );
+    Ok(0)
+}
+
+#[cfg(windows)]
+fn cmd_warp_register(accept_tos: bool) -> Result<i32> {
+    use sentinela_core::net::routes::windows::SystemRoutes;
+    if !accept_tos {
+        bail!(TOS_NEEDED);
+    }
+    SystemRoutes::new(elevated())
+        .register_warp()
+        .map_err(anyhow::Error::msg)?;
+    println!("Cloudflare WARP ativado");
+    Ok(0)
+}
+
+#[cfg(not(windows))]
+fn cmd_warp_register(_accept_tos: bool) -> Result<i32> {
+    bail!("o WARP só roda no Windows")
 }

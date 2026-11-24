@@ -214,6 +214,8 @@ pub fn run() {
             commands::routes::net_routes_page,
             commands::routes::net_tunnel_import,
             commands::routes::net_tunnel_remove,
+            commands::routes::net_warp_tunnel_create,
+            commands::routes::net_warp_register,
             commands::routes::net_route_set,
             commands::routes::net_game_route_set,
             commands::routes::net_wifi_hold_set,

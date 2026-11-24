@@ -13,6 +13,9 @@ use serde::Serialize;
 use super::history::fmt_ms;
 use super::{Measurement, Prober, Target, resolve, summarize};
 
+/// Aviso do WARP que ainda não foi ativado; a janela oferece "Ativar".
+pub const WARP_SETUP_NOTE: &str = "O WARP ainda não foi ativado neste computador. Use \"Ativar WARP\" ou abra o aplicativo uma vez.";
+
 /// Id da conexão sem nenhuma alternativa ligada pelo Sentinela.
 pub const NORMAL: &str = "normal";
 
