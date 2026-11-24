@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   relaunchElevated,
+  wallpaperStatus,
   restartExplorer,
   tweaksApply,
   tweaksApplyChoice,
@@ -14,8 +15,11 @@ import type {
   TweakItem,
   TweaksPage,
   UndoReport,
+  WallpaperStatus,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Themes from "../components/Themes";
+import WallpaperGallery from "../components/WallpaperGallery";
 import { useJob } from "../jobs";
 
 const AREAS: { id: TweakArea; label: string }[] = [
@@ -87,7 +91,7 @@ type Pending =
 
 const EFFECT_ORDER: TweakEffect[] = ["immediate", "explorer", "relogon", "reboot"];
 
-export default function Personalizar() {
+function Ajustes({ nav }: { nav: React.ReactNode }) {
   const [data, setData] = useState<TweaksPage | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<TweakArea>("barra");
@@ -283,6 +287,7 @@ export default function Personalizar() {
   return (
     <section className="page">
       <h1>Personalizar</h1>
+      {nav}
       {data && !data.hkcu_allowed && <p className="notice">{OTHER_ACCOUNT}</p>}
       {bannerNeeded && (
         <div className="notice">
@@ -393,6 +398,52 @@ export default function Personalizar() {
           <p>A barra de tarefas some por alguns segundos e volta.</p>
         </ConfirmDialog>
       )}
+    </section>
+  );
+}
+
+type Section = "ajustes" | "wallpaper" | "temas";
+
+/** Ajustes do Windows, papel de parede (só com o Wallpaper Engine) e temas. */
+export default function Personalizar() {
+  const [section, setSection] = useState<Section>("ajustes");
+  const [engine, setEngine] = useState<WallpaperStatus | null>(null);
+
+  useEffect(() => {
+    wallpaperStatus().then(setEngine, () => setEngine(null));
+  }, []);
+
+  const tabs: { id: Section; label: string }[] = [
+    { id: "ajustes", label: "Ajustes" },
+    ...(engine?.installed ? [{ id: "wallpaper" as const, label: "Papel de parede" }] : []),
+    { id: "temas", label: "Temas" },
+  ];
+  // Se o Wallpaper Engine sumir com a aba aberta, volta para os ajustes.
+  const current: Section = tabs.some((t) => t.id === section) ? section : "ajustes";
+
+  const nav = (
+    <nav aria-label="Seção" className="tweak-profiles">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          className="btn"
+          aria-current={current === t.id ? "page" : undefined}
+          onClick={() => setSection(t.id)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </nav>
+  );
+
+  if (current === "ajustes") return <Ajustes nav={nav} />;
+  return (
+    <section className="page">
+      <h1>Personalizar</h1>
+      {nav}
+      {current === "wallpaper" && engine && <WallpaperGallery status={engine} />}
+      {current === "temas" && <Themes engine={engine?.installed ?? false} />}
     </section>
   );
 }

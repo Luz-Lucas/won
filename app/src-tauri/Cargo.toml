@@ -23,6 +23,8 @@ serde_json.workspace = true
 windows-sys = { workspace = true, features = ["Win32_UI_WindowsAndMessaging", "Win32_System_Threading"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
+base64 = "0.22"
+rayon.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

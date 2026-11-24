@@ -1,0 +1,35 @@
+name: Installer preview
+
+# Gera o instalador do Windows como artefato (sem criar release), para testar
+# um PR no PC. Baixe em "Artifacts" na página da execução.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Instalador NSIS
+        working-directory: app
+        run: |
+          npm ci
+          npm run tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sentinela-installer
+          path: |
+            target/release/bundle/nsis/*-setup.exe
+            target/release/sentinela.exe
+          retention-days: 14

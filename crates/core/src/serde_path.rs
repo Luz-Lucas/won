@@ -10,6 +10,13 @@ pub fn lossy<S: Serializer>(p: &Path, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_str(&p.to_string_lossy())
 }
 
+pub fn lossy_opt<S: Serializer>(p: &Option<PathBuf>, s: S) -> Result<S::Ok, S::Error> {
+    match p {
+        Some(p) => s.serialize_some(&*p.to_string_lossy()),
+        None => s.serialize_none(),
+    }
+}
+
 pub fn lossy_vec<S: Serializer>(v: &[PathBuf], s: S) -> Result<S::Ok, S::Error> {
     let mut seq = s.serialize_seq(Some(v.len()))?;
     for p in v {

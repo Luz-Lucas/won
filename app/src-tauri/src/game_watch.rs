@@ -60,12 +60,16 @@ fn installed_games() -> Vec<sentinela_core::games::Game> {
 #[cfg(windows)]
 fn run(app: AppHandle, stop: Arc<AtomicBool>) {
     use sentinela_core::clean::platform::is_elevated;
+    use sentinela_core::games;
     use sentinela_core::games::running::{exe_key, processes, running_of};
     use sentinela_core::net::routes::windows::SystemRoutes;
     use sentinela_core::net::wifi::SystemWifiHold;
 
     use crate::commands::scan::{ScanState, emit_pause};
     use sentinela_core::scan::pause::GamePause;
+    use sentinela_core::wallpaper::host::WindowsHost;
+    use sentinela_core::wallpaper::pause::{self as wp_pause, GamePauser, PauseMode};
+    use sentinela_core::wallpaper::steam as wp_steam;
     use tauri::Manager;
 
     let pause = app.try_state::<ScanState>().map(|s| s.pause.clone());
@@ -75,11 +79,28 @@ fn run(app: AppHandle, stop: Arc<AtomicBool>) {
     let mut exes = Vec::new();
     let mut names: BTreeMap<String, String> = BTreeMap::new();
     let mut scanned: Option<Instant> = None;
+    // Wallpaper Engine: o pausador nasce quando a instalação é encontrada.
+    let mut pauser: Option<GamePauser> = None;
+    let mut wp_checked: Option<Instant> = None;
     loop {
         let settings = game_session::load(&game_session::default_settings_path());
         let wanted = !settings.routes.is_empty() || settings.wifi_hold;
         let scanning = pause.as_ref().is_some_and(|p| p.active());
-        if wanted || scanning || !session.open_games().is_empty() {
+        let wp_mode = wp_pause::load(&wp_pause::default_path()).in_games;
+        if wp_mode != PauseMode::Off
+            && pauser.is_none()
+            && wp_checked.is_none_or(|t| t.elapsed() >= RESCAN)
+        {
+            wp_checked = Some(Instant::now());
+            pauser = games::windows::system_roots()
+                .steam
+                .and_then(|s| wp_steam::detect(&s))
+                .map(|i| GamePauser::new(std::sync::Arc::new(WindowsHost::new(&i.exe))));
+        }
+        // Pausada por nós: segue de olho até retomar, mesmo com a opção desligada.
+        let wp_on = (wp_mode != PauseMode::Off && pauser.is_some())
+            || pauser.as_ref().is_some_and(|p| p.is_paused());
+        if wanted || scanning || wp_on || !session.open_games().is_empty() {
             if scanned.is_none_or(|t| t.elapsed() >= RESCAN) {
                 let games = installed_games();
                 names = games
@@ -89,7 +110,7 @@ fn run(app: AppHandle, stop: Arc<AtomicBool>) {
                 exes = games.into_iter().map(|g| g.exe).collect();
                 scanned = Some(Instant::now());
             }
-            let running: BTreeSet<String> = if wanted || scanning {
+            let running: BTreeSet<String> = if wanted || scanning || wp_on {
                 running_of(&exes, &processes())
             } else {
                 BTreeSet::new()
@@ -98,6 +119,11 @@ fn run(app: AppHandle, stop: Arc<AtomicBool>) {
                 && let Some(paused) = game_pause.update(scanning && !running.is_empty())
             {
                 emit_pause(&app, p.set_game(paused));
+            }
+            if let Some(p) = pauser.as_mut()
+                && let Err(e) = p.update(!running.is_empty(), wp_mode)
+            {
+                log(&format!("Wallpaper Engine: {e}"));
             }
             if wanted || !session.open_games().is_empty() {
                 let now = if wanted { running } else { BTreeSet::new() };
@@ -114,6 +140,11 @@ fn run(app: AppHandle, stop: Arc<AtomicBool>) {
         let start = Instant::now();
         while start.elapsed() < TICK {
             if stop.load(Ordering::Relaxed) {
+                if let Some(p) = pauser.as_mut()
+                    && let Err(e) = p.shutdown()
+                {
+                    log(&format!("Wallpaper Engine: {e}"));
+                }
                 let routes = SystemRoutes::new(is_elevated());
                 let events = session.stop_all(&routes, &mut wifi);
                 report(&app, &events, &names);

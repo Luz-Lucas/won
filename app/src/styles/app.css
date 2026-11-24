@@ -489,7 +489,8 @@ body {
 }
 
 .tweak-profiles .btn[aria-pressed="true"],
-.tweak-profiles .btn[aria-selected="true"] {
+.tweak-profiles .btn[aria-selected="true"],
+.tweak-profiles .btn[aria-current="page"] {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
@@ -653,4 +654,36 @@ body {
   padding-left: var(--sp-4);
   color: var(--text-dim);
   font-size: var(--fs-md);
+}
+
+.wallpaper-grid {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.wallpaper-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+.wallpaper-card img,
+.wallpaper-placeholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.wallpaper-placeholder {
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  background: var(--surface-2, rgba(128, 128, 128, 0.2));
+}
+.wallpaper-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
