@@ -2,6 +2,7 @@
 //! A lógica de arquivo vive em `sentinela_core::settings`; aqui só a fiação.
 
 use sentinela_core::clean;
+use sentinela_core::scan::explorer as scan_explorer;
 use sentinela_core::settings::{self, Settings};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -173,6 +174,64 @@ pub fn sync_autostart(app: &AppHandle) {
     let _ = write_autostart(app, want);
 }
 
+/// "Verificar com o Sentinela" no clique direito: só o app instalado e sem
+/// elevação grava no registro (como o início automático).
+pub fn sync_explorer_menu(app: &AppHandle) {
+    if autostart_mode() != AutostartMode::Register {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let want = app.state::<SettingsState>().snapshot().explorer_menu;
+    // Só reescreve se mudou (ou se o app foi movido para outra pasta).
+    if scan_explorer::is_enabled(&exe) != want {
+        let _ = scan_explorer::set_enabled(want, &exe);
+    }
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct ExplorerMenuView {
+    pub enabled: bool,
+    /// Por que não dá para mudar aqui (app de desenvolvimento ou elevado).
+    pub note: Option<String>,
+}
+
+fn explorer_view(enabled: bool, mode: AutostartMode) -> ExplorerMenuView {
+    ExplorerMenuView {
+        enabled,
+        note: match mode {
+            AutostartMode::Register => None,
+            AutostartMode::SkipElevated => {
+                Some("Abra o Sentinela sem administrador para mudar o menu do Explorador.".into())
+            }
+            AutostartMode::SkipNotInstalled => {
+                Some("O menu do Explorador só é registrado pela versão instalada.".into())
+            }
+        },
+    }
+}
+
+#[tauri::command]
+pub fn explorer_menu_get(state: State<'_, SettingsState>) -> ExplorerMenuView {
+    explorer_view(state.snapshot().explorer_menu, autostart_mode())
+}
+
+#[tauri::command]
+pub fn explorer_menu_set(
+    on: bool,
+    state: State<'_, SettingsState>,
+) -> Result<ExplorerMenuView, String> {
+    let mode = autostart_mode();
+    if mode == AutostartMode::Register {
+        let exe = std::env::current_exe()
+            .map_err(|_| "Não foi possível localizar o Sentinela.".to_string())?;
+        scan_explorer::set_enabled(on, &exe)?;
+    }
+    let saved = state.update(|s| s.explorer_menu = on)?;
+    Ok(explorer_view(saved.explorer_menu, mode))
+}
+
 #[tauri::command]
 pub fn settings_get(state: State<'_, SettingsState>) -> SettingsView {
     view(&state.snapshot(), autostart_mode())
@@ -198,6 +257,21 @@ pub fn settings_set(
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    #[test]
+    fn explorer_menu_view_explains_why_it_cannot_change() {
+        assert_eq!(explorer_view(true, AutostartMode::Register).note, None);
+        assert!(
+            explorer_view(true, AutostartMode::SkipElevated)
+                .note
+                .is_some()
+        );
+        assert!(
+            explorer_view(false, AutostartMode::SkipNotInstalled)
+                .note
+                .is_some()
+        );
+    }
 
     fn state() -> (tempfile::TempDir, SettingsState) {
         let d = tempfile::tempdir().unwrap();

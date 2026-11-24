@@ -55,6 +55,32 @@ pub fn own_dirs() -> Vec<PathBuf> {
 #[derive(Default)]
 pub struct ScanState {
     pub pause: Arc<PauseControl>,
+    /// Pedidos do menu do Explorador que a janela ainda não pegou.
+    pub requests: Mutex<Vec<PathBuf>>,
+}
+
+/// Evento: chegou um pedido do menu do Explorador (a janela chama `scan_request_take`).
+pub const REQUEST_EVENT: &str = "scan:request";
+
+/// Guarda o pedido (`--scan <caminho>`), mostra a janela e avisa a interface.
+pub fn push_request(app: &AppHandle, path: PathBuf) {
+    if let Some(s) = app.try_state::<ScanState>() {
+        s.requests
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .push(path);
+    }
+    crate::tray::show_main(app);
+    let _ = app.emit(REQUEST_EVENT, ());
+}
+
+/// A interface pega os pedidos do Explorador (e esvazia a fila).
+#[tauri::command]
+pub fn scan_request_take(state: State<'_, ScanState>) -> Vec<String> {
+    std::mem::take(&mut *state.requests.lock().unwrap_or_else(|p| p.into_inner()))
+        .into_iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
 }
 
 /// Avisa a janela que a pausa mudou (`scan:paused`).
@@ -230,7 +256,8 @@ pub struct GuardView {
     pub guards: Vec<Guard>,
 }
 
-/// Travas de cada arquivo antes da quarentena (pasta do Windows, processo aberto).
+/// Travas de cada arquivo antes da quarentena (pasta do Windows, assinatura
+/// da Microsoft, processo aberto).
 #[tauri::command]
 pub async fn scan_guard(paths: Vec<String>) -> Result<Vec<GuardView>, String> {
     tauri::async_runtime::spawn_blocking(move || {

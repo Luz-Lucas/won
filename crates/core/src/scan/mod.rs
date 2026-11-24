@@ -6,6 +6,7 @@ pub mod context;
 pub mod detector;
 pub mod exceptions;
 pub mod explain;
+pub mod explorer;
 pub mod guard;
 pub mod hash;
 pub mod pause;

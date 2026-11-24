@@ -20,6 +20,8 @@ pub struct Settings {
     pub auto_quarantine_hash: bool,
     /// A oferta de agendar a verificação semanal já foi mostrada.
     pub scan_schedule_offered: bool,
+    /// "Verificar com o Sentinela" no clique direito do Explorador (§15.4).
+    pub explorer_menu: bool,
 }
 
 impl Default for Settings {
@@ -30,6 +32,7 @@ impl Default for Settings {
             tray_notice_shown: false,
             auto_quarantine_hash: false,
             scan_schedule_offered: false,
+            explorer_menu: true,
         }
     }
 }
@@ -156,10 +159,19 @@ mod tests {
             tray_notice_shown: true,
             auto_quarantine_hash: true,
             scan_schedule_offered: true,
+            explorer_menu: false,
         };
         save(&p, &s).unwrap();
         assert_eq!(load(&p), s);
         assert!(!d.path().join("sub").join("s.json.tmp").exists());
+    }
+
+    #[test]
+    fn old_settings_files_get_the_explorer_menu_on() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.json");
+        std::fs::write(&p, br#"{"start_with_windows":false}"#).unwrap();
+        assert!(load(&p).explorer_menu);
     }
 
     #[test]
