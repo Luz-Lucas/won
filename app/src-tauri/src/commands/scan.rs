@@ -13,16 +13,17 @@ use sentinela_core::games::running;
 use sentinela_core::quarantine::{self, QuarantineEntry};
 use sentinela_core::scan::exceptions::{self, Exception};
 use sentinela_core::scan::guard::{self, Done, Guard, Request};
+use sentinela_core::scan::pause::{PauseControl, PauseState};
 use sentinela_core::scan::targets::{Resolved, ScanSummary, ScanTarget, resolve, summarize};
-use sentinela_core::scan::{Engine, ScanOptions, areas, run_scan_with_progress, schedule};
+use sentinela_core::scan::{Engine, ScanOptions, areas, cache, run_scan_with_progress, schedule};
 use sentinela_core::walker::WalkOptions;
 use sentinela_core::{platform_fs, signatures};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 
 /// Arquivos maiores que isso só têm o hash calculado.
@@ -49,6 +50,18 @@ pub fn own_dirs() -> Vec<PathBuf> {
     ]
 }
 
+/// Estado do antivírus que vive enquanto o app estiver aberto: a pausa da
+/// verificação, compartilhada com o botão e com a vigia de jogos.
+#[derive(Default)]
+pub struct ScanState {
+    pub pause: Arc<PauseControl>,
+}
+
+/// Avisa a janela que a pausa mudou (`scan:paused`).
+pub fn emit_pause(app: &AppHandle, state: PauseState) {
+    let _ = app.emit("scan:paused", state);
+}
+
 fn resolve_target(target: &ScanTarget) -> Result<Resolved, String> {
     let quick = || areas::collect(&areas::system_sources(), &var);
     resolve(target, &quick, &platform_fs::fixed_drive_roots())
@@ -60,6 +73,7 @@ fn scan_body(
     id: JobId,
     cancel: &AtomicBool,
     sink: Arc<dyn Sink>,
+    app: &AppHandle,
 ) -> ScanSummary {
     let db = signatures::load(&signatures::default_db_dir());
     let db_initialized = db.manifest.as_ref().is_some_and(|m| !m.sources.is_empty());
@@ -75,10 +89,29 @@ fn scan_body(
             ..WalkOptions::default()
         },
         max_size: MAX_SIZE,
-        ..ScanOptions::default()
+        // Só a janela usa o cache; o CLI sempre relê tudo.
+        cache: Some(Arc::new(Mutex::new(cache::load(&cache::default_path())))),
+        pause: app.try_state::<ScanState>().map(|s| s.pause.clone()),
+        background: true,
     };
+    if let Some(p) = &opts.pause {
+        // Cada verificação começa sem a pausa do usuário; a do jogo continua.
+        emit_pause(app, p.set_user(false));
+        p.set_active(true);
+    }
     let progress = EventProgress::new(id, sink, Duration::from_millis(100));
     let mut report = run_scan_with_progress(&engine, &opts, cancel, &progress);
+    if let Some(p) = &opts.pause {
+        // A pausa por jogo é a vigia que solta (ela sabe se o jogo fechou).
+        p.set_active(false);
+        emit_pause(app, p.set_user(false));
+    }
+    if let Some(c) = &opts.cache {
+        let c = c.lock().unwrap_or_else(|p| p.into_inner());
+        if let Err(e) = cache::save(&cache::default_path(), &c) {
+            eprintln!("Sentinela: cache de verificados não gravado: {e}");
+        }
+    }
     report.errors.splice(0..0, resolved.unreadable);
     let summary = summarize(
         report,
@@ -110,10 +143,24 @@ pub async fn scan_start(
         .map_err(|_| "Não foi possível iniciar a verificação.".to_string())??;
     spawn_job(
         jobs.inner().clone(),
-        Arc::new(TauriSink(app)),
+        Arc::new(TauriSink(app.clone())),
         JobKind::Scan,
-        move |id, cancel, sink| Ok(scan_body(resolved, id, cancel, sink)),
+        move |id, cancel, sink| Ok(scan_body(resolved, id, cancel, sink, &app)),
     )
+}
+
+/// Pausa ou continua a verificação em andamento (botão da janela).
+#[tauri::command]
+pub fn scan_pause(paused: bool, app: AppHandle, state: State<'_, ScanState>) -> PauseState {
+    let s = state.pause.set_user(paused);
+    emit_pause(&app, s);
+    s
+}
+
+/// Estado atual da pausa (a janela pergunta ao abrir a página).
+#[tauri::command]
+pub fn scan_pause_state(state: State<'_, ScanState>) -> PauseState {
+    state.pause.state()
 }
 
 /// Verificação agendada: rápida, com a quarentena automática se ligada e uma
@@ -133,7 +180,7 @@ pub fn start_scheduled(app: &AppHandle, exit_after: bool) {
         JobKind::Scan,
         move |id, cancel, sink| {
             let resolved = resolve_target(&ScanTarget::Quick)?;
-            let summary = scan_body(resolved, id, cancel, sink);
+            let summary = scan_body(resolved, id, cancel, sink, &handle);
             let mut quarantined = 0;
             if auto {
                 let targets =

@@ -8,6 +8,7 @@ pub mod exceptions;
 pub mod explain;
 pub mod guard;
 pub mod hash;
+pub mod pause;
 pub mod pe;
 pub mod risk;
 pub mod schedule;
@@ -43,6 +44,11 @@ pub struct ScanOptions {
     /// Cache de verificados (só a janela usa): lido no começo e atualizado
     /// no fim com os arquivos limpos percorridos nas pastas.
     pub cache: Option<std::sync::Arc<Mutex<cache::ScanCache>>>,
+    /// Pausa (botão e jogo aberto); as threads esperam entre um arquivo e outro.
+    pub pause: Option<std::sync::Arc<pause::PauseControl>>,
+    /// Segundo plano: metade dos processadores, com prioridade baixa de CPU
+    /// e de disco.
+    pub background: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -275,6 +281,54 @@ pub fn run_scan_with_progress(
     cancel: &AtomicBool,
     progress: &dyn Progress,
 ) -> ScanReport {
+    if opts.background
+        && let Ok(pool) = background_pool()
+    {
+        return pool.install(|| scan_inner(engine, opts, cancel, progress));
+    }
+    scan_inner(engine, opts, cancel, progress)
+}
+
+/// Metade dos processadores (mínimo 1).
+pub fn background_threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get() / 2)
+        .unwrap_or(1)
+        .max(1)
+}
+
+fn background_pool() -> Result<rayon::ThreadPool, rayon::ThreadPoolBuildError> {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(background_threads())
+        .thread_name(|i| format!("scan-bg-{i}"))
+        .start_handler(|_| enter_background_mode())
+        .build()
+}
+
+/// `THREAD_MODE_BACKGROUND_BEGIN`: prioridade baixa de CPU e de E/S.
+#[cfg(windows)]
+fn enter_background_mode() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN,
+    };
+    // SAFETY: pseudo-handle da thread atual, sem nada para liberar.
+    unsafe { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) };
+}
+
+#[cfg(not(windows))]
+fn enter_background_mode() {}
+
+fn scan_inner(
+    engine: &Engine,
+    opts: &ScanOptions,
+    cancel: &AtomicBool,
+    progress: &dyn Progress,
+) -> ScanReport {
+    let wait_if_paused = || {
+        if let Some(p) = &opts.pause {
+            p.wait(cancel);
+        }
+    };
     // (arquivo, ler só se for de risco, veio das pastas)
     let mut entries: Vec<(Entry, bool, bool)> = Vec::new();
     let mut errors = Vec::new();
@@ -295,6 +349,7 @@ pub fn run_scan_with_progress(
         }
     }
     for item in walk(&opts.roots, &opts.walk) {
+        wait_if_paused();
         if cancel.load(Ordering::Relaxed) {
             skipped_in_walk = true;
             break;
@@ -330,6 +385,7 @@ pub fn run_scan_with_progress(
     let results: Vec<Outcome> = entries
         .par_iter()
         .filter_map(|(entry, only_risky, from_walk)| {
+            wait_if_paused();
             if cancel.load(Ordering::Relaxed) {
                 skipped.store(true, Ordering::Relaxed);
                 return None;
@@ -1008,6 +1064,51 @@ mod tests {
         assert_eq!(reads.load(Ordering::Relaxed), 2);
         assert_eq!(r.items.len(), 1);
         assert!(c.lock().unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn paused_scan_waits_then_finishes() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("m.bin"), MARKER).unwrap();
+        let (engine, _) = Engine::from_database(&marker_db());
+        let p = std::sync::Arc::new(pause::PauseControl::default());
+        p.set_user(true);
+        let mut o = opts(dir.path(), 1 << 20);
+        o.pause = Some(p.clone());
+        o.background = true;
+        let resume = {
+            let p = p.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                p.set_user(false);
+            })
+        };
+        let start = std::time::Instant::now();
+        let report = run_scan(&engine, &o, &AtomicBool::new(false));
+        resume.join().unwrap();
+        assert!(start.elapsed() >= std::time::Duration::from_millis(100));
+        assert_malicious(&report);
+    }
+
+    #[test]
+    fn cancel_while_paused_returns_partial_report() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), b"x").unwrap();
+        let (engine, _) = Engine::from_database(&marker_db());
+        let p = std::sync::Arc::new(pause::PauseControl::default());
+        p.set_game(true);
+        let mut o = opts(dir.path(), 1 << 20);
+        o.pause = Some(p);
+        let cancel = std::sync::Arc::new(AtomicBool::new(false));
+        let c = cancel.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            c.store(true, Ordering::Relaxed);
+        });
+        let report = run_scan(&engine, &o, &cancel);
+        t.join().unwrap();
+        assert!(report.interrupted);
+        assert_eq!(report.scanned, 0);
     }
 
     #[test]

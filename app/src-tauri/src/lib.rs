@@ -58,6 +58,8 @@ pub fn run() {
                 eprintln!("Sentinela: sem ícone na bandeja: {e}");
             }
             sync_autostart(app.handle());
+            // Antes da vigia de jogos, que pausa a verificação enquanto um jogo roda.
+            app.manage(commands::scan::ScanState::default());
             app.manage(game_watch::GameWatch::start(app.handle().clone()));
             // A janela nasce escondida (tauri.conf) e aparece quando o frontend
             // avisa que carregou; só o início automático a mantém escondida.
@@ -109,6 +111,8 @@ pub fn run() {
             commands::disk::disk_find_large,
             commands::disk::disk_find_dupes,
             commands::scan::scan_start,
+            commands::scan::scan_pause,
+            commands::scan::scan_pause_state,
             commands::scan::quarantine_list,
             commands::scan::quarantine_restore,
             commands::scan::quarantine_delete,

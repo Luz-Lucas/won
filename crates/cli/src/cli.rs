@@ -357,8 +357,10 @@ fn cmd_scan(
             ..WalkOptions::default()
         },
         max_size,
-        // O CLI não usa o cache de verificados.
+        // O CLI não usa o cache de verificados, nem pausa, nem segundo plano.
         cache: None,
+        pause: None,
+        background: false,
     };
     let progress = make_progress(json);
     let mut scan = run_scan_with_progress(&engine, &opts, &cancel, &*progress);
