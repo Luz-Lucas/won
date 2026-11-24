@@ -232,6 +232,19 @@ pub fn explorer_menu_set(
     Ok(explorer_view(saved.explorer_menu, mode))
 }
 
+/// Procura uma versão nova do Sentinela no GitHub (só avisa; não instala).
+#[tauri::command]
+pub async fn app_update_check() -> Result<sentinela_core::appupdate::AppUpdate, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        sentinela_core::appupdate::check(
+            env!("CARGO_PKG_VERSION"),
+            &sentinela_core::updater::HttpFetcher,
+        )
+    })
+    .await
+    .map_err(|_| "A tarefa foi interrompida.".to_string())?
+}
+
 #[tauri::command]
 pub fn settings_get(state: State<'_, SettingsState>) -> SettingsView {
     view(&state.snapshot(), autostart_mode())

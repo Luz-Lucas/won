@@ -22,6 +22,10 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - name: Instalador NSIS (compila o frontend, o CLI e empacota ambos)
         working-directory: app
+        # Sem os dois segredos o instalador sai sem assinatura, como antes.
+        env:
+          SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
         run: |
           npm ci
           npm run tauri build

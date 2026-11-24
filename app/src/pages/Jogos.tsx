@@ -8,6 +8,7 @@ import type {
   TweakStatus,
   TweaksPage,
 } from "../api";
+import GameSessionCard from "../components/GameSession";
 import ConfirmDialog from "../components/ConfirmDialog";
 import GpuPerGame from "../components/GpuPerGame";
 import StartupList from "../components/StartupList";
@@ -240,6 +241,7 @@ export default function Jogos() {
   return (
     <section className="page">
       <h1>Jogos</h1>
+      <GameSessionCard />
       {data && !data.hkcu_allowed && <p className="notice">{OTHER_ACCOUNT}</p>}
       {bannerNeeded && (
         <div className="notice">

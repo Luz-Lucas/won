@@ -494,3 +494,49 @@ mod tests {
         );
     }
 }
+
+/// Sessão de jogo em andamento (plano de energia trocado), se houver.
+#[tauri::command]
+pub fn game_session_status() -> Option<sentinela_core::games::session::Session> {
+    sentinela_core::games::session::current(&sentinela_core::games::session::default_path())
+}
+
+#[tauri::command]
+pub async fn game_session_start() -> Result<sentinela_core::games::session::Session, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let r = sentinela_core::games::session::start_now(
+            &sentinela_core::games::session::default_path(),
+            &sentinela_core::apps::SystemRunner,
+        );
+        if r.is_ok() {
+            let _ = sentinela_core::activity::append(
+                &sentinela_core::activity::default_activity_path(),
+                sentinela_core::activity::ActivityKind::Tweak,
+                "Sessão de jogo iniciada (plano de energia de alto desempenho)",
+            );
+        }
+        r
+    })
+    .await
+    .map_err(|_| "A tarefa foi interrompida.".to_string())?
+}
+
+#[tauri::command]
+pub async fn game_session_end() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let r = sentinela_core::games::session::end(
+            &sentinela_core::games::session::default_path(),
+            &sentinela_core::apps::SystemRunner,
+        );
+        if r.is_ok() {
+            let _ = sentinela_core::activity::append(
+                &sentinela_core::activity::default_activity_path(),
+                sentinela_core::activity::ActivityKind::Tweak,
+                "Sessão de jogo encerrada (plano de energia restaurado)",
+            );
+        }
+        r.map(|_| ())
+    })
+    .await
+    .map_err(|_| "A tarefa foi interrompida.".to_string())?
+}

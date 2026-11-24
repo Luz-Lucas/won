@@ -29,6 +29,7 @@ vi.mock("../api", () => ({
   jobCancel: vi.fn(),
   jobRunning: vi.fn().mockResolvedValue(null),
   wallpaperStatus: vi.fn(),
+  desktopStatus: vi.fn().mockRejectedValue("sem desktop"),
   terminalStatus: vi.fn().mockRejectedValue("sem terminal"),
   wallpaperGallery: vi.fn(),
   wallpaperOpen: vi.fn(),
@@ -67,6 +68,7 @@ describe("Personalizar: papel de parede e temas", () => {
   beforeEach(() => {
     for (const f of Object.values(api)) if (vi.isMockFunction(f)) f.mockReset();
     vi.mocked(api.terminalStatus).mockRejectedValue("sem terminal");
+    vi.mocked(api.desktopStatus).mockRejectedValue("sem desktop");
     vi.mocked(api.jobRunning).mockResolvedValue(null);
     vi.mocked(api.tweaksList).mockResolvedValue({
       tweaks: [],
