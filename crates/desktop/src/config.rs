@@ -34,12 +34,26 @@ pub enum Action {
     ToggleFloat,
     MasterGrow,
     MasterShrink,
+    OpenLauncher,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hotkey {
     pub combo: Combo,
     pub action: Action,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomApp {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LauncherConfig {
+    pub max_results: usize,
+    pub apps: Vec<CustomApp>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,6 +73,7 @@ pub struct Config {
     pub bar: Option<BarConfig>,
     /// Presente = tiling ligado ao iniciar (`[tiling]`).
     pub tiling: Option<TilingConfig>,
+    pub launcher: Option<LauncherConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,6 +86,7 @@ struct RawFile {
     borders: Option<RawBorders>,
     bar: Option<RawBar>,
     tiling: Option<RawTiling>,
+    launcher: Option<RawLauncher>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -97,6 +113,24 @@ struct RawRule {
     float: bool,
     corners: Option<Corners>,
     backdrop: Option<Backdrop>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawLauncher {
+    hotkey: String,
+    max_results: Option<usize>,
+    #[serde(default)]
+    app: Vec<RawApp>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawApp {
+    name: String,
+    command: String,
+    #[serde(default)]
+    args: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -188,6 +222,58 @@ fn action(h: &RawHotkey) -> Result<Action, String> {
         "master-shrink" => named(Action::MasterShrink),
         other => Err(format!("ação desconhecida \"{other}\"")),
     }
+}
+
+fn parse_launcher(
+    l: &RawLauncher,
+    hotkeys: &mut Vec<Hotkey>,
+    errors: &mut Vec<String>,
+) -> Option<LauncherConfig> {
+    let before = errors.len();
+    match keys::parse(&l.hotkey) {
+        Ok(combo) if hotkeys.iter().any(|h| h.combo == combo) => {
+            errors.push(format!(
+                "launcher: \"{}\" já está em uso por outro atalho",
+                l.hotkey
+            ));
+        }
+        Ok(combo) => hotkeys.push(Hotkey {
+            combo,
+            action: Action::OpenLauncher,
+        }),
+        Err(e) => errors.push(format!("launcher: {e}")),
+    }
+    let max_results = l.max_results.unwrap_or(8);
+    if !(3..=15).contains(&max_results) {
+        errors.push("launcher: max_results deve ficar entre 3 e 15".into());
+    }
+    if l.app.len() > 100 {
+        errors.push("launcher: no máximo 100 apps".into());
+    }
+    for (i, a) in l.app.iter().enumerate() {
+        if a.name.trim().is_empty() || a.name.chars().count() > 60 {
+            errors.push(format!("launcher: app {}: nome inválido", i + 1));
+        }
+        if a.command.trim().is_empty()
+            || a.command.contains('\0')
+            || a.args.len() > MAX_ARGS
+            || a.args.iter().any(|x| x.contains('\0'))
+        {
+            errors.push(format!("launcher: app {}: command/args inválidos", i + 1));
+        }
+    }
+    (errors.len() == before).then(|| LauncherConfig {
+        max_results,
+        apps: l
+            .app
+            .iter()
+            .map(|a| CustomApp {
+                name: a.name.clone(),
+                command: a.command.clone(),
+                args: a.args.clone(),
+            })
+            .collect(),
+    })
 }
 
 fn parse_tiling(t: &RawTiling, errors: &mut Vec<String>) -> Option<TilingConfig> {
@@ -366,6 +452,10 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
         .tiling
         .as_ref()
         .and_then(|t| parse_tiling(t, &mut errors));
+    let launcher = raw
+        .launcher
+        .as_ref()
+        .and_then(|l| parse_launcher(l, &mut hotkeys, &mut errors));
 
     if errors.is_empty() {
         Ok(Config {
@@ -374,6 +464,7 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
             borders,
             bar,
             tiling,
+            launcher,
         })
     } else {
         Err(errors)
@@ -493,6 +584,15 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # active = "#0A84FF"
 # inactive = "#3A3A3C"
 
+# Lançador: caixa de busca de apps, janelas abertas e contas (ex.: 2*(3+4)).
+# [launcher]
+# hotkey = "Alt+Space"
+# max_results = 8              # 3 a 15
+# [[launcher.app]]             # apps extras, além dos do menu Iniciar
+# name = "Terminal admin"
+# command = "wt.exe"
+# args = ["-p", "PowerShell"]
+
 # Tiling: organiza as janelas sem sobreposição (janelas de tamanho fixo e as com float = true ficam soltas).
 # [tiling]
 # layout = "master-stack"      # master-stack, columns, grid, monocle
@@ -527,18 +627,41 @@ mod tests {
         assert_eq!(parse(EXAMPLE).unwrap(), Config::default());
         let on: String = EXAMPLE
             .lines()
-            .map(|l| {
-                l.strip_prefix("# ")
-                    .filter(|r| r.starts_with(['[', 'k', 'a', 'c', 'e', 'o', 't', 'n']))
-                    .unwrap_or(l)
+            .map(|l| match l.strip_prefix("# ") {
+                Some(r) if r.starts_with('[') => r,
+                Some(r)
+                    if r.split(" =").next().is_some_and(|k| {
+                        r.contains(" =")
+                            && !k.is_empty()
+                            && k.chars().all(|c| c.is_ascii_lowercase() || c == '_')
+                    }) =>
+                {
+                    r
+                }
+                _ => l,
             })
             .map(|l| format!("{l}\n"))
             .collect();
         let c = parse(&on).unwrap();
-        assert_eq!(c.hotkeys.len(), 2);
+        assert_eq!(c.hotkeys.len(), 3, "dois atalhos e o do lançador");
         assert_eq!(c.rules.len(), 1);
         assert!(c.borders.active.is_some());
-        assert!(c.bar.is_some());
+        assert!(c.bar.is_some() && c.tiling.is_some() && c.launcher.is_some());
+    }
+
+    #[test]
+    fn launcher_section_registers_its_hotkey() {
+        let c = parse(
+            "[launcher]\nhotkey=\"Alt+Space\"\n[[launcher.app]]\nname=\"X\"\ncommand=\"x.exe\"\nargs=[\"-a\"]\n",
+        )
+        .unwrap();
+        let l = c.launcher.unwrap();
+        assert_eq!((l.max_results, l.apps.len()), (8, 1));
+        assert!(c.hotkeys.iter().any(|h| h.action == Action::OpenLauncher));
+        assert!(parse("[launcher]\n").is_err(), "hotkey é obrigatória");
+        assert!(parse("[launcher]\nhotkey=\"Space\"\n").is_err());
+        let e = parse("[[hotkey]]\nkeys=\"Alt+Space\"\naction=\"center\"\n[launcher]\nhotkey=\"Alt+Space\"\nmax_results=1\n[[launcher.app]]\nname=\"\"\ncommand=\"x\"\n").unwrap_err();
+        assert_eq!(e.len(), 3, "{e:?}");
     }
 
     #[test]

@@ -5,6 +5,7 @@
 pub mod bar;
 pub mod config;
 pub mod keys;
+pub mod launcher;
 pub mod rules;
 pub mod tiling;
 
@@ -16,3 +17,6 @@ pub mod winbar;
 
 #[cfg(windows)]
 pub mod wintile;
+
+#[cfg(windows)]
+pub mod winlauncher;

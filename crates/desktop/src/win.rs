@@ -8,6 +8,7 @@ use crate::config::{Action, Borders, Loader, Reload, Rgb, default_path};
 use crate::keys::EMERGENCY;
 use crate::rules::{self, Backdrop, Corners, Effects, Rect, WindowInfo};
 use crate::winbar;
+use crate::winlauncher;
 use crate::wintile::Tiler;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -163,7 +164,7 @@ fn to_rect(r: RECT) -> Rect {
 }
 
 /// Janela que cobre o monitor inteiro (jogo): ninguém mexe nela.
-fn is_fullscreen(hwnd: HWND) -> bool {
+pub(crate) fn is_fullscreen(hwnd: HWND) -> bool {
     unsafe {
         let mut r: RECT = std::mem::zeroed();
         if GetWindowRect(hwnd, &mut r) == 0 {
@@ -444,6 +445,12 @@ fn do_action(st: &mut State, action: &Action) {
         let _ = std::process::Command::new(command).args(args).spawn();
         return;
     }
+    if matches!(action, Action::OpenLauncher) {
+        if let Some(l) = st.loader.config().launcher.clone() {
+            winlauncher::toggle(&l);
+        }
+        return;
+    }
     if matches!(
         action,
         Action::TileToggle
@@ -553,6 +560,7 @@ fn shutdown(st: &mut State) {
     restore_all(st);
     st.tiler.disable();
     winbar::destroy();
+    winlauncher::destroy();
     for (id, _) in st.registered.drain(..) {
         unsafe { UnregisterHotKey(std::ptr::null_mut(), id) };
     }
