@@ -24,6 +24,18 @@ enum Cmd {
         module: std::path::PathBuf,
         names: Vec<String>,
     },
+    /// Liga o mod 5 (rótulos da barra) no Explorer, passando pelas travas do shell
+    ShellLabels {
+        dll: std::path::PathBuf,
+        #[arg(long)]
+        experimental: bool,
+    },
+    /// Liga o mod 4 (ícones pequenos da barra) no Explorer
+    ShellIcons {
+        dll: std::path::PathBuf,
+        #[arg(long)]
+        experimental: bool,
+    },
     /// Grava o script de recuperação e mostra o caminho
     Recovery,
 }
@@ -60,6 +72,20 @@ fn main() -> Result<()> {
             for (name, rva) in sentinela_mods::symbols::resolve_module(&dir, &module, &refs)? {
                 println!("{name} = 0x{rva:X}");
             }
+        }
+        Cmd::ShellLabels { dll, experimental } => {
+            let build = sysinfo::System::kernel_version()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            let done = sentinela_mods::enable_shell_labels(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            println!("{} carregamento(s) no Explorer (build {build})", done.len());
+        }
+        Cmd::ShellIcons { dll, experimental } => {
+            let build = sysinfo::System::kernel_version()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            let done = sentinela_mods::enable_shell_icons(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::Recovery => println!(
             "{}",
