@@ -43,43 +43,43 @@
 
 **Files:** `crates/core/src/scan/risk.rs`, `scan/areas.rs`, `scan/mod.rs` (arquivos avulsos, filtro, `sha256` no item), `scan/targets.rs`, `games/running.rs` (`pid`).
 
-- [ ] `risk::is_risky(path, head)`; `areas::QuickAreas { roots, files, unreadable }` montado por `areas::collect(&Sources)`, com `Sources` injetável e `system_sources()` real.
-- [ ] `ScanOptions { files, risky_only }`; `ScanItem.sha256`; exclusão da pasta do Sentinela.
-- [ ] Testes: `risky_by_header_and_extension`, `quick_areas_dedupe_and_skip_missing`, `quick_reads_only_risky_files_in_folders`, `explicit_files_always_scanned`, `own_folder_is_excluded`.
-- [ ] Commit `feat(core): quick scan of critical areas and risky file types`.
+- [x] `risk::is_risky(path, head)`; `areas::QuickAreas { roots, files, unreadable }` montado por `areas::collect(&Sources)`, com `Sources` injetável e `system_sources()` real.
+- [x] `ScanOptions { files, risky_only }`; `ScanItem.sha256`; exclusão da pasta do Sentinela.
+- [x] Testes: `risky_by_header_and_extension`, `quick_areas_dedupe_and_skip_missing`, `quick_reads_only_risky_files_in_folders`, `explicit_files_always_scanned`, `own_folder_is_excluded`.
+- [x] Commit `feat(core): quick scan of critical areas and risky file types`.
 
 ### Task 2: Achados, travas e exceções
 
 **Files:** `scan/explain.rs`, `scan/guard.rs`, `scan/exceptions.rs`, `scan/targets.rs`.
 
-- [ ] Texto do "por quê" por detector; `recommended` (só hash) no item; `guard::check(path, system_root, procs)` → `SystemFolder`, `InUse { pids }`; `kill(pids)`; exceções por hash (`load/add/remove`), filtradas no resumo (`ignored`).
-- [ ] Testes: `hash_hits_are_recommended`, `system_root_needs_second_confirmation`, `running_file_reports_pids`, `exceptions_round_trip_and_filter`.
-- [ ] Commit `feat(core): finding explanations, quarantine guards and exceptions`.
+- [x] Texto do "por quê" por detector; `recommended` (só hash) no item; `guard::check(path, system_root, procs)` → `SystemFolder`, `InUse { pids }`; `kill(pids)`; exceções por hash (`load/add/remove`), filtradas no resumo (`ignored`).
+- [x] Testes: `hash_hits_are_recommended`, `system_root_needs_second_confirmation`, `running_file_reports_pids`, `exceptions_round_trip_and_filter`.
+- [x] Commit `feat(core): finding explanations, quarantine guards and exceptions`.
 
 ### Task 3: Quarentena codificada e apagar
 
 **Files:** `crates/core/src/quarantine.rs`, CLI `quarantine --delete`.
 
-- [ ] `encoding` no índice; gravar codificado e conferir o hash do original; restaurar os dois formatos; `delete(dir, id)`.
-- [ ] Testes: `stored_bytes_are_encoded`, `legacy_entry_still_restores`, `delete_removes_file_and_entry`.
-- [ ] Commit `feat(core): encoded quarantine and permanent delete`.
+- [x] `encoding` no índice; gravar codificado e conferir o hash do original; restaurar os dois formatos; `delete(dir, id)`.
+- [x] Testes: `stored_bytes_are_encoded`, `legacy_entry_still_restores`, `delete_removes_file_and_entry`.
+- [x] Commit `feat(core): encoded quarantine and permanent delete`.
 
 ### Task 4: Agendamento, quarentena automática e assinaturas
 
 **Files:** `crates/core/src/scan/schedule.rs`, `settings.rs`, `app/src-tauri/src/scheduled.rs`, `lib.rs`.
 
-- [ ] XML da tarefa, `schtasks` (criar, apagar, consultar); `Settings { auto_quarantine_hash, scan_schedule_offered }`; `--scheduled-scan` (instância única, ou escondida e fecha); notificação; atualização das assinaturas com mais de 24 h.
-- [ ] Testes: `task_xml_runs_scheduled_scan`, `auto_quarantine_only_hash_hits_outside_windows`, `signatures_stale_after_24h`, `scheduled_arg_parsing`.
-- [ ] Commit `feat: weekly scheduled quick scan and signature auto-update`.
+- [x] XML da tarefa, `schtasks` (criar, apagar, consultar); `Settings { auto_quarantine_hash, scan_schedule_offered }`; `--scheduled-scan` (instância única, ou escondida e fecha); notificação; atualização das assinaturas com mais de 24 h.
+- [x] Testes: `task_xml_runs_scheduled_scan`, `auto_quarantine_only_hash_hits_outside_windows`, `signatures_stale_after_24h`, `scheduled_arg_parsing`.
+- [x] Commit `feat: weekly scheduled quick scan and signature auto-update`.
 
 ### Task 5: Janela
 
-- [ ] Segurança: botões Rápida, Completa, Personalizada (várias pastas e discos); aviso do Defender; achados com caixas, "por quê", SHA-256, Detalhes, Abrir pasta, VirusTotal, Ignorar sempre; "Colocar em quarentena" com as travas; oferta de agendamento; página Quarentena (restaurar, apagar definitivamente). Ajustes: verificação agendada, quarentena automática, exceções.
-- [ ] Testes Vitest: `hash_hits_come_checked`, `quarantine_asks_again_for_windows_folder`, `in_use_offers_to_end_process`, `ignore_always_adds_exception`, `virustotal_opens_hash_url`, `delete_needs_confirmation`, `schedule_offer_after_first_scan`, `exceptions_in_settings`.
-- [ ] Commit `feat(gui): antivirus page with actions, quarantine page and schedule`.
+- [x] Segurança: botões Rápida, Completa, Personalizada (várias pastas e discos); aviso do Defender; achados com caixas, "por quê", SHA-256, Detalhes, Abrir pasta, VirusTotal, Ignorar sempre; "Colocar em quarentena" com as travas; oferta de agendamento; página Quarentena (restaurar, apagar definitivamente). Ajustes: verificação agendada, quarentena automática, exceções.
+- [x] Testes Vitest: `hash_hits_come_checked`, `quarantine_asks_again_for_windows_folder`, `in_use_offers_to_end_process`, `ignore_always_adds_exception`, `virustotal_opens_hash_url`, `delete_needs_confirmation`, `schedule_offer_after_first_scan`, `exceptions_in_settings`.
+- [x] Commit `feat(gui): antivirus page with actions, quarantine page and schedule`.
 
 ### Task 6: CLI e roteiro manual
 
-- [ ] `sentinela scan --quick [--json]`; `sentinela quarantine --delete <id>`; README; `docs/testes-manuais-fase-s1.md`.
-- [ ] Testes CLI: `scan_quick_runs`, `quarantine_delete_unknown_id_exits_2`.
-- [ ] Commit `feat(cli): quick scan and quarantine delete; docs for phase S1`.
+- [x] `sentinela scan --quick [--json]`; `sentinela quarantine --delete <id>`; README; `docs/testes-manuais-fase-s1.md`.
+- [x] Testes CLI: `scan_quick_runs`, `quarantine_delete_unknown_id_exits_2`.
+- [x] Commit `feat(cli): quick scan and quarantine delete; docs for phase S1`.

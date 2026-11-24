@@ -114,6 +114,37 @@ fn scan_exclude_skips_files() {
 }
 
 #[test]
+fn scan_quick_runs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = marker_db(tmp.path());
+    let dir = tmp.path().join("pasta");
+    fs::create_dir(&dir).unwrap();
+    // Só o tipo de risco é lido na rápida.
+    fs::write(dir.join("dados.bin"), MARKER).unwrap();
+    fs::write(dir.join("script.ps1"), MARKER).unwrap();
+    let out = sentinela(&db)
+        .args(["scan", "--quick", "--json", "--quick-root"])
+        .arg(&dir)
+        .assert()
+        .code(1)
+        .get_output()
+        .clone();
+    let v = json_of(&out);
+    assert_eq!(v["summary"]["scanned"], 1);
+    assert_eq!(v["summary"]["malicious"], 1);
+}
+
+#[test]
+fn scan_quick_and_paths_conflict() {
+    let tmp = tempfile::tempdir().unwrap();
+    sentinela(&tmp.path().join("db"))
+        .args(["scan", "--quick"])
+        .arg(tmp.path())
+        .assert()
+        .code(2);
+}
+
+#[test]
 fn scan_invalid_exclude_exits_2() {
     let tmp = tempfile::tempdir().unwrap();
     sentinela(&tmp.path().join("db"))

@@ -17,7 +17,9 @@ use crate::updates::{self, UpdatesCommand};
 use sentinela_core::clean::category::Env;
 use sentinela_core::clean::{self, CleanReport, platform};
 use sentinela_core::full::{self, FullOptions};
-use sentinela_core::scan::{Engine, NoProgress, Progress, ScanOptions, run_scan_with_progress};
+use sentinela_core::scan::{
+    Engine, NoProgress, Progress, ScanOptions, areas, run_scan_with_progress,
+};
 use sentinela_core::secrets::{WindowsCredentialStore, resolve_abuse_key};
 use sentinela_core::status::db_status;
 use sentinela_core::walker::WalkOptions;
@@ -40,8 +42,25 @@ enum Command {
     /// Verifica arquivos e pastas em busca de malware
     Scan {
         /// Arquivos ou pastas a verificar
-        #[arg(required = true, num_args = 1.., value_name = "CAMINHO")]
+        #[arg(
+            required_unless_present = "quick",
+            conflicts_with = "quick",
+            num_args = 1..,
+            value_name = "CAMINHO"
+        )]
         paths: Vec<PathBuf>,
+        /// Verificação rápida: processos abertos, o que inicia com o Windows e
+        /// as pastas onde malware costuma cair (só tipos de arquivo de risco)
+        #[arg(long)]
+        quick: bool,
+        /// Só para testes: na rápida, troca as áreas críticas por estas pastas
+        #[arg(
+            long = "quick-root",
+            value_name = "CAMINHO",
+            hide = true,
+            requires = "quick"
+        )]
+        quick_root: Vec<PathBuf>,
         /// Saída em JSON
         #[arg(long)]
         json: bool,
@@ -170,10 +189,12 @@ fn dispatch(command: Command) -> Result<i32> {
     match command {
         Command::Scan {
             paths,
+            quick,
+            quick_root,
             json,
             max_size,
             exclude,
-        } => cmd_scan(paths, json, max_size, exclude),
+        } => cmd_scan(paths, quick.then_some(quick_root), json, max_size, exclude),
         Command::Update => cmd_update(),
         Command::Clean {
             category,
@@ -254,8 +275,18 @@ fn make_progress(json: bool) -> Box<dyn Progress> {
     }
 }
 
-fn cmd_scan(paths: Vec<PathBuf>, json: bool, max_size: u64, exclude: Vec<String>) -> Result<i32> {
-    require_exists(&paths)?;
+/// `quick`: `Some(raízes de teste)` para a verificação rápida (vazio = as
+/// áreas críticas reais da máquina).
+fn cmd_scan(
+    paths: Vec<PathBuf>,
+    quick: Option<Vec<PathBuf>>,
+    json: bool,
+    max_size: u64,
+    exclude: Vec<String>,
+) -> Result<i32> {
+    if quick.is_none() {
+        require_exists(&paths)?;
+    }
     let max_size = max_size
         .checked_mul(1024 * 1024)
         .context("--max-size grande demais")?;
@@ -295,18 +326,40 @@ fn cmd_scan(paths: Vec<PathBuf>, json: bool, max_size: u64, exclude: Vec<String>
         }
     }
 
+    let var = |n: &str| std::env::var(n).ok().filter(|v| !v.is_empty());
+    let (roots, files, risky_only, unreadable) = match quick {
+        None => (paths, Vec::new(), false, Vec::new()),
+        Some(test_roots) => {
+            let sources = if test_roots.is_empty() {
+                areas::system_sources()
+            } else {
+                areas::Sources {
+                    folders: test_roots,
+                    ..areas::Sources::default()
+                }
+            };
+            let a = areas::collect(&sources, &var);
+            (a.roots, a.files, true, a.unreadable)
+        }
+    };
     let opts = ScanOptions {
-        roots: paths,
-        files: Vec::new(),
-        risky_only: false,
+        roots,
+        files,
+        risky_only,
         walk: WalkOptions {
             excludes,
+            // O próprio banco e a quarentena nunca são verificados.
+            skip_dirs: vec![
+                signatures::default_db_dir(),
+                quarantine::default_quarantine_dir(),
+            ],
             ..WalkOptions::default()
         },
         max_size,
     };
     let progress = make_progress(json);
-    let scan = run_scan_with_progress(&engine, &opts, &cancel, &*progress);
+    let mut scan = run_scan_with_progress(&engine, &opts, &cancel, &*progress);
+    scan.errors.splice(0..0, unreadable);
     report::write_scan(&scan, json, &mut io::stdout().lock())?;
     Ok(scan.exit_code())
 }
