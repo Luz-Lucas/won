@@ -1,3 +1,4 @@
+import ShellMods from "../components/ShellMods";
 import { useCallback, useEffect, useState } from "react";
 import {
   relaunchElevated,
@@ -460,6 +461,9 @@ export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page)
         <>
           <h2>{info.title}</h2>
           <p className="muted">{info.description}</p>
+          {(view === "barra" || view === "iniciar") && (
+            <ShellMods only={view === "iniciar" ? ["xaml"] : ["xaml", "icones", "rotulos"]} />
+          )}
           <details className="style-reference">
             <summary>Referências: o que esta área muda</summary>
             <ul>

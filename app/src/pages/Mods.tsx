@@ -8,6 +8,7 @@ import {
   modsStatus,
 } from "../api";
 import type { ModsStatus } from "../api";
+import ShellMods from "../components/ShellMods";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
@@ -79,6 +80,8 @@ export default function Mods() {
           {`Não foi possível ler o mods.toml: ${status.registry_error}`}
         </p>
       )}
+
+      <ShellMods />
 
       <div className="game-session">
         <h2>Recuperação</h2>

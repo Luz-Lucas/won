@@ -1068,3 +1068,22 @@ export const modsInject = (name: string) => invoke<number>("mods_inject", { name
 export const modsEject = (name: string) => invoke<number>("mods_eject", { name });
 export const modsEjectAll = () => invoke<number>("mods_eject_all");
 export const modsRecoveryWrite = () => invoke<string>("mods_recovery_write");
+
+export interface ShellModItem {
+  id: "icones" | "rotulos" | "tema" | "xaml";
+  dll_exists: boolean;
+  active: boolean;
+}
+
+export interface ShellModsStatus {
+  installed: boolean;
+  anticheat_running: boolean;
+  build: number;
+  mods: ShellModItem[];
+  xaml_cfg: string;
+}
+
+export const shellModsStatus = () => invoke<ShellModsStatus>("shell_mods_status");
+export const shellModSet = (id: ShellModItem["id"], on: boolean) =>
+  invoke<number>("shell_mod_set", { id, on });
+export const xamlCfgWrite = (text: string) => invoke<void>("xaml_cfg_write", { text });

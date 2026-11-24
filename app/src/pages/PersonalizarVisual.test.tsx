@@ -20,6 +20,9 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 vi.mock("../api", () => ({
+  shellModsStatus: vi.fn().mockResolvedValue(undefined),
+  shellModSet: vi.fn(),
+  xamlCfgWrite: vi.fn(),
   tweaksList: vi.fn(),
   tweaksApply: vi.fn(),
   tweaksApplyChoice: vi.fn(),

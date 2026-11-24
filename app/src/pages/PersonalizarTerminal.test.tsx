@@ -11,6 +11,9 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: () => Promise.resolve(() => {}) }));
 
 vi.mock("../api", () => ({
+  shellModsStatus: vi.fn().mockResolvedValue(undefined),
+  shellModSet: vi.fn(),
+  xamlCfgWrite: vi.fn(),
   tweaksList: vi.fn().mockResolvedValue({ tweaks: [], elevated: true, hkcu_allowed: true }),
   tweaksApply: vi.fn(),
   tweaksApplyChoice: vi.fn(),

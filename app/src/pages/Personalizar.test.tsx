@@ -16,6 +16,9 @@ const render = (ui: React.ReactElement) =>
   rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
+  shellModsStatus: vi.fn().mockResolvedValue(undefined),
+  shellModSet: vi.fn(),
+  xamlCfgWrite: vi.fn(),
   tweaksList: vi.fn(),
   tweaksApply: vi.fn(),
   tweaksApplyChoice: vi.fn(),
