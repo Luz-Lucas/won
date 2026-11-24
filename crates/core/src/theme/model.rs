@@ -120,7 +120,7 @@ pub fn parse(text: &str) -> Result<Parsed, String> {
     let mut warnings = Vec::new();
     for key in table.keys() {
         match key.as_str() {
-            "version" | "theme" | "tweaks" | "wallpaper" | "colors" | "terminal" => {}
+            "version" | "theme" | "tweaks" | "wallpaper" | "colors" | "terminal" | "shell" => {}
             k if RESERVED.contains(&k) => {
                 warnings.push(format!("a seção [{k}] é de uma fase futura e foi ignorada"))
             }

@@ -48,11 +48,60 @@ async fn blocking<T: Send + 'static>(
         .map_err(|_| "A tarefa foi interrompida.".to_string())?
 }
 
+/// Estilo da barra e do Iniciar (`xaml-barra.cfg`) dos temas prontos.
+fn builtin_shell(name: &str) -> Option<&'static str> {
+    match name {
+        "Minimalista" => Some(
+            "enabled=true\nfill=#FF1C1C1C\nradius=0\nmargin=0,0,0,0\nhide_border=false\nstart_fill=#FF202020\nstart_radius=8\n",
+        ),
+        "Translúcido" => Some(
+            "enabled=true\nfill=#CC101018\nradius=14\nmargin=8,0,8,6\nhide_border=true\nstart_fill=#E6141420\nstart_radius=16\n",
+        ),
+        _ => None,
+    }
+}
+
+/// Texto do `xaml-barra.cfg` da seção `[shell]` do tema, se houver.
+fn shell_cfg(toml_text: &str) -> Option<String> {
+    let t: toml::Table = toml_text.trim_start_matches('\u{feff}').parse().ok()?;
+    let x = t.get("shell")?.get("xaml")?.as_str()?;
+    (x.len() <= 4000).then(|| x.to_string())
+}
+
+fn cfg_dir() -> PathBuf {
+    sentinela_mods::registry::data_dir()
+}
+
+/// Grava o estilo do tema (guardando o anterior para o "desfazer") e liga o efeito.
+async fn apply_shell(cfg: String) -> Result<(), String> {
+    let dir = cfg_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let (cur, prev) = (dir.join("xaml-barra.cfg"), dir.join("xaml-barra.cfg.prev"));
+    if !prev.exists() {
+        // Sem arquivo antes: guarda vazio para saber que deve voltar a "desligado".
+        let old = std::fs::read_to_string(&cur).unwrap_or_default();
+        std::fs::write(&prev, old).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&cur, cfg).map_err(|e| e.to_string())?;
+    crate::commands::mods::shell_mod_set("xaml".into(), true)
+        .await
+        .map(|_| ())
+}
+
 fn info(t: &Theme, builtin: bool) -> ThemeInfo {
+    let mut toml = theme::to_toml(t);
+    if let Some(x) = builtin.then(|| builtin_shell(&t.name)).flatten() {
+        let mut tb = toml::Table::new();
+        tb.insert("xaml".into(), x.into());
+        let mut root = toml::Table::new();
+        root.insert("shell".into(), tb.into());
+        toml.push('\n');
+        toml.push_str(&toml::to_string(&root).unwrap_or_default());
+    }
     ThemeInfo {
         name: t.name.clone(),
         description: t.description.clone(),
-        toml: theme::to_toml(t),
+        toml,
         builtin,
         applied: false,
     }
@@ -151,7 +200,8 @@ pub async fn theme_preview(toml: String, state: State<'_, TweaksState>) -> Resul
 #[tauri::command]
 pub async fn theme_apply(toml: String, state: State<'_, TweaksState>) -> Result<Applied, String> {
     let state = state.inner().clone();
-    blocking(move || {
+    let shell = shell_cfg(&toml);
+    let applied = blocking(move || {
         let t = parse(&toml)?;
         let applied = with_env(&state, |env| theme::apply(&t, env));
         if applied.record.is_some() {
@@ -159,18 +209,31 @@ pub async fn theme_apply(toml: String, state: State<'_, TweaksState>) -> Result<
         }
         Ok(applied)
     })
-    .await
+    .await?;
+    if let Some(cfg) = shell {
+        // A barra e o Iniciar dependem do mod no Explorer; erro aqui não desfaz o resto.
+        if let Err(e) = apply_shell(cfg).await {
+            log(&format!("Estilo da barra/Iniciar do tema não aplicado: {e}"));
+        }
+    }
+    Ok(applied)
 }
 
 #[tauri::command]
 pub async fn theme_undo(state: State<'_, TweaksState>) -> Result<Undone, String> {
     let state = state.inner().clone();
-    blocking(move || {
+    let undone = blocking(move || {
         let undone = with_env(&state, theme::undo_last)?;
         log("Tema desfeito");
         Ok(undone)
     })
-    .await
+    .await?;
+    let (cur, prev) = (cfg_dir().join("xaml-barra.cfg"), cfg_dir().join("xaml-barra.cfg.prev"));
+    if let Ok(old) = std::fs::read_to_string(&prev) {
+        let _ = std::fs::write(&cur, old);
+        let _ = std::fs::remove_file(&prev);
+    }
+    Ok(undone)
 }
 
 /// Salva o visual atual (ajustes de personalização aplicados, wallpaper da

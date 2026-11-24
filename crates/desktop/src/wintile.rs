@@ -27,7 +27,7 @@ const WS_THICKFRAME: u32 = 0x0004_0000;
 const WS_MAXIMIZEBOX: u32 = 0x0001_0000;
 const RATIO_STEP: f32 = 0.05;
 /// Distância (px) a partir da qual uma janela é considerada movida pelo usuário.
-const MOVED_PX: i32 = 48;
+const MOVED_PX: i32 = 96;
 
 pub struct Tiler {
     pub enabled: bool,
@@ -38,6 +38,11 @@ pub struct Tiler {
     saved: HashMap<isize, RECT>,
     /// Última disposição aplicada: não mexe de novo se nada mudou.
     last: Vec<(isize, Rect)>,
+    /// Quando a última disposição foi aplicada: logo depois, as janelas ainda estão se ajustando
+    /// (troca de DPI entre monitores, animações) e não contam como "movidas".
+    placed_at: Option<std::time::Instant>,
+    /// Verificações seguidas em que a janela estava longe do lugar.
+    strikes: HashMap<isize, u8>,
 }
 
 impl Tiler {
@@ -56,6 +61,8 @@ impl Tiler {
             floating: HashSet::new(),
             saved: HashMap::new(),
             last: Vec::new(),
+            placed_at: None,
+            strikes: HashMap::new(),
         }
     }
 
@@ -156,11 +163,18 @@ impl Tiler {
             self.place(*h as HWND, *r);
         }
         self.last = plan;
+        self.placed_at = Some(std::time::Instant::now());
     }
 
     /// Janela que o usuário arrastou ou encaixou (Snap do Windows, Win+setas) para outro lugar
     /// deixa de ser organizada: fica onde ele a pôs. `toggle-float` a traz de volta.
     fn release_moved_windows(&mut self) {
+        if self
+            .placed_at
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(1500))
+        {
+            return;
+        }
         let mut moved = Vec::new();
         for (h, want) in &self.last {
             let hwnd = *h as HWND;
@@ -183,7 +197,14 @@ impl Tiler {
                 let far = (vis.left - want.left).abs() > MOVED_PX
                     || (vis.top - want.top).abs() > MOVED_PX;
                 if far {
-                    moved.push(*h);
+                    let n = self.strikes.entry(*h).or_insert(0);
+                    *n += 1;
+                    // Duas verificações seguidas: um deslize momentâneo não solta a janela.
+                    if *n >= 2 {
+                        moved.push(*h);
+                    }
+                } else {
+                    self.strikes.remove(h);
                 }
             }
         }
@@ -191,6 +212,7 @@ impl Tiler {
             return;
         }
         for h in moved {
+            self.strikes.remove(&h);
             self.floating.insert(h);
             // Fica onde o usuário pôs: não volta ao lugar antigo ao desligar o tiling.
             self.saved.remove(&h);
