@@ -35,6 +35,8 @@ pub enum Action {
     MasterGrow,
     MasterShrink,
     OpenLauncher,
+    /// Abre os layouts de encaixe nativos do Windows (Win+Z), para combinar com o tiling.
+    SnapLayouts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +144,17 @@ struct RawTiling {
     gap: Option<u32>,
     outer_gap: Option<u32>,
     master_ratio: Option<f32>,
+    portrait_layout: Option<Layout>,
+    #[serde(default)]
+    monitor: Vec<RawMonitor>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMonitor {
+    index: usize,
+    layout: Option<Layout>,
+    max_windows: Option<usize>,
 }
 
 fn yes() -> bool {
@@ -220,6 +233,7 @@ fn action(h: &RawHotkey) -> Result<Action, String> {
         "toggle-float" => named(Action::ToggleFloat),
         "master-grow" => named(Action::MasterGrow),
         "master-shrink" => named(Action::MasterShrink),
+        "snap-layouts" => named(Action::SnapLayouts),
         other => Err(format!("ação desconhecida \"{other}\"")),
     }
 }
@@ -294,11 +308,29 @@ fn parse_tiling(t: &RawTiling, errors: &mut Vec<String>) -> Option<TilingConfig>
             tiling::MAX_RATIO
         ));
     }
+    let mut monitors = Vec::new();
+    for m in &t.monitor {
+        if !(1..=16).contains(&m.index) {
+            errors.push("tiling.monitor: index vai de 1 a 16 (1 = monitor mais à esquerda)".into());
+        } else if monitors.iter().any(|r: &tiling::MonitorRule| r.index == m.index) {
+            errors.push(format!("tiling.monitor: index {} repetido", m.index));
+        }
+        if m.max_windows.is_some_and(|n| !(1..=12).contains(&n)) {
+            errors.push("tiling.monitor: max_windows vai de 1 a 12".into());
+        }
+        monitors.push(tiling::MonitorRule {
+            index: m.index,
+            layout: m.layout,
+            max_windows: m.max_windows,
+        });
+    }
     (errors.len() == before).then_some(TilingConfig {
         layout: t.layout.unwrap_or(Layout::MasterStack),
         gap,
         outer_gap,
         master_ratio,
+        portrait_layout: t.portrait_layout.unwrap_or(Layout::Rows),
+        monitors,
     })
 }
 
@@ -599,8 +631,13 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # gap = 8
 # outer_gap = 8
 # master_ratio = 0.55          # 0,2 a 0,8
+# portrait_layout = "rows"     # layout dos monitores em retrato (janelas empilhadas)
+# [[tiling.monitor]]           # regra por monitor (1 = o mais à esquerda)
+# index = 2
+# layout = "rows"
+# max_windows = 3              # 2 ou 3 zonas empilhadas
 # Ações de atalho do tiling: tile-toggle, tile-next-layout, focus-next, focus-prev,
-# swap-master, toggle-float, master-grow, master-shrink.
+# swap-master, toggle-float, master-grow, master-shrink, snap-layouts (abre os layouts de encaixe do Windows, Win+Z).
 
 # Barra própria (fica ocupando a borda; janelas maximizadas não passam por baixo dela).
 # [bar]
@@ -678,6 +715,11 @@ mod tests {
         assert!(parse("[tiling]\nmaster_ratio=0.95\n").is_err());
         assert!(parse("[tiling]\ngap=500\n").is_err());
         assert!(parse("[tiling]\nlayout=\"spiral\"\n").is_err());
+        let c = parse("[tiling]\n[[tiling.monitor]]\nindex=2\nlayout=\"rows\"\nmax_windows=3\n").unwrap();
+        let t = c.tiling.unwrap();
+        assert_eq!(t.portrait_layout, Layout::Rows);
+        assert_eq!(t.monitors[0].max_windows, Some(3));
+        assert!(parse("[tiling]\n[[tiling.monitor]]\nindex=0\n").is_err());
         assert!(
             parse("[[hotkey]]\nkeys=\"Win+J\"\naction=\"focus-next\"\ncommand=\"x\"\n").is_err()
         );

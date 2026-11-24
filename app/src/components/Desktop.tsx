@@ -7,6 +7,7 @@ import {
   desktopStop,
 } from "../api";
 import type { DesktopStatus } from "../api";
+import DesktopRules from "./DesktopRules";
 import DesktopVisual from "./DesktopVisual";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
@@ -110,6 +111,7 @@ export default function Desktop({
       )}
 
       <DesktopVisual text={text} onChange={edit} />
+      <DesktopRules text={text} onChange={edit} />
 
       <details className="style-reference dv-advanced">
         <summary>Avançado: atalhos e regras no arquivo desktop.toml</summary>

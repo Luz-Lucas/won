@@ -3,6 +3,7 @@ import { shellModSet, shellModsStatus, xamlCfgWrite } from "../api";
 import type { ShellModItem, ShellModsStatus } from "../api";
 import { buildXamlCfg, parseXamlCfg } from "../xamlCfg";
 import type { XamlStyle } from "../xamlCfg";
+import { PRESETS_UNAVAILABLE, STYLE_PRESETS } from "../stylePresets";
 import ConfirmDialog from "./ConfirmDialog";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
@@ -28,6 +29,7 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState<ShellModItem["id"] | null>(null);
   const [style, setStyle] = useState<XamlStyle | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.resolve(shellModsStatus()).then(
@@ -110,6 +112,47 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
           <legend>Aparência da barra e do Iniciar</legend>
           <div className="row">
             <label>
+              Estilos prontos{" "}
+              <select
+                aria-label="Estilos prontos"
+                value=""
+                onChange={(e) => {
+                  const p = STYLE_PRESETS.find((x) => x.id === e.target.value);
+                  if (p) {
+                    set({ startFill: null, startRadius: null, ...p.style });
+                    setPicked(p.id);
+                  }
+                }}
+              >
+                <option value="">Escolher…</option>
+                {STYLE_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {`${p.name} (${p.repo})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {picked && (
+            <p className="muted">
+              {(() => {
+                const p = STYLE_PRESETS.find((x) => x.id === picked)!;
+                return `${p.name}: origem ${p.repo}, ${p.credit}.${p.approx ? " Aproximado: " : " "}${p.note} Clique em Aplicar estilo para valer.`;
+              })()}
+            </p>
+          )}
+          <details>
+            <summary>Estilos dos repositórios que não dá para aplicar</summary>
+            <ul>
+              {PRESETS_UNAVAILABLE.map((u) => (
+                <li key={u.what}>
+                  <strong>{u.what}:</strong> {u.why}
+                </li>
+              ))}
+            </ul>
+          </details>
+          <div className="row">
+            <label>
               Cor da barra{" "}
               <input type="color" value={style.fill} onChange={(e) => set({ fill: e.target.value })} />
             </label>
@@ -139,8 +182,11 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
                 type="range"
                 min={0}
                 max={40}
-                value={style.margin}
-                onChange={(e) => set({ margin: Number(e.target.value) })}
+                value={style.margin[0]}
+                onChange={(e) => {
+                  const m = Number(e.target.value);
+                  set({ margin: [m, m, m, m] });
+                }}
               />
             </label>
             <label>

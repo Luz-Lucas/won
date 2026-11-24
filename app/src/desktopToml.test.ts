@@ -35,7 +35,7 @@ describe("desktopToml", () => {
     const out = applySections(FILE, {
       ...s,
       bar: { ...DEFAULT_BAR, height: 50 },
-      tiling: { layout: "grid", gap: 4, outerGap: 6, masterRatio: 0.5 },
+      tiling: { layout: "grid", gap: 4, outerGap: 6, masterRatio: 0.5, portraitLayout: "rows", monitors: [] },
     });
     expect(out).toContain("# meu arquivo");
     expect(out).toContain('[[hotkey]]\nkeys = "Win+Alt+T"');
@@ -57,11 +57,23 @@ describe("desktopToml", () => {
   });
 
   it("tile boxes never overlap and fill the layout", () => {
-    const t = { layout: "master-stack" as const, gap: 20, outerGap: 10, masterRatio: 0.6 };
+    const t = { layout: "master-stack" as const, gap: 20, outerGap: 10, masterRatio: 0.6, portraitLayout: "rows" as const, monitors: [] };
     const b = tileBoxes(t, 4, 192, 108, 10);
     expect(b).toHaveLength(4);
     expect(b[0]!.w).toBeGreaterThan(b[1]!.w);
     expect(tileBoxes({ ...t, layout: "monocle" }, 4, 192, 108, 10)).toHaveLength(1);
     expect(tileBoxes({ ...t, layout: "grid" }, 4, 192, 108, 10)).toHaveLength(4);
+  });
+});
+
+describe("tiling por monitor", () => {
+  it("lê e grava layout de retrato e regras de monitor", () => {
+    const text = `[tiling]\nlayout = "grid"\nportrait_layout = "rows"\n\n[[tiling.monitor]]\nindex = 2\nlayout = "rows"\nmax_windows = 3\n`;
+    const s = readSections(text)!;
+    expect(s.tiling!.portraitLayout).toBe("rows");
+    expect(s.tiling!.monitors).toEqual([{ index: 2, layout: "rows", maxWindows: 3 }]);
+    const out = applySections(text, s);
+    expect(out).toContain("[[tiling.monitor]]\nindex = 2\nlayout = \"rows\"\nmax_windows = 3");
+    expect(out.match(/\[\[tiling\.monitor\]\]/g)).toHaveLength(1);
   });
 });

@@ -27,7 +27,10 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW, SetEvent, WaitForSingleObject,
 };
 use windows_sys::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+    INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, RegisterHotKey, SendInput,
+    UnregisterHotKey,
+};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, EnumWindows, GA_ROOT, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, GetAncestor,
     GetClassNameW, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW, GetWindowRect,
@@ -440,9 +443,39 @@ fn register_hotkeys(st: &mut State) {
     }
 }
 
+/// Pressiona Win+Z: abre os layouts de encaixe (Snap) do Windows 11.
+fn send_win_z() {
+    const VK_LWIN: u16 = 0x5B;
+    const VK_Z: u16 = 0x5A;
+    let key = |vk: u16, up: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: if up { KEYEVENTF_KEYUP } else { 0 },
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    let inputs = [key(VK_LWIN, false), key(VK_Z, false), key(VK_Z, true), key(VK_LWIN, true)];
+    unsafe {
+        SendInput(
+            inputs.len() as u32,
+            inputs.as_ptr(),
+            std::mem::size_of::<INPUT>() as i32,
+        );
+    }
+}
+
 fn do_action(st: &mut State, action: &Action) {
     if let Action::Run { command, args } = action {
         let _ = std::process::Command::new(command).args(args).spawn();
+        return;
+    }
+    if matches!(action, Action::SnapLayouts) {
+        send_win_z();
         return;
     }
     if matches!(action, Action::OpenLauncher) {

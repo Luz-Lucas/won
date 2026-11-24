@@ -11,14 +11,17 @@ pub enum Layout {
     Columns,
     Grid,
     Monocle,
+    /// Janelas empilhadas, uma abaixo da outra, de largura total (monitor em retrato).
+    Rows,
 }
 
 impl Layout {
-    pub const ALL: [Layout; 4] = [
+    pub const ALL: [Layout; 5] = [
         Layout::MasterStack,
         Layout::Columns,
         Layout::Grid,
         Layout::Monocle,
+        Layout::Rows,
     ];
 
     pub fn next(self) -> Layout {
@@ -38,6 +41,33 @@ pub struct TilingConfig {
     /// Espaço entre as janelas e a borda da área.
     pub outer_gap: u32,
     pub master_ratio: f32,
+    /// Layout dos monitores em retrato (mais altos que largos), salvo regra própria do monitor.
+    pub portrait_layout: Layout,
+    /// Regras por monitor (layout e limite de janelas).
+    pub monitors: Vec<MonitorRule>,
+}
+
+/// Regra de um monitor: `index` conta da esquerda para a direita, a partir de 1.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MonitorRule {
+    pub index: usize,
+    pub layout: Option<Layout>,
+    /// Quantas janelas o monitor organiza (as demais ficam soltas): 2 ou 3 zonas, por exemplo.
+    pub max_windows: Option<usize>,
+}
+
+impl TilingConfig {
+    /// Layout e limite de janelas para o monitor `index` (1 = o mais à esquerda) de área `area`.
+    pub fn for_monitor(&self, index: usize, area: Rect) -> (Layout, Option<usize>) {
+        let rule = self.monitors.iter().find(|m| m.index == index);
+        let portrait = area.bottom - area.top > area.right - area.left;
+        let layout = rule.and_then(|r| r.layout).unwrap_or(if portrait {
+            self.portrait_layout
+        } else {
+            self.layout
+        });
+        (layout, rule.and_then(|r| r.max_windows))
+    }
 }
 
 /// Divide `len` em `n` partes inteiras, com `gap` entre elas; a sobra vai
@@ -114,6 +144,10 @@ pub fn arrange(cfg: &TilingConfig, area: Rect, n: usize) -> Vec<Rect> {
             }
             out
         }
+        Layout::Rows => split(inner.top, h, n, gap)
+            .into_iter()
+            .map(|(y, rh)| rect(inner.left, y, w, rh))
+            .collect(),
         Layout::Monocle => unreachable!(),
     }
 }
@@ -156,6 +190,8 @@ mod tests {
             gap: 8,
             outer_gap: 10,
             master_ratio: 0.5,
+            portrait_layout: Layout::Rows,
+            monitors: Vec::new(),
         }
     }
 
@@ -169,7 +205,7 @@ mod tests {
 
     #[test]
     fn every_layout_stays_inside_and_never_overlaps() {
-        for layout in [Layout::MasterStack, Layout::Columns, Layout::Grid] {
+        for layout in [Layout::MasterStack, Layout::Columns, Layout::Grid, Layout::Rows] {
             for n in 1..=12 {
                 let rs = arrange(&cfg(layout), AREA, n);
                 assert_eq!(rs.len(), n, "{layout:?} {n}");
@@ -267,6 +303,20 @@ mod tests {
         let mut one = vec!['a'];
         swap_master(&mut one, 0);
         assert_eq!(one, ['a']);
-        assert_eq!(Layout::Monocle.next(), Layout::MasterStack);
+        assert_eq!(Layout::Rows.next(), Layout::MasterStack);
+    }
+
+    #[test]
+    fn portrait_monitor_stacks_rows_and_respects_rules() {
+        let portrait = Rect { left: 1920, top: 0, right: 3000, bottom: 1920 };
+        let mut c = cfg(Layout::MasterStack);
+        assert_eq!(c.for_monitor(2, portrait), (Layout::Rows, None));
+        assert_eq!(c.for_monitor(1, AREA), (Layout::MasterStack, None));
+        c.monitors.push(MonitorRule { index: 2, layout: None, max_windows: Some(3) });
+        assert_eq!(c.for_monitor(2, portrait), (Layout::Rows, Some(3)));
+        let rs = arrange(&TilingConfig { layout: Layout::Rows, ..c }, portrait, 3);
+        assert_eq!(rs.len(), 3);
+        assert!(rs.iter().all(|r| r.left == 1930 && r.right == 2990));
+        assert!(rs[0].bottom + 8 == rs[1].top && rs[1].bottom + 8 == rs[2].top);
     }
 }

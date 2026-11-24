@@ -45,6 +45,7 @@ const LAYOUT_LABEL: Record<Layout, string> = {
   columns: "Colunas",
   grid: "Grade",
   monocle: "Uma janela por vez",
+  rows: "Empilhadas (uma sobre a outra)",
 };
 const HOTKEYS = ["Alt+Space", "Win+Space", "Ctrl+Alt+Space", "Win+Alt+Space", "Ctrl+Space"];
 
@@ -320,6 +321,107 @@ export default function DesktopVisual({
               </fieldset>
               <Range label="Espaço entre janelas" value={til.gap} min={0} max={100} onChange={(v) => setTil({ gap: v })} format={(v) => `${v} px`} />
               <Range label="Espaço na borda da tela" value={til.outerGap} min={0} max={100} onChange={(v) => setTil({ outerGap: v })} format={(v) => `${v} px`} />
+              <fieldset className="choice-group">
+                <legend>Monitores em retrato (na vertical)</legend>
+                <label className="dv-field">
+                  <span>Disposição</span>
+                  <select
+                    aria-label="Disposição dos monitores em retrato"
+                    value={til.portraitLayout}
+                    onChange={(e) => setTil({ portraitLayout: e.target.value as Layout })}
+                  >
+                    {LAYOUTS.map((l) => (
+                      <option key={l} value={l}>
+                        {LAYOUT_LABEL[l]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </fieldset>
+              <fieldset className="choice-group">
+                <legend>Regras por monitor</legend>
+                <p className="muted">
+                  Monitor 1 é o mais à esquerda. Limite as zonas (por exemplo 3, para o segundo monitor na
+                  vertical ter topo, meio e fim); as outras janelas ficam soltas.
+                </p>
+                {til.monitors.map((m, i) => (
+                  <div className="row" key={i}>
+                    <label>
+                      Monitor{" "}
+                      <input
+                        aria-label={`Número do monitor ${i + 1}`}
+                        type="number"
+                        min={1}
+                        max={16}
+                        value={m.index}
+                        onChange={(e) =>
+                          setTil({ monitors: til.monitors.map((x, j) => (j === i ? { ...x, index: Number(e.target.value) } : x)) })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Disposição{" "}
+                      <select
+                        aria-label={`Disposição do monitor ${i + 1}`}
+                        value={m.layout}
+                        onChange={(e) =>
+                          setTil({ monitors: til.monitors.map((x, j) => (j === i ? { ...x, layout: e.target.value as Layout | "" } : x)) })
+                        }
+                      >
+                        <option value="">Automática</option>
+                        {LAYOUTS.map((l) => (
+                          <option key={l} value={l}>
+                            {LAYOUT_LABEL[l]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Zonas (janelas){" "}
+                      <select
+                        aria-label={`Zonas do monitor ${i + 1}`}
+                        value={m.maxWindows ?? ""}
+                        onChange={(e) =>
+                          setTil({
+                            monitors: til.monitors.map((x, j) =>
+                              j === i ? { ...x, maxWindows: e.target.value === "" ? null : Number(e.target.value) } : x,
+                            ),
+                          })
+                        }
+                      >
+                        <option value="">Sem limite</option>
+                        {[2, 3, 4].map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn"
+                      aria-label={`Remover regra do monitor ${i + 1}`}
+                      onClick={() => setTil({ monitors: til.monitors.filter((_, j) => j !== i) })}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    setTil({
+                      monitors: [
+                        ...til.monitors,
+                        { index: (til.monitors[til.monitors.length - 1]?.index ?? 1) + 1, layout: "rows", maxWindows: 3 },
+                      ],
+                    })
+                  }
+                >
+                  Adicionar regra de monitor
+                </button>
+              </fieldset>
               {til.layout === "master-stack" && (
                 <Range
                   label="Largura da janela principal"

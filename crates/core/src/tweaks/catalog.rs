@@ -926,6 +926,9 @@ mod tests {
                 "iniciar",
                 Some("start-layout"),
             ),
+            ("start-allapps-category", "iniciar", Some("start-allapps")),
+            ("start-allapps-grid", "iniciar", Some("start-allapps")),
+            ("start-allapps-list", "iniciar", Some("start-allapps")),
             ("explorer-classic-menu", "explorador", None),
             ("explorer-show-extensions", "explorador", None),
             ("explorer-show-hidden", "explorador", None),
@@ -957,7 +960,7 @@ mod tests {
                 by_choice.entry(ch).or_default().push(t);
             }
         }
-        assert_eq!(by_choice.len(), 6);
+        assert_eq!(by_choice.len(), 7);
         for (ch, opts) in &by_choice {
             assert!(opts.len() >= 2, "{ch}");
             for o in opts {

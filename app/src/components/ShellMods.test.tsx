@@ -48,3 +48,16 @@ describe("ShellMods", () => {
     expect(text).toContain("margin=0,0,0,0");
   });
 });
+
+describe("ShellMods presets", () => {
+  it("aplica um estilo pronto e grava o cfg", async () => {
+    render(<ShellMods only={["xaml"]} />);
+    await userEvent.selectOptions(await screen.findByLabelText("Estilos prontos"), "catppuccin-mocha");
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar estilo" }));
+    await waitFor(() => expect(api.xamlCfgWrite).toHaveBeenCalled());
+    const text = vi.mocked(api.xamlCfgWrite).mock.calls[0][0];
+    expect(text).toContain("fill=#F01E1E2E");
+    expect(text).toContain("margin=4,4,4,4");
+    expect(text).toContain("start_fill=#F01E1E2E");
+  });
+});

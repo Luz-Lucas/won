@@ -3,7 +3,8 @@ export interface XamlStyle {
   fill: string; // #RRGGBB
   alpha: number; // 0 a 255
   radius: number;
-  margin: number; // mesma margem nos quatro lados ("ilha")
+  /** Margens (esquerda, topo, direita, base): encolher o fundo faz a "ilha". */
+  margin: [number, number, number, number];
   hideBorder: boolean;
   startFill: string | null; // #RRGGBB ou null = não mexe
   startAlpha: number;
@@ -14,7 +15,7 @@ export const DEFAULT_XAML: XamlStyle = {
   fill: "#1C1C24",
   alpha: 200,
   radius: 14,
-  margin: 0,
+  margin: [0, 0, 0, 0],
   hideBorder: false,
   startFill: null,
   startAlpha: 230,
@@ -51,8 +52,13 @@ export function parseXamlCfg(text: string): XamlStyle {
       const n = Number(v);
       if (Number.isFinite(n)) s.radius = Math.max(0, Math.min(60, n));
     } else if (k === "margin") {
-      const n = Number(v.split(",")[0]);
-      if (Number.isFinite(n)) s.margin = Math.max(0, Math.min(200, n));
+      const p = v.split(",").map((x) => Number(x.trim()));
+      const c = (n: number) => Math.max(0, Math.min(200, n));
+      if (p.length > 0 && p.every(Number.isFinite)) {
+        if (p.length === 1) s.margin = [c(p[0]), c(p[0]), c(p[0]), c(p[0])];
+        else if (p.length === 2) s.margin = [c(p[0]), c(p[1]), c(p[0]), c(p[1])];
+        else if (p.length === 4) s.margin = [c(p[0]), c(p[1]), c(p[2]), c(p[3])];
+      }
     } else if (k === "hide_border") {
       s.hideBorder = v === "true" || v === "1";
     } else if (k === "start_fill") {
@@ -76,7 +82,7 @@ export function buildXamlCfg(s: XamlStyle): string {
     "enabled=true",
     `fill=${argb(s.fill, s.alpha)}`,
     `radius=${s.radius}`,
-    `margin=${s.margin},${s.margin},${s.margin},${s.margin}`,
+    `margin=${s.margin.join(",")}`,
     `hide_border=${s.hideBorder}`,
   ];
   if (s.startFill) lines.push(`start_fill=${argb(s.startFill, s.startAlpha)}`);

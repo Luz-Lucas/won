@@ -8,7 +8,7 @@ import { parse } from "smol-toml";
 
 export type Module = "title" | "clock" | "cpu" | "ram";
 export type Zone = "left" | "center" | "right";
-export type Layout = "master-stack" | "columns" | "grid" | "monocle";
+export type Layout = "master-stack" | "columns" | "grid" | "monocle" | "rows";
 
 export interface BarModel {
   edge: "top" | "bottom";
@@ -24,11 +24,21 @@ export interface BarModel {
   clockFormat: string;
 }
 
+/** Regra de um monitor: 1 = o mais à esquerda. */
+export interface MonitorRule {
+  index: number;
+  layout: Layout | "";
+  maxWindows: number | null;
+}
+
 export interface TilingModel {
   layout: Layout;
   gap: number;
   outerGap: number;
   masterRatio: number;
+  /** Layout dos monitores em retrato (mais altos que largos). */
+  portraitLayout: Layout;
+  monitors: MonitorRule[];
 }
 
 export interface LauncherApp {
@@ -50,7 +60,7 @@ export interface Sections {
 }
 
 export const MODULES: Module[] = ["title", "cpu", "ram", "clock"];
-export const LAYOUTS: Layout[] = ["master-stack", "columns", "grid", "monocle"];
+export const LAYOUTS: Layout[] = ["master-stack", "columns", "grid", "monocle", "rows"];
 
 export const DEFAULT_BAR: BarModel = {
   edge: "top",
@@ -70,6 +80,8 @@ export const DEFAULT_TILING: TilingModel = {
   gap: 8,
   outerGap: 8,
   masterRatio: 0.55,
+  portraitLayout: "rows",
+  monitors: [],
 };
 export const DEFAULT_LAUNCHER: LauncherModel = { hotkey: "Alt+Space", maxResults: 8, apps: [] };
 
@@ -113,6 +125,21 @@ export function readSections(text: string): Sections | null {
             gap: num(t.gap, DEFAULT_TILING.gap),
             outerGap: num(t.outer_gap, DEFAULT_TILING.outerGap),
             masterRatio: num(t.master_ratio, DEFAULT_TILING.masterRatio),
+            portraitLayout: LAYOUTS.includes(t.portrait_layout as Layout)
+              ? (t.portrait_layout as Layout)
+              : "rows",
+            monitors: (Array.isArray(t.monitor) ? t.monitor : []).flatMap((m): MonitorRule[] => {
+              const r = rec(m);
+              return r && typeof r.index === "number"
+                ? [
+                    {
+                      index: r.index,
+                      layout: LAYOUTS.includes(r.layout as Layout) ? (r.layout as Layout) : "",
+                      maxWindows: typeof r.max_windows === "number" ? r.max_windows : null,
+                    },
+                  ]
+                : [];
+            }),
           }
         : null,
     launcher: l && {
@@ -161,6 +188,15 @@ const tilingToml = (t: TilingModel) =>
     `gap = ${Math.round(t.gap)}`,
     `outer_gap = ${Math.round(t.outerGap)}`,
     `master_ratio = ${t.masterRatio.toFixed(2)}`,
+    `portrait_layout = ${q(t.portraitLayout)}`,
+    ...t.monitors.map((m) =>
+      [
+        "\n[[tiling.monitor]]",
+        `index = ${Math.round(m.index)}`,
+        ...(m.layout ? [`layout = ${q(m.layout)}`] : []),
+        ...(m.maxWindows !== null ? [`max_windows = ${Math.round(m.maxWindows)}`] : []),
+      ].join("\n"),
+    ),
   ].join("\n");
 
 const launcherToml = (l: LauncherModel) =>
@@ -174,7 +210,7 @@ const launcherToml = (l: LauncherModel) =>
     ),
   ].join("\n");
 
-const MANAGED = new Set(["bar", "tiling", "launcher", "launcher.app"]);
+const MANAGED = new Set(["bar", "tiling", "tiling.monitor", "launcher", "launcher.app"]);
 const HEADER = /^\s*\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$/;
 
 /** Troca as seções gerenciadas pelas do modelo; o resto do texto fica como está. */
@@ -213,6 +249,7 @@ export function tileBoxes(t: TilingModel, n: number, w: number, h: number, scale
     return Array.from({ length: parts }, (_, i) => [start + i * (size + g), size] as const);
   };
   if (t.layout === "monocle") return [{ x: o, y: o, w: aw, h: ah }];
+  if (t.layout === "rows") return split(o, ah, n).map(([y, sh]) => ({ x: o, y, w: aw, h: sh }));
   if (t.layout === "columns")
     return split(o, aw, n).map(([x, sw]) => ({ x, y: o, w: sw, h: ah }));
   if (t.layout === "grid") {
