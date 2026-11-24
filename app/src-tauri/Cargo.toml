@@ -32,3 +32,8 @@ sysinfo.workspace = true
 [dev-dependencies]
 anyhow.workspace = true
 tempfile.workspace = true
+
+[features]
+# O `tauri build` ativa esta feature; um `cargo build --release` puro precisa passar
+# `--features custom-protocol`, senão o app aponta para o devUrl (localhost:1420).
+custom-protocol = ["tauri/custom-protocol"]
