@@ -3,5 +3,6 @@
 //! escreve num bloco marcado do perfil e nas chaves que gerencia.
 
 pub mod backup;
+pub mod omp;
 pub mod profile;
 pub mod wt_settings;
