@@ -185,3 +185,26 @@ pub fn enable_shell_icons(
         experimental,
     )
 }
+
+/// Fase 14 (versão segura de sessão): desliga a verificação de assinatura de temas só dentro do
+/// Explorer já aberto. Não toca no disco, não sobrevive a reinicialização. Ver crates/mod-theme.
+pub fn enable_shell_theme_session(
+    dir: &Path,
+    exe: &Path,
+    dll: &Path,
+    build: u32,
+    tested: &[u32],
+    experimental: bool,
+) -> Result<Vec<Injection>> {
+    enable_shell_mod(
+        "tema-sem-assinatura-sessao",
+        "?Verify@CThemeSignature@@QEAAJPEAX@Z",
+        "theme-verify.rva",
+        dir,
+        exe,
+        dll,
+        build,
+        tested,
+        experimental,
+    )
+}

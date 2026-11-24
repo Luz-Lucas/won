@@ -36,6 +36,13 @@ enum Cmd {
         #[arg(long)]
         experimental: bool,
     },
+    /// Fase 14, versão de sessão (não sobrevive a reboot): desliga a verificação de assinatura
+    /// de temas só dentro do Explorer já aberto
+    ShellThemeSession {
+        dll: std::path::PathBuf,
+        #[arg(long)]
+        experimental: bool,
+    },
     /// Grava o script de recuperação e mostra o caminho
     Recovery,
 }
@@ -85,6 +92,13 @@ fn main() -> Result<()> {
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
             let done = sentinela_mods::enable_shell_icons(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            println!("{} carregamento(s) no Explorer (build {build})", done.len());
+        }
+        Cmd::ShellThemeSession { dll, experimental } => {
+            let build = sysinfo::System::kernel_version()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            let done = sentinela_mods::enable_shell_theme_session(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
             println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::Recovery => println!(
