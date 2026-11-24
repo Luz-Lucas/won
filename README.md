@@ -20,10 +20,11 @@ A janela do Sentinela tem estas páginas, na barra lateral:
 - **Aplicativos**: instala e atualiza aplicativos do catálogo pelo winget.
 - **Personalizar**: barra de tarefas, menu Iniciar, Explorador, tema e sistema, com interruptores e listas de opções. Cada mudança mostra a prévia, pede confirmação e pode ser desfeita pelo Histórico. Mudanças que só aparecem com o Explorer reiniciado oferecem o botão "Reiniciar Explorer"; o Sentinela nunca o reinicia sozinho.
 - **Rede**: mede latência, *jitter* e perda até o roteador, a Cloudflare e os servidores que você acrescentar; rastreia a rota separando sua casa do provedor e mostra onde o atraso começa; testa o *bufferbloat*; compara o DNS atual com DNS públicos e, se outro for mais rápido, aplica com prévia (desfaz pelo Histórico); desliga a economia de energia do adaptador de rede; mostra o sinal do Wi‑Fi. Em **Rotas alternativas**, compara a conexão atual com o Cloudflare WARP e com um túnel WireGuard seu (e mostra ExitLag/NoPing, se instalados), só recomenda quando a diferença passa da variação medida, liga a rota escolhida ao abrir cada jogo e pode segurar a varredura do Wi‑Fi durante jogos. Na troca de DNS, oferece DNS sobre HTTPS quando o Windows conhece o servidor. A rota até o servidor do jogo é do provedor: o Sentinela mede e ajusta só o que é do computador.
-- **Segurança**: verifica pastas ou o computador inteiro (com cancelamento) e lista o que encontrou, sem mover nem apagar nada; também lista os itens que o `sentinela full` colocou em quarentena e permite restaurá-los, sempre depois de confirmar.
+- **Segurança**: antivírus sob demanda (sem proteção em tempo real; mantenha o Defender ligado). A verificação **Rápida** lê os programas abertos, tudo que inicia com o Windows (chaves `Run`/`RunOnce`, pastas Inicializar, tarefas agendadas e serviços) e as pastas onde malware costuma cair (Downloads, Área de Trabalho, Documentos, Temp, AppData, ProgramData, Público e a raiz dos discos), só nos tipos de arquivo de risco; a **Completa** lê todos os discos fixos; a **Personalizada**, as pastas e discos que você escolher. Cada achado diz por quê em português, com o SHA-256, e tem Detalhes, Abrir pasta, Consultar no VirusTotal (só o hash vai ao navegador) e Ignorar sempre. Só o malware confirmado por hash vem marcado para quarentena; nada é movido sem você pedir. Antes de mover, arquivos da pasta do Windows pedem uma segunda confirmação e arquivos de programas abertos oferecem encerrar o programa. Depois da primeira verificação, oferece agendar uma rápida por semana.
+- **Quarentena**: os arquivos ficam guardados codificados (não rodam por engano); restaurar confere o conteúdo e nunca sobrescreve; apagar definitivamente pede confirmação.
 - **Disco**: lista os maiores arquivos e os duplicados de uma pasta. Só lista; nunca apaga.
 - **Histórico**: as otimizações e personalizações aplicadas, com desfazer.
-- **Ajustes**: atualiza o banco de assinaturas, guarda a chave gratuita da abuse.ch e define a inicialização com o Windows e a bandeja. A seção **Atualizações do Windows** escolhe entre Padrão, Só segurança (recomendado), Pausado até… e Bloqueado, com prévia e aviso dos efeitos; mostra "Parcial" quando o Windows desfaz algo sozinho, com "Aplicar de novo". Mudar o modo exige administrador.
+- **Ajustes**: atualiza o banco de assinaturas (e o atualiza sozinho ao abrir o app quando tem mais de 24 h), guarda a chave gratuita da abuse.ch e define a inicialização com o Windows e a bandeja. Em **Verificação agendada**, liga a rápida semanal (domingo ao meio-dia pelo Agendador de Tarefas, sem administrador; se o computador estava desligado, roda assim que ligar, e o resultado vem numa notificação) e a quarentena automática do malware confirmado por hash, desligada por padrão. **Exceções da verificação** lista o que está em "Ignorar sempre". A seção **Atualizações do Windows** escolhe entre Padrão, Só segurança (recomendado), Pausado até… e Bloqueado, com prévia e aviso dos efeitos; mostra "Parcial" quando o Windows desfaz algo sozinho, com "Aplicar de novo". Mudar o modo exige administrador.
 
 O rodapé da barra lateral mostra se o programa está como administrador e oferece "Reiniciar como administrador". As regras de segurança são as mesmas do `sentinela.exe` descrito abaixo.
 
@@ -35,12 +36,14 @@ Depois de instalar, o `sentinela.exe` fica na pasta de instalação (`C:\Program
 
 ```
 sentinela scan <caminho>... [--json] [--max-size <MB>] [--exclude <glob>]...
+sentinela scan --quick [--json]
 sentinela update
 sentinela clean [--category <nome>]... [--apply] [--yes] [--json]
 sentinela find-large <caminho> [--top <N>] [--min-size <MB>] [--json]
 sentinela find-dupes <caminho> [--min-size <KB>] [--json]
 sentinela full [--json]
 sentinela quarantine [--json]
+sentinela quarantine --delete <id>
 sentinela restore <id>
 sentinela tweak list | apply <id>... | undo (<id>... | --all)
 sentinela apps list | install <id>... | upgrade (<id>... | --all)
@@ -85,6 +88,8 @@ Não verificados:
 sentinela scan C:\Users\eu\Downloads D:\Projetos --max-size 100 --exclude "**/*.iso" --json
 ```
 
+`sentinela scan --quick` faz a verificação rápida da janela: programas abertos, o que inicia com o Windows e as pastas de risco, só nos tipos de arquivo de risco (executáveis pelo cabeçalho, scripts, instaladores, atalhos, Office com macro e compactados). Sem administrador, as tarefas agendadas aparecem em "Não verificados". O banco de assinaturas e a quarentena do próprio Sentinela nunca são verificados.
+
 ### `full`: verificar o computador inteiro, isolar malware e limpar
 
 ```
@@ -114,11 +119,12 @@ Código de saída: `0` normalmente (itens em quarentena ou suspeitos não altera
 
 ### `quarantine` e `restore`: quarentena reversível
 
-A quarentena fica em `%LOCALAPPDATA%\Sentinela\quarantine` (altere com a variável `SENTINELA_QUARANTINE_DIR`): os arquivos isolados em `files\<id>` e o índice em `index.json`. Os arquivos são **movidos, nunca apagados**: a movimentação funciona entre discos diferentes (copia, confere o hash e só então remove o original) e, se algo falhar, o original continua no lugar. Links simbólicos e junctions nunca são seguidos.
+A quarentena fica em `%LOCALAPPDATA%\Sentinela\quarantine` (altere com a variável `SENTINELA_QUARANTINE_DIR`): os arquivos isolados em `files\<id>` (gravados codificados, para não rodarem por engano; os de versões anteriores continuam restauráveis) e o índice em `index.json`. Os arquivos são **movidos**, e só `--delete` (ou "Apagar" na página Quarentena) os apaga de vez: a movimentação funciona entre discos diferentes (copia, confere o hash e só então remove o original) e, se algo falhar, o original continua no lugar. Links simbólicos e junctions nunca são seguidos.
 
 ```
-sentinela quarantine [--json]   # lista id, data, tamanho, caminho original e regra
-sentinela restore <id>          # devolve o arquivo ao caminho original
+sentinela quarantine [--json]       # lista id, data, tamanho, caminho original e regra
+sentinela restore <id>              # devolve o arquivo ao caminho original
+sentinela quarantine --delete <id>  # apaga de vez (não tem volta)
 ```
 
 O `restore` recusa-se a sobrescrever: se já existir algo no caminho original, ele falha (código `2`) e mantém a cópia em quarentena. Confere também o hash antes de devolver o arquivo.

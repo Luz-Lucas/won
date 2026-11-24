@@ -13,6 +13,7 @@ import {
   type SettingsView,
   type UpdateSummary,
 } from "../api";
+import ScanSettings from "../components/ScanSettings";
 import WindowsUpdates from "../components/WindowsUpdates";
 import { humanDate } from "../format";
 import { useJob } from "../jobs";
@@ -153,6 +154,8 @@ export default function Ajustes() {
           {prefsError}
         </p>
       )}
+
+      <ScanSettings />
 
       <h2 className="section-title">Banco de assinaturas</h2>
       {dbError && (

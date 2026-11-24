@@ -1,6 +1,12 @@
+pub mod areas;
 pub mod detector;
+pub mod exceptions;
+pub mod explain;
+pub mod guard;
 pub mod hash;
 pub mod pe;
+pub mod risk;
+pub mod schedule;
 pub mod targets;
 pub mod yara;
 
@@ -14,11 +20,15 @@ use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::signatures::Database;
-use crate::walker::{Entry, WalkError, WalkItem, WalkOptions, walk};
+use crate::walker::{Entry, WalkError, WalkItem, WalkOptions, is_link_like, is_under, walk};
 use detector::{Detector, FileData, Finding, Severity};
 
 pub struct ScanOptions {
     pub roots: Vec<PathBuf>,
+    /// Arquivos avulsos, sempre lidos (processos, itens de inicialização).
+    pub files: Vec<PathBuf>,
+    /// Nas `roots`, só arquivos de risco (`risk::file_is_risky`).
+    pub risky_only: bool,
     pub walk: WalkOptions,
     /// Files larger than this (bytes) are only hashed, streaming.
     pub max_size: u64,
@@ -30,6 +40,8 @@ pub struct ScanItem {
     pub path: PathBuf,
     pub verdict: Severity,
     pub findings: Vec<Finding>,
+    /// SHA-256 do arquivo, em hexadecimal minúsculo.
+    pub sha256: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -86,13 +98,18 @@ fn walk_error(path: &Path, e: impl std::fmt::Display) -> WalkError {
     }
 }
 
+/// Resultado de um arquivo: veredito, achados, erros dos detectores e hash.
+#[derive(Debug)]
+struct EntryScan {
+    verdict: Severity,
+    findings: Vec<Finding>,
+    errors: Vec<WalkError>,
+    sha256: [u8; 32],
+}
+
 /// Scans one file. Returns the verdict and findings, or a `WalkError` if the
 /// file could not be read.
-fn scan_entry(
-    engine: &Engine,
-    entry: &Entry,
-    max_size: u64,
-) -> Result<(Severity, Vec<Finding>, Vec<WalkError>), WalkError> {
+fn scan_entry(engine: &Engine, entry: &Entry, max_size: u64) -> Result<EntryScan, WalkError> {
     let path = entry.path.as_path();
     // Big full reads are serialized to bound peak memory.
     let _guard = (entry.size > BIG_FILE && entry.size <= max_size)
@@ -108,10 +125,12 @@ fn scan_entry(
         None
     };
     let mut inspect_errors = Vec::new();
+    let sha256;
     let mut findings = if let Some(bytes) = full {
+        sha256 = hash::sha256_bytes(&bytes);
         let data = FileData {
             path,
-            sha256: hash::sha256_bytes(&bytes),
+            sha256,
             bytes: Some(&bytes),
         };
         let mut f = engine.hash.inspect(&data).unwrap_or_default();
@@ -123,10 +142,11 @@ fn scan_entry(
         }
         f
     } else {
+        sha256 = hash::sha256_file(path).map_err(|e| walk_error(path, e))?;
         let data = FileData {
             path,
             bytes: None,
-            sha256: hash::sha256_file(path).map_err(|e| walk_error(path, e))?,
+            sha256,
         };
         engine.hash.inspect(&data).unwrap_or_default()
     };
@@ -136,7 +156,46 @@ fn scan_entry(
         .map(|f| f.severity)
         .max()
         .unwrap_or(Severity::Info);
-    Ok((verdict, findings, inspect_errors))
+    Ok(EntryScan {
+        verdict,
+        findings,
+        errors: inspect_errors,
+        sha256,
+    })
+}
+
+/// Chave para não ler o mesmo arquivo duas vezes (sem diferenciar maiúsculas
+/// no Windows).
+fn path_key(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    if cfg!(windows) {
+        s.to_lowercase()
+    } else {
+        s.into_owned()
+    }
+}
+
+/// Arquivo avulso pedido pelo chamador. Ausente vale `Ok(None)` (um item de
+/// inicialização pode apontar para um arquivo que já não existe). Links e
+/// pastas não são seguidos.
+fn explicit_entry(path: &Path) -> Result<Option<Entry>, WalkError> {
+    let meta = match std::fs::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(walk_error(path, e)),
+    };
+    if is_link_like(&meta) || meta.file_type().is_symlink() {
+        return Err(walk_error(path, "link simbólico/junção ignorado"));
+    }
+    if !meta.is_file() {
+        return Ok(None);
+    }
+    Ok(Some(Entry {
+        path: path.to_path_buf(),
+        size: meta.len(),
+        modified: meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+        created: None,
+    }))
 }
 
 /// Sink the scanner drives to report progress. `advance` is called from
@@ -169,9 +228,25 @@ pub fn run_scan_with_progress(
     cancel: &AtomicBool,
     progress: &dyn Progress,
 ) -> ScanReport {
-    let mut entries = Vec::new();
+    // (arquivo, ler só se for de risco)
+    let mut entries: Vec<(Entry, bool)> = Vec::new();
     let mut errors = Vec::new();
     let mut skipped_in_walk = false;
+    let mut seen = std::collections::HashSet::new();
+    for path in &opts.files {
+        if opts.walk.skip_dirs.iter().any(|d| is_under(path, d)) {
+            continue;
+        }
+        match explicit_entry(path) {
+            Ok(Some(e)) => {
+                if seen.insert(path_key(&e.path)) {
+                    entries.push((e, false));
+                }
+            }
+            Ok(None) => {}
+            Err(e) => errors.push(e),
+        }
+    }
     for item in walk(&opts.roots, &opts.walk) {
         if cancel.load(Ordering::Relaxed) {
             skipped_in_walk = true;
@@ -179,7 +254,9 @@ pub fn run_scan_with_progress(
         }
         match item {
             WalkItem::File(e) => {
-                entries.push(e);
+                if seen.insert(path_key(&e.path)) {
+                    entries.push((e, opts.risky_only));
+                }
                 if entries.len().is_multiple_of(256) {
                     progress.counting(entries.len());
                 }
@@ -187,7 +264,7 @@ pub fn run_scan_with_progress(
             WalkItem::Error(e) => errors.push(e),
         }
     }
-    let total_bytes: u64 = entries.iter().map(|e| e.size).sum();
+    let total_bytes: u64 = entries.iter().map(|(e, _)| e.size).sum();
     progress.start(entries.len(), total_bytes);
     let files_done = AtomicUsize::new(0);
     let bytes_done = AtomicU64::new(0);
@@ -196,25 +273,28 @@ pub fn run_scan_with_progress(
     type Scanned = (Option<ScanItem>, Vec<WalkError>);
     let results: Vec<Result<Scanned, WalkError>> = entries
         .par_iter()
-        .filter_map(|entry| {
+        .filter_map(|(entry, only_risky)| {
             if cancel.load(Ordering::Relaxed) {
                 skipped.store(true, Ordering::Relaxed);
                 return None;
             }
-            let scanned =
-                scan_entry(engine, entry, opts.max_size).map(|(verdict, findings, errs)| {
-                    let item = (verdict >= Severity::Suspicious).then(|| ScanItem {
+            let wanted = !only_risky || risk::file_is_risky(&entry.path);
+            let scanned = wanted.then(|| {
+                scan_entry(engine, entry, opts.max_size).map(|r| {
+                    let item = (r.verdict >= Severity::Suspicious).then(|| ScanItem {
                         path: entry.path.clone(),
-                        verdict,
-                        findings,
+                        verdict: r.verdict,
+                        findings: r.findings,
+                        sha256: hex::encode(r.sha256),
                     });
-                    (item, errs)
-                });
-            // Errored files count too, so the bar can reach 100%.
+                    (item, r.errors)
+                })
+            });
+            // Errored and skipped files count too, so the bar can reach 100%.
             let f = files_done.fetch_add(1, Ordering::Relaxed) + 1;
             let b = bytes_done.fetch_add(entry.size, Ordering::Relaxed) + entry.size;
             progress.advance(f, b, &entry.path);
-            Some(scanned)
+            scanned
         })
         .collect();
     progress.finish();
@@ -266,6 +346,8 @@ mod tests {
     fn opts(dir: &Path, max_size: u64) -> ScanOptions {
         ScanOptions {
             roots: vec![dir.to_path_buf()],
+            files: vec![],
+            risky_only: false,
             walk: WalkOptions::default(),
             max_size,
         }
@@ -300,6 +382,59 @@ mod tests {
         let (engine, _) = Engine::from_database(&db);
         let report = run_scan(&engine, &opts(dir.path(), 1 << 20), &AtomicBool::new(false));
         assert_malicious(&report);
+    }
+
+    #[test]
+    fn quick_reads_only_risky_files_in_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("dados.bin"), MARKER).unwrap();
+        fs::write(dir.path().join("script.ps1"), MARKER).unwrap();
+        let mut o = opts(dir.path(), 1 << 20);
+        o.risky_only = true;
+        let (engine, _) = Engine::from_database(&marker_db());
+        let report = run_scan(&engine, &o, &AtomicBool::new(false));
+        assert_eq!(report.scanned, 1);
+        assert_eq!(report.items.len(), 1);
+        assert!(report.items[0].path.ends_with("script.ps1"));
+        assert_eq!(
+            report.items[0].sha256,
+            hex::encode(hash::sha256_bytes(MARKER))
+        );
+    }
+
+    #[test]
+    fn explicit_files_always_scanned() {
+        let dir = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let loose = other.path().join("dados.bin");
+        fs::write(&loose, MARKER).unwrap();
+        fs::write(dir.path().join("dados.bin"), MARKER).unwrap();
+        let mut o = opts(dir.path(), 1 << 20);
+        o.risky_only = true;
+        // Duplicado e ausente: lido uma vez, ausente ignorado.
+        o.files = vec![loose.clone(), loose.clone(), other.path().join("sumiu.exe")];
+        let (engine, _) = Engine::from_database(&marker_db());
+        let report = run_scan(&engine, &o, &AtomicBool::new(false));
+        assert_eq!(report.scanned, 1);
+        assert_eq!(report.items.len(), 1);
+        assert_eq!(report.items[0].path, loose);
+        assert!(report.errors.is_empty());
+    }
+
+    #[test]
+    fn own_folder_is_excluded() {
+        let dir = tempfile::tempdir().unwrap();
+        let own = dir.path().join("Sentinela");
+        fs::create_dir_all(own.join("db")).unwrap();
+        fs::write(own.join("db").join("regras.exe"), MARKER).unwrap();
+        fs::write(dir.path().join("fora.exe"), MARKER).unwrap();
+        let mut o = opts(dir.path(), 1 << 20);
+        o.walk.skip_dirs = vec![own.clone()];
+        o.files = vec![own.join("db").join("regras.exe")];
+        let (engine, _) = Engine::from_database(&marker_db());
+        let report = run_scan(&engine, &o, &AtomicBool::new(false));
+        assert_eq!(report.scanned, 1);
+        assert!(report.items[0].path.ends_with("fora.exe"));
     }
 
     #[test]

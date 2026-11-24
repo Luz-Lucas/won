@@ -6,6 +6,7 @@ pub mod tray;
 use commands::settings::{SettingsState, sync_autostart};
 use commands::system::{CloseAction, MINIMIZED_ARG, on_window_close, parse_minimized};
 use jobs::{JobRegistry, Sink};
+use sentinela_core::scan::schedule::parse_scheduled;
 use sentinela_core::settings::default_settings_path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,7 +29,9 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             // Uma segunda abertura traz a janela escondida na bandeja de volta
             // (exceto se for outro início automático).
-            if !parse_minimized(&args) {
+            if parse_scheduled(&args) {
+                commands::scan::start_scheduled(app, false);
+            } else if !parse_minimized(&args) {
                 tray::show_main(app);
             }
         }));
@@ -59,7 +62,9 @@ pub fn run() {
             // A janela nasce escondida (tauri.conf) e aparece quando o frontend
             // avisa que carregou; só o início automático a mantém escondida.
             let tray_ok = app.state::<SettingsState>().tray_ok.load(Ordering::Relaxed);
-            let hidden = tray_ok && parse_minimized(std::env::args_os());
+            // A verificação agendada roda escondida e fecha o app no fim.
+            let scheduled = parse_scheduled(std::env::args_os());
+            let hidden = scheduled || (tray_ok && parse_minimized(std::env::args_os()));
             app.manage(tray::StartupShow {
                 hidden,
                 shown: AtomicBool::new(false),
@@ -67,6 +72,10 @@ pub fn run() {
             if !hidden {
                 tray::schedule_startup_fallback(app.handle());
             }
+            if scheduled {
+                commands::scan::start_scheduled(app.handle(), true);
+            }
+            commands::signatures::auto_update(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -102,6 +111,16 @@ pub fn run() {
             commands::scan::scan_start,
             commands::scan::quarantine_list,
             commands::scan::quarantine_restore,
+            commands::scan::quarantine_delete,
+            commands::scan::scan_guard,
+            commands::scan::scan_quarantine,
+            commands::scan::scan_exceptions_list,
+            commands::scan::scan_exception_add,
+            commands::scan::scan_exception_remove,
+            commands::scan::scan_schedule_get,
+            commands::scan::scan_schedule_set,
+            commands::scan::scan_schedule_dismiss,
+            commands::scan::scan_auto_quarantine_set,
             commands::signatures::signatures_update,
             commands::signatures::abuse_key_set,
             commands::signatures::abuse_key_clear,

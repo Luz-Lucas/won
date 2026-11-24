@@ -1,12 +1,13 @@
-//! Restorable quarantine: files are moved (never deleted) into
-//! `<dir>/files/<id>` and described by `<dir>/index.json`.
-
+//! Restorable quarantine: files are moved into `<dir>/files/<id>` and
+//! described by `<dir>/index.json`. New files are stored encoded (`ENCODING`)
+//! so they cannot run by accident; old entries stored as plain copies still
+//! restore. Only `delete` removes a quarantined file for good.
 //!
 //! Moves are copy -> flush -> re-hash -> remove original, so they also work
 //! across volumes, and any failure leaves the original file in place.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -44,6 +45,10 @@ pub struct QuarantineEntry {
     pub rule: String,
     /// RFC 3339, UTC.
     pub quarantined_at: String,
+    /// Como o arquivo está guardado: `None` (cópia direta, entradas antigas)
+    /// ou `ENCODING`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<String>,
 }
 
 fn new_id(path: &Path) -> String {
@@ -179,22 +184,80 @@ fn require_plain_file(path: &Path) -> Result<u64> {
     Ok(meta.len())
 }
 
-/// Copies `src` to a new file `dst` (fails if `dst` exists), flushes it and
-/// checks that what landed on disk has the expected SHA-256. On any failure
-/// `dst` is removed again. Does not touch `src`.
-fn copy_verified(src: &Path, dst: &Path, expected: &[u8; 32]) -> Result<u64> {
+/// Formato dos arquivos guardados: XOR com esta chave fixa, para que um
+/// executável em quarentena não rode nem seja aberto por engano. Não é
+/// criptografia; só tira o arquivo do formato executável.
+pub const ENCODING: &str = "xor1";
+const KEY: [u8; 32] = *b"Sentinela-quarentena-nao-execute";
+
+/// Aplica a chave aos bytes que começam na posição `offset` do arquivo.
+/// A mesma operação codifica e decodifica.
+fn xor_at(buf: &mut [u8], offset: u64) {
+    for (i, b) in buf.iter_mut().enumerate() {
+        *b ^= KEY[((offset + i as u64) % KEY.len() as u64) as usize];
+    }
+}
+
+/// Como os bytes passam de `src` para `dst`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Transform {
+    Plain,
+    /// `src` é o original; `dst` fica codificado.
+    Encode,
+    /// `src` está codificado; `dst` volta ao original.
+    Decode,
+}
+
+/// SHA-256 do conteúdo original de um arquivo guardado (decodificando se preciso).
+fn plain_sha256(path: &Path, encoded: bool) -> Result<[u8; 32]> {
+    if !encoded {
+        return Ok(sha256_file(path)?);
+    }
+    let mut f = File::open(path)?;
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut offset = 0u64;
+    loop {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        xor_at(&mut buf[..n], offset);
+        h.update(&buf[..n]);
+        offset += n as u64;
+    }
+    Ok(h.finalize().into())
+}
+
+/// Copies `src` to a new file `dst` (fails if `dst` exists), encoding or
+/// decoding on the way, flushes it and checks that the original content of
+/// what landed on disk has the expected SHA-256. On any failure `dst` is
+/// removed again. Does not touch `src`.
+fn copy_verified(src: &Path, dst: &Path, expected: &[u8; 32], t: Transform) -> Result<u64> {
     let mut created = false;
     let result = (|| -> Result<u64> {
         let mut input = File::open(src)?;
         let mut out = OpenOptions::new().write(true).create_new(true).open(dst)?;
         created = true;
-        let n = io::copy(&mut input, &mut out)?;
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut n = 0u64;
+        loop {
+            let read = input.read(&mut buf)?;
+            if read == 0 {
+                break;
+            }
+            if t != Transform::Plain {
+                xor_at(&mut buf[..read], n);
+            }
+            out.write_all(&buf[..read])?;
+            n += read as u64;
+        }
         out.sync_all()?;
         drop(out);
         if fs::metadata(dst)?.len() != n {
             bail!("tamanho da cópia diverge");
         }
-        if &sha256_file(dst)? != expected {
+        if &plain_sha256(dst, t == Transform::Encode)? != expected {
             bail!("o conteúdo do arquivo não confere com o hash esperado");
         }
         Ok(n)
@@ -220,7 +283,7 @@ pub fn quarantine_file(
     fs::create_dir_all(&files).context("não foi possível criar a pasta de quarentena")?;
     let id = new_id(original);
     let stored = files.join(&id);
-    copy_verified(original, &stored, &sha256)?;
+    copy_verified(original, &stored, &sha256, Transform::Encode)?;
 
     let entry = QuarantineEntry {
         id,
@@ -229,6 +292,7 @@ pub fn quarantine_file(
         size,
         rule: rule.to_string(),
         quarantined_at: crate::updater::now_rfc3339(),
+        encoding: Some(ENCODING.to_string()),
     };
     let _lock = match IndexLock::acquire(dir) {
         Ok(l) => l,
@@ -290,7 +354,12 @@ pub fn restore(dir: &Path, id: &str) -> Result<PathBuf> {
         fs::create_dir_all(parent)
             .with_context(|| format!("não foi possível criar {}", parent.display()))?;
     }
-    copy_verified(&stored, target, &expected)?;
+    let t = match entry.encoding.as_deref() {
+        None => Transform::Plain,
+        Some(ENCODING) => Transform::Decode,
+        Some(other) => bail!("formato desconhecido na quarentena: {other}"),
+    };
+    copy_verified(&stored, target, &expected, t)?;
     entries.remove(pos);
     if let Err(e) = write_index(dir, &entries) {
         let _ = fs::remove_file(target);
@@ -299,6 +368,35 @@ pub fn restore(dir: &Path, id: &str) -> Result<PathBuf> {
     // Index no longer references it; a leftover copy is harmless.
     let _ = fs::remove_file(&stored);
     Ok(entry.original_path)
+}
+
+/// Apaga definitivamente um arquivo da quarentena (sem volta). O índice é
+/// atualizado primeiro: se apagar o arquivo falhar, ele fica órfão e inofensivo.
+pub fn delete(dir: &Path, id: &str) -> Result<QuarantineEntry> {
+    let _lock = IndexLock::acquire(dir)?;
+    let mut entries = read_index(dir)
+        .map_err(|_| anyhow::anyhow!("índice da quarentena ilegível"))?
+        .unwrap_or_default();
+    let pos = entries
+        .iter()
+        .position(|e| e.id == id)
+        .with_context(|| format!("id não encontrado na quarentena: {id}"))?;
+    let entry = entries.remove(pos);
+    if !valid_id(&entry.id) {
+        bail!("id inválido no índice: {}", entry.id);
+    }
+    write_index(dir, &entries)?;
+    let stored = dir.join(FILES).join(&entry.id);
+    match fs::remove_file(&stored) {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(e).with_context(|| {
+                format!("a entrada saiu da lista, mas {} ficou", stored.display())
+            });
+        }
+    }
+    Ok(entry)
 }
 
 #[cfg(test)]
@@ -341,7 +439,7 @@ mod tests {
         assert_eq!(e.rule, "sha256:abc");
         assert!(e.quarantined_at.ends_with('Z') && e.quarantined_at.len() == 20);
         let stored = f.qdir.join("files").join(&e.id);
-        assert_eq!(fs::read(&stored).unwrap(), b"payload-bytes");
+        assert_eq!(fs::read(&stored).unwrap().len(), 13);
         assert_eq!(list(&f.qdir).len(), 1);
 
         let back = restore(&f.qdir, &e.id).unwrap();
@@ -349,6 +447,59 @@ mod tests {
         assert_eq!(sha256_file(&p).unwrap(), sha);
         assert!(list(&f.qdir).is_empty());
         assert!(!stored.exists());
+    }
+
+    #[test]
+    fn stored_bytes_are_encoded() {
+        let f = fx();
+        let p = f.src_dir.join("evil.exe");
+        let payload = b"MZ\x90\x00 programa malicioso de teste com mais de 32 bytes";
+        fs::write(&p, payload).unwrap();
+        let e = quarantine_file(&f.qdir, &p, sha256_bytes(payload), "r").unwrap();
+        assert_eq!(e.encoding.as_deref(), Some(ENCODING));
+        let stored = fs::read(f.qdir.join("files").join(&e.id)).unwrap();
+        assert_eq!(stored.len(), payload.len());
+        assert!(!stored.starts_with(b"MZ"));
+        assert_ne!(stored, payload);
+        // O índice guarda o formato.
+        let text = fs::read_to_string(f.qdir.join("index.json")).unwrap();
+        assert!(text.contains("\"encoding\": \"xor1\""));
+        restore(&f.qdir, &e.id).unwrap();
+        assert_eq!(fs::read(&p).unwrap(), payload);
+    }
+
+    #[test]
+    fn legacy_entry_still_restores() {
+        let f = fx();
+        let p = f.src_dir.join("velho.bin");
+        fs::create_dir_all(f.qdir.join("files")).unwrap();
+        fs::write(f.qdir.join("files").join("abc123"), b"conteudo antigo").unwrap();
+        let sha = hex::encode(sha256_bytes(b"conteudo antigo"));
+        // Índice como as versões anteriores gravavam (sem `encoding`).
+        let index = format!(
+            r#"[{{"id":"abc123","original_path":{},"sha256":"{sha}","size":15,"rule":"r","quarantined_at":"2026-01-01T00:00:00Z"}}]"#,
+            serde_json::to_string(&p).unwrap()
+        );
+        fs::write(f.qdir.join("index.json"), index).unwrap();
+        assert_eq!(list(&f.qdir)[0].encoding, None);
+        restore(&f.qdir, "abc123").unwrap();
+        assert_eq!(fs::read(&p).unwrap(), b"conteudo antigo");
+    }
+
+    #[test]
+    fn delete_removes_file_and_entry() {
+        let f = fx();
+        let p = f.src_dir.join("x.bin");
+        fs::write(&p, b"x").unwrap();
+        let e = quarantine_file(&f.qdir, &p, sha256_bytes(b"x"), "r").unwrap();
+        let stored = f.qdir.join("files").join(&e.id);
+        assert!(stored.exists());
+        assert!(delete(&f.qdir, "naoexiste").is_err());
+        let gone = delete(&f.qdir, &e.id).unwrap();
+        assert_eq!(gone.id, e.id);
+        assert!(!stored.exists());
+        assert!(list(&f.qdir).is_empty());
+        assert!(!p.exists(), "apagar não devolve o arquivo");
     }
 
     #[test]
@@ -394,7 +545,7 @@ mod tests {
         fs::write(&p, b"new occupant").unwrap();
         assert!(restore(&f.qdir, &e.id).is_err());
         assert_eq!(fs::read(&p).unwrap(), b"new occupant");
-        assert_eq!(fs::read(f.qdir.join("files").join(&e.id)).unwrap(), b"evil");
+        assert_eq!(fs::read(f.qdir.join("files").join(&e.id)).unwrap().len(), 4);
         assert_eq!(list(&f.qdir).len(), 1);
     }
 

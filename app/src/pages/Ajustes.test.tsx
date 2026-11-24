@@ -39,6 +39,8 @@ vi.mock("@tauri-apps/api/event", () => ({
   },
 }));
 
+vi.mock("../components/ScanSettings", () => ({ default: () => null }));
+
 const openUrl = vi.fn().mockResolvedValue(undefined);
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: (...a: unknown[]) => openUrl(...a),

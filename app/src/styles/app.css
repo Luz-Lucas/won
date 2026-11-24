@@ -395,6 +395,33 @@ body {
   align-items: center;
 }
 
+.finding-check {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.finding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-1);
+}
+
+.finding-details {
+  margin-top: var(--sp-1);
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: var(--fs-sm);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+  padding: 0 var(--sp-2);
+}
+
 .finding-path {
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
