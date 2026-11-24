@@ -113,3 +113,10 @@ Uso: `sentinela-mods shell-xaml <dll> --experimental`; configuração em `%LOCAL
 (cria `xaml-barra.eject`, a DLL restaura os valores originais). A DLL se fixa no processo porque o XAML guarda
 ponteiros para ela; reiniciar o Explorer a remove por completo. Diagnóstico em `xaml-barra.log`.
 Bindings WinRT gerados com `windows-bindgen` a partir de `Windows.winmd` do SDK 26100 (o crate `windows` 0.62 não traz `UI.Xaml`).
+
+### Mod 7 (menu Iniciar)
+Mesma DLL, também injetada no `StartMenuExperienceHost.exe` (o `shell-xaml` carrega nos dois). O painel é o
+`Border#AcrylicBorder` dentro de `Grid#MainMenu`; o mod troca `Background` e `CornerRadius` com as chaves
+`start_fill=#AARRGGBB` e `start_radius=N` do `xaml-barra.cfg`. Para descobrir alvos em outros processos, criar
+`xaml-barra.dump` na pasta de mods faz a DLL listar a árvore em `xaml-barra.tree.log`. Testado: painel roxo com
+cantos arredondados junto com a ilha da barra; o eject restaurou o menu.

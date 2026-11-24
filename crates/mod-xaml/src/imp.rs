@@ -10,7 +10,7 @@ use windows::Win32::System::LibraryLoader::{
 use windows::Win32::System::Ole::{IObjectWithSite, IObjectWithSite_Impl};
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use crate::xaml_bindings::{
-    Brush, Color, CoreDispatcherPriority, DispatchedHandler, FrameworkElement, Rectangle, Shape,
+    Border, Brush, Color, CornerRadius, CoreDispatcherPriority, DispatchedHandler, FrameworkElement, Rectangle, Shape,
     SolidColorBrush, Thickness, UIElement, VisualTreeHelper,
 };
 use windows::core::{
@@ -87,6 +87,15 @@ struct Tracked {
     rect: Rectangle,
     orig: Option<Orig>,
 }
+
+/// Painel do menu Iniciar (`AcrylicBorder`): troca o fundo e o raio dos cantos.
+struct TrackedStart {
+    handle: u64,
+    border: Border,
+    orig: Option<(Option<Brush>, CornerRadius)>,
+}
+unsafe impl Send for TrackedStart {}
+static START: Mutex<Vec<TrackedStart>> = Mutex::new(Vec::new());
 struct Orig {
     fill: Option<Brush>,
     margin: Thickness,
@@ -168,6 +177,7 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
 
 /// Reaplica (ou restaura) em todos os elementos guardados, cada um na sua thread de UI.
 fn apply_all(on: bool, st: Style) {
+    apply_all_start(on, st.clone());
     let handles: Vec<(u64, Rectangle)> = {
         let g = TRACKED.lock().unwrap();
         g.iter().map(|t| (t.handle, t.rect.clone())).collect()
@@ -219,8 +229,27 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
         // As strings pertencem a nós; `BSTR` libera no drop.
         let name = element.name.to_string();
         let ty = element.type_name.to_string();
+        if mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists()) && mutation == 0 {
+            dump_log(&format!("{ty} #{name}"));
+        }
         if mutation == 1 {
             TRACKED.lock().unwrap().retain(|t| t.handle != element.handle);
+            START.lock().unwrap().retain(|t| t.handle != element.handle);
+            return S_OK;
+        }
+        if ty == "Windows.UI.Xaml.Controls.Border" && name == "AcrylicBorder" {
+            let mut raw: *mut c_void = std::ptr::null_mut();
+            if unsafe { self.diag.GetIInspectableFromHandle(element.handle, &mut raw) }.is_err() || raw.is_null() {
+                return S_OK;
+            }
+            let insp: windows::core::IInspectable = unsafe { windows::core::IInspectable::from_raw(raw) };
+            let Ok(border) = insp.cast::<Border>() else { return S_OK };
+            let (on, st) = want_on();
+            let mut t = TrackedStart { handle: element.handle, border, orig: None };
+            if on {
+                log(&format!("aplicar AcrylicBorder: {:?}", apply_start(&mut t, true, &st)));
+            }
+            START.lock().unwrap().push(t);
             return S_OK;
         }
         if ty != "Windows.UI.Xaml.Shapes.Rectangle" || !(name == "BackgroundFill" || name == "BackgroundStroke") {
@@ -409,5 +438,59 @@ pub fn log(msg: &str) {
         if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(d.join("xaml-barra.log")) {
             let _ = writeln!(f, "{msg}");
         }
+    }
+}
+
+/// Lista a árvore (tipo e nome de cada elemento) em `xaml-barra.tree.log`, para descobrir alvos
+/// de estilo em processos novos (ex.: menu Iniciar). Só roda se existir `xaml-barra.dump`.
+fn dump_log(msg: &str) {
+    use std::io::Write;
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    if N.fetch_add(1, std::sync::atomic::Ordering::Relaxed) > 20000 {
+        return;
+    }
+    if let Some(d) = mods_dir() {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(d.join("xaml-barra.tree.log")) {
+            let _ = writeln!(f, "{}\t{msg}", std::process::id());
+        }
+    }
+}
+
+fn apply_start(t: &mut TrackedStart, on: bool, st: &Style) -> Result<()> {
+    if on && (st.start_fill.is_some() || st.start_radius.is_some()) {
+        if t.orig.is_none() {
+            t.orig = Some((t.border.Background().ok(), t.border.CornerRadius()?));
+        }
+        if let Some((a, r, g, b)) = st.start_fill {
+            let brush = SolidColorBrush::CreateInstanceWithColor(Color { A: a, R: r, G: g, B: b })?;
+            t.border.SetBackground(&brush.cast::<Brush>()?)?;
+        }
+        if let Some(rad) = st.start_radius {
+            t.border.SetCornerRadius(CornerRadius { TopLeft: rad, TopRight: rad, BottomRight: rad, BottomLeft: rad })?;
+        }
+    } else if let Some((bg, cr)) = t.orig.take() {
+        if let Some(bg) = bg {
+            t.border.SetBackground(&bg)?;
+        }
+        t.border.SetCornerRadius(cr)?;
+    }
+    Ok(())
+}
+
+fn apply_all_start(on: bool, st: Style) {
+    let list: Vec<(u64, Border)> = START.lock().unwrap().iter().map(|t| (t.handle, t.border.clone())).collect();
+    for (handle, border) in list {
+        let Ok(ui) = border.cast::<UIElement>() else { continue };
+        let Ok(disp) = ui.Dispatcher() else { continue };
+        struct S(Style);
+        unsafe impl Send for S {}
+        let st = S(st.clone());
+        let h = DispatchedHandler::new(move || {
+            if let Some(t) = START.lock().unwrap().iter_mut().find(|t| t.handle == handle) {
+                let _ = apply_start(t, on, &st.0);
+            }
+            Ok(())
+        });
+        let _ = disp.RunAsync(CoreDispatcherPriority::Normal, &h);
     }
 }

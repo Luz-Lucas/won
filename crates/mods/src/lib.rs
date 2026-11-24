@@ -263,7 +263,9 @@ pub fn enable_shell_xaml(
     let mut done = Vec::new();
     for p in sys.processes().values() {
         let name = p.name().to_string_lossy().into_owned();
-        if !name.eq_ignore_ascii_case("explorer.exe") {
+        if !(name.eq_ignore_ascii_case("explorer.exe")
+            || name.eq_ignore_ascii_case("StartMenuExperienceHost.exe"))
+        {
             continue;
         }
         let pid = p.pid().as_u32();

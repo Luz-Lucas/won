@@ -25,6 +25,9 @@ pub struct Style {
     pub margin: (f64, f64, f64, f64),
     /// Esconde a linha fina da borda de cima.
     pub hide_border: bool,
+    /// Menu Iniciar (mod 7): cor do painel, ARGB, e raio dos cantos; `None` não mexe.
+    pub start_fill: Option<(u8, u8, u8, u8)>,
+    pub start_radius: Option<f64>,
 }
 
 impl Default for Style {
@@ -35,6 +38,8 @@ impl Default for Style {
             radius: 14.0,
             margin: (0.0, 0.0, 0.0, 0.0),
             hide_border: false,
+            start_fill: None,
+            start_radius: None,
         }
     }
 }
@@ -88,6 +93,8 @@ pub fn parse_style(text: &str) -> Style {
                 }
             }
             "hide_border" => st.hide_border = v == "true" || v == "1",
+            "start_fill" => st.start_fill = parse_color(v),
+            "start_radius" => st.start_radius = v.parse::<f64>().ok().map(|r| r.clamp(0.0, 60.0)),
             _ => {}
         }
     }
@@ -128,6 +135,15 @@ mod tests {
     fn valor_invalido_mantem_padrao() {
         let s = parse_style("fill=nada\nmargin=a,b\nradius=x");
         assert_eq!(s, Style::default());
+    }
+
+    #[test]
+    fn config_do_menu_iniciar() {
+        let s = parse_style("start_fill=#CC101018
+start_radius=20");
+        assert_eq!(s.start_fill, Some((0xCC, 0x10, 0x10, 0x18)));
+        assert_eq!(s.start_radius, Some(20.0));
+        assert_eq!(Style::default().start_fill, None);
     }
 
     #[test]
