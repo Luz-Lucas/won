@@ -24,6 +24,20 @@ pub struct WallpaperRef {
     pub title: Option<String>,
 }
 
+/// Terminal do tema (§9.7): fonte, esquema de cores e tema do prompt.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TerminalSpec {
+    /// Nome da lista de fontes (`omp::FONTS`).
+    pub font: Option<String>,
+    /// Esquema do Windows Terminal gerado da cor do wallpaper.
+    pub scheme_from_wallpaper: bool,
+    /// Tema do prompt do Oh My Posh, já revisado (JSON limpo). No arquivo
+    /// `.sentinela-theme` vai como `prompt.omp.json`.
+    pub prompt: Option<String>,
+}
+
+pub const PROMPT_FILE: &str = "prompt.omp.json";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Theme {
     pub name: String,
@@ -32,12 +46,15 @@ pub struct Theme {
     pub tweaks: Vec<String>,
     pub wallpaper: Option<WallpaperRef>,
     pub accent: Option<Accent>,
+    pub terminal: Option<TerminalSpec>,
 }
 
 #[derive(Debug)]
 pub struct Parsed {
     pub theme: Theme,
     pub warnings: Vec<String>,
+    /// O `theme.toml` aponta para o `prompt.omp.json` do arquivo.
+    pub prompt_file: bool,
 }
 
 #[derive(Deserialize, Default)]
@@ -59,7 +76,15 @@ struct RawColors {
     accent: Option<String>,
 }
 #[derive(Deserialize, Default)]
+struct RawTerminal {
+    font: Option<String>,
+    scheme: Option<String>,
+    prompt: Option<String>,
+    prompt_json: Option<String>,
+}
+#[derive(Deserialize, Default)]
 struct Raw {
+    terminal: Option<RawTerminal>,
     #[serde(default)]
     theme: RawTheme,
     #[serde(default)]
@@ -95,7 +120,7 @@ pub fn parse(text: &str) -> Result<Parsed, String> {
     let mut warnings = Vec::new();
     for key in table.keys() {
         match key.as_str() {
-            "version" | "theme" | "tweaks" | "wallpaper" | "colors" => {}
+            "version" | "theme" | "tweaks" | "wallpaper" | "colors" | "terminal" => {}
             k if RESERVED.contains(&k) => {
                 warnings.push(format!("a seção [{k}] é de uma fase futura e foi ignorada"))
             }
@@ -149,6 +174,41 @@ pub fn parse(text: &str) -> Result<Parsed, String> {
             Rgb::from_hex(&a).ok_or_else(|| format!("cor de destaque inválida: {a:?}"))?,
         )),
     };
+    let mut prompt_file = false;
+    let terminal = match raw.terminal {
+        None => None,
+        Some(t) => {
+            let font = match t.font {
+                None => None,
+                Some(f) if crate::terminal::omp::font_face(&f).is_some() => Some(f),
+                Some(f) => return Err(format!("fonte do terminal fora da lista: {f:?}")),
+            };
+            let scheme_from_wallpaper = match t.scheme.as_deref() {
+                None => false,
+                Some(s) if s.eq_ignore_ascii_case("wallpaper") => true,
+                Some(s) => return Err(format!("esquema do terminal desconhecido: {s:?}")),
+            };
+            match t.prompt.as_deref() {
+                None => {}
+                Some(PROMPT_FILE) => prompt_file = true,
+                Some(p) => return Err(format!("arquivo do prompt inválido: {p:?}")),
+            }
+            let prompt = match t.prompt_json {
+                None => None,
+                Some(j) => {
+                    let r = crate::terminal::theme_file::review(&j, "json")?;
+                    warnings.extend(r.disabled.iter().map(|d| format!("prompt: {d}")));
+                    Some(r.json)
+                }
+            };
+            let spec = TerminalSpec {
+                font,
+                scheme_from_wallpaper,
+                prompt,
+            };
+            (spec != TerminalSpec::default() || prompt_file).then_some(spec)
+        }
+    };
     Ok(Parsed {
         theme: Theme {
             name,
@@ -156,13 +216,25 @@ pub fn parse(text: &str) -> Result<Parsed, String> {
             tweaks,
             wallpaper,
             accent,
+            terminal,
         },
         warnings,
+        prompt_file,
     })
 }
 
-/// O `theme.toml` deste tema (sempre na versão atual).
+/// O `theme.toml` deste tema para trafegar entre a janela e o motor: leva o
+/// tema do prompt embutido (`prompt_json`).
 pub fn to_toml(t: &Theme) -> String {
+    build(t, false)
+}
+
+/// O `theme.toml` do arquivo `.sentinela-theme`: o prompt vai à parte, em `prompt.omp.json`.
+pub fn to_toml_archive(t: &Theme) -> String {
+    build(t, true)
+}
+
+fn build(t: &Theme, archive: bool) -> String {
     let mut root = toml::Table::new();
     root.insert("version".into(), toml::Value::Integer(VERSION));
     let mut th = toml::Table::new();
@@ -193,6 +265,23 @@ pub fn to_toml(t: &Theme) -> String {
         };
         tb.insert("accent".into(), v.into());
         root.insert("colors".into(), tb.into());
+    }
+    if let Some(tm) = &t.terminal {
+        let mut tb = toml::Table::new();
+        if let Some(f) = &tm.font {
+            tb.insert("font".into(), f.clone().into());
+        }
+        if tm.scheme_from_wallpaper {
+            tb.insert("scheme".into(), "wallpaper".into());
+        }
+        if let Some(p) = &tm.prompt {
+            if archive {
+                tb.insert("prompt".into(), PROMPT_FILE.into());
+            } else {
+                tb.insert("prompt_json".into(), p.clone().into());
+            }
+        }
+        root.insert("terminal".into(), tb.into());
     }
     toml::to_string(&root).unwrap_or_default()
 }
@@ -226,6 +315,48 @@ accent = "wallpaper"
         assert_eq!(t.accent, Some(Accent::FromWallpaper));
         // Ida e volta pelo texto.
         assert_eq!(parse(&to_toml(&t)).unwrap().theme, t);
+    }
+
+    #[test]
+    fn terminal_section_round_trip() {
+        let text = format!(
+            "{FULL}[terminal]\nfont = \"Meslo\"\nscheme = \"wallpaper\"\nprompt_json = \'\'\'{{\"version\": 3, \"blocks\": []}}\'\'\'\n"
+        );
+        let p = parse(&text).unwrap();
+        let tm = p.theme.terminal.clone().unwrap();
+        assert_eq!(tm.font.as_deref(), Some("Meslo"));
+        assert!(tm.scheme_from_wallpaper);
+        assert!(tm.prompt.as_deref().unwrap().contains("\"blocks\""));
+        assert_eq!(parse(&to_toml(&p.theme)).unwrap().theme, p.theme);
+        // No arquivo, o prompt vira uma referência e o JSON sai do texto.
+        let arch = to_toml_archive(&p.theme);
+        assert!(arch.contains("prompt = \"prompt.omp.json\"") && !arch.contains("blocks"));
+        assert!(parse(&arch).unwrap().prompt_file);
+        // Fonte fora da lista, esquema e arquivo desconhecidos.
+        for bad in [
+            "font = \"Comic\"",
+            "scheme = \"roxo\"",
+            "prompt = \"../x.json\"",
+        ] {
+            assert!(
+                parse(&format!("{FULL}[terminal]\n{bad}\n")).is_err(),
+                "{bad}"
+            );
+        }
+        // Prompt com comando: entra limpo e avisa.
+        let hostile = format!(
+            "{FULL}[terminal]\nprompt_json = \'\'\'{{\"blocks\":[{{\"segments\":[{{\"type\":\"command\"}}]}}]}}\'\'\'\n"
+        );
+        let h = parse(&hostile).unwrap();
+        assert!(
+            !h.theme
+                .terminal
+                .unwrap()
+                .prompt
+                .unwrap()
+                .contains("command")
+        );
+        assert!(h.warnings.iter().any(|w| w.starts_with("prompt:")));
     }
 
     #[test]

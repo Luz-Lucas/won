@@ -5,7 +5,8 @@
 
 use crate::commands::tweaks::TweaksState;
 use sentinela_core::activity::{self, ActivityKind};
-use sentinela_core::theme::apply::{Applied, Preview, Record, Undone, WallpaperCtx};
+use sentinela_core::terminal::{backup, omp, profile, wt_settings};
+use sentinela_core::theme::apply::{Applied, Preview, Record, TerminalCtx, Undone, WallpaperCtx};
 use sentinela_core::theme::{self, Env, Theme};
 use sentinela_core::tweaks::{default_journal_path, full_catalog};
 use sentinela_core::wallpaper;
@@ -83,12 +84,30 @@ fn with_env<T>(state: &TweaksState, f: impl FnOnce(&Env) -> T) -> T {
         }),
         _ => None,
     };
+    let store = backup::Store::system();
+    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    let terminal = local.as_ref().map(|local| TerminalCtx {
+        store: &store,
+        profiles: profile::documents_dir()
+            .map(|d| profile::profile_paths(&d))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(_, p)| p.parent().is_some_and(|d| d.exists()))
+            .collect(),
+        wt_settings: wt_settings::settings_paths(local)
+            .into_iter()
+            .filter(|p| p.exists())
+            .collect(),
+        prompts_dir: local.join("Sentinela").join("prompts"),
+        omp_installed: omp::locate(local, &std::env::var_os("PATH").unwrap_or_default()).is_some(),
+    });
     f(&Env {
         catalog: &catalog,
         backend: backend.as_ref(),
         journal: &journal,
         history: &history,
         wallpaper: ctx,
+        terminal,
     })
 }
 

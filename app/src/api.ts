@@ -895,3 +895,88 @@ export const themeUndo = () => invoke<ThemeUndone>("theme_undo");
 export const themeExport = (name: string, path: string) =>
   invoke<void>("theme_export", { name, path });
 export const themeImport = (path: string) => invoke<ImportedTheme>("theme_import", { path });
+
+export interface TerminalProfile {
+  shell: string;
+  path: string;
+  active: boolean;
+}
+
+export interface TerminalFont {
+  name: string;
+  label: string;
+}
+
+export interface TerminalStatus {
+  installed: boolean;
+  version: string | null;
+  update_available: boolean;
+  profiles: TerminalProfile[];
+  windows_terminal: boolean;
+  fonts: TerminalFont[];
+  can_undo: boolean;
+}
+
+export interface TerminalRequest {
+  theme: string | null;
+  extras: string[];
+  font: string | null;
+  scheme_from_wallpaper: boolean;
+}
+
+export interface TerminalChange {
+  label: string;
+  path: string;
+  /** [adicionada, linha] */
+  lines: [boolean, string][];
+  is_new: boolean;
+}
+
+export interface TerminalPlan {
+  changes: TerminalChange[];
+  warnings: string[];
+  disabled: string[];
+}
+
+export interface TerminalApplied {
+  changed: number;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface TerminalHistoryItem {
+  seq: number;
+  label: string;
+  path: string;
+  applied_at: string;
+}
+
+export interface TerminalUndo {
+  undone: TerminalHistoryItem | null;
+  changed_after: string | null;
+}
+
+export interface TerminalTiming {
+  median_ms: number;
+  runs: number;
+  slow: boolean;
+}
+
+export const terminalStatus = () => invoke<TerminalStatus>("terminal_status");
+export const terminalInstallOmp = (upgrade: boolean) =>
+  invoke<string>("terminal_install_omp", { upgrade });
+export const terminalInstallFont = (name: string) =>
+  invoke<void>("terminal_install_font", { name });
+export const terminalThemes = () => invoke<string[]>("terminal_themes");
+export const terminalThemePreview = (name: string) =>
+  invoke<string>("terminal_theme_preview", { name });
+export const terminalTiming = (name: string) =>
+  invoke<TerminalTiming>("terminal_timing", { name });
+export const terminalPlan = (req: TerminalRequest) =>
+  invoke<TerminalPlan>("terminal_plan", { req });
+export const terminalApply = (req: TerminalRequest) =>
+  invoke<TerminalApplied>("terminal_apply", { req });
+export const terminalDisablePrompt = () => invoke<number>("terminal_disable_prompt");
+export const terminalHistory = () => invoke<TerminalHistoryItem[]>("terminal_history");
+export const terminalUndo = (force: boolean) =>
+  invoke<TerminalUndo>("terminal_undo", { force });

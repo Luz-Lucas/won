@@ -9,7 +9,7 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use super::model::{Accent, Parsed, Theme, WallpaperRef, parse, to_toml};
+use super::model::{Accent, PROMPT_FILE, Parsed, Theme, WallpaperRef, parse, to_toml_archive};
 use crate::tweaks::model::{Group, RegValue};
 use crate::tweaks::state::TweakStatus;
 use crate::tweaks::{Catalog, Snapshot, SystemBackend};
@@ -19,6 +19,7 @@ pub const EXTENSION: &str = "sentinela-theme";
 const THEME_FILE: &str = "theme.toml";
 const MAX_ENTRIES: usize = 16;
 const MAX_THEME_BYTES: u64 = 64 * 1024;
+const MAX_PROMPT_BYTES: u64 = 512 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Serialize)]
@@ -55,8 +56,17 @@ pub fn export(theme: &Theme) -> Result<Vec<u8>, String> {
                 .compression_method(zip::CompressionMethod::Deflated),
         )
         .map_err(|e| e.to_string())?;
-        z.write_all(to_toml(theme).as_bytes())
+        z.write_all(to_toml_archive(theme).as_bytes())
             .map_err(|e| e.to_string())?;
+        if let Some(prompt) = theme.terminal.as_ref().and_then(|t| t.prompt.as_ref()) {
+            z.start_file(
+                PROMPT_FILE,
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Deflated),
+            )
+            .map_err(|e| e.to_string())?;
+            z.write_all(prompt.as_bytes()).map_err(|e| e.to_string())?;
+        }
         z.finish().map_err(|e| e.to_string())?;
     }
     Ok(buf.into_inner())
@@ -74,6 +84,7 @@ pub fn import(bytes: &[u8], cat: &Catalog, workshop: Option<&Path>) -> Result<Im
         return Err(format!("entradas demais no tema (máximo {MAX_ENTRIES})"));
     }
     let mut text = None;
+    let mut prompt_text: Option<String> = None;
     let mut warnings = Vec::new();
     for i in 0..zip.len() {
         let mut e = zip
@@ -88,6 +99,23 @@ pub fn import(bytes: &[u8], cat: &Catalog, workshop: Option<&Path>) -> Result<Im
             ));
         }
         if e.is_dir() {
+            continue;
+        }
+        if name == PROMPT_FILE {
+            if e.size() > MAX_PROMPT_BYTES {
+                return Err("prompt.omp.json grande demais (máximo 512 KB)".into());
+            }
+            let mut buf = Vec::new();
+            e.by_ref()
+                .take(MAX_PROMPT_BYTES + 1)
+                .read_to_end(&mut buf)
+                .map_err(|e| format!("prompt.omp.json ilegível: {e}"))?;
+            if buf.len() as u64 > MAX_PROMPT_BYTES {
+                return Err("prompt.omp.json grande demais (máximo 512 KB)".into());
+            }
+            prompt_text = Some(
+                String::from_utf8(buf).map_err(|_| "prompt.omp.json não é UTF-8".to_string())?,
+            );
             continue;
         }
         if name != THEME_FILE {
@@ -112,10 +140,28 @@ pub fn import(bytes: &[u8], cat: &Catalog, workshop: Option<&Path>) -> Result<Im
     let Parsed {
         mut theme,
         warnings: pw,
+        prompt_file,
     } = parse(&text)?;
     warnings.extend(pw);
 
     let mut disabled = Vec::new();
+    // Tema do prompt: é só um arquivo de configuração; o que executa comandos sai.
+    match (prompt_file, prompt_text) {
+        (true, Some(t)) => {
+            let r = crate::terminal::theme_file::review(&t, "json")?;
+            disabled.extend(r.disabled.iter().map(|d| format!("prompt: {d}")));
+            if let Some(tm) = theme.terminal.as_mut() {
+                tm.prompt = Some(r.json);
+            }
+        }
+        (true, None) => warnings.push(format!(
+            "o tema cita {PROMPT_FILE}, mas o arquivo não veio no zip"
+        )),
+        (false, Some(_)) => warnings.push(format!(
+            "{PROMPT_FILE} não é citado pelo tema e foi ignorado"
+        )),
+        (false, None) => {}
+    }
     // Seções que um dia poderão trazer comandos já vêm desligadas.
     for w in &warnings {
         if w.contains("fase futura") {
@@ -201,6 +247,7 @@ pub fn snapshot_current(
         tweaks,
         wallpaper,
         accent,
+        terminal: None,
     }
 }
 
@@ -300,7 +347,65 @@ mod tests {
         assert!(i.disabled.iter().any(|d| d.contains("[shortcuts]")));
         assert!(i.warnings.iter().any(|w| w.contains("payload.exe")));
         // E o tema exportado de novo não carrega as seções.
-        assert!(!to_toml(&i.theme).contains("powershell"));
+        assert!(!super::super::model::to_toml(&i.theme).contains("powershell"));
+    }
+
+    #[test]
+    fn import_keeps_prompt_theme_as_file_only() {
+        let toml = format!("{OK}[terminal]\nfont = \"Meslo\"\nprompt = \"prompt.omp.json\"\n");
+        let prompt = r#"{"version":3,"blocks":[{"type":"prompt","segments":[{"type":"path"},{"type":"command","properties":{"command":"calc"}}]}]}"#;
+        let z = zip_of(&[
+            ("theme.toml", toml.as_bytes()),
+            ("prompt.omp.json", prompt.as_bytes()),
+        ]);
+        let i = import(&z, &cat(), None).unwrap();
+        let p = i
+            .theme
+            .terminal
+            .as_ref()
+            .unwrap()
+            .prompt
+            .as_deref()
+            .unwrap();
+        assert!(p.contains("path") && !p.contains("calc"), "{p}");
+        assert!(
+            i.disabled
+                .iter()
+                .any(|d| d.starts_with("prompt:") && d.contains("command"))
+        );
+        // Exporta de novo: o JSON vai em arquivo, nunca dentro do theme.toml.
+        let again = export(&i.theme).unwrap();
+        let mut zip = zip::ZipArchive::new(Cursor::new(&again)).unwrap();
+        let mut t = String::new();
+        zip.by_name("theme.toml")
+            .unwrap()
+            .read_to_string(&mut t)
+            .unwrap();
+        assert!(t.contains("prompt = \"prompt.omp.json\"") && !t.contains("segments"));
+        assert!(zip.by_name("prompt.omp.json").is_ok());
+        assert_eq!(import(&again, &cat(), None).unwrap().theme, i.theme);
+        // Citado e ausente, e presente sem citação.
+        let missing = zip_of(&[("theme.toml", toml.as_bytes())]);
+        assert!(
+            import(&missing, &cat(), None)
+                .unwrap()
+                .warnings
+                .iter()
+                .any(|w| w.contains("não veio"))
+        );
+        let uncited = zip_of(&[
+            ("theme.toml", OK.as_bytes()),
+            ("prompt.omp.json", prompt.as_bytes()),
+        ]);
+        let u = import(&uncited, &cat(), None).unwrap();
+        assert!(u.theme.terminal.is_none() && u.warnings.iter().any(|w| w.contains("ignorado")));
+        // Grande demais.
+        let big = format!("{{\"x\":\"{}\"}}", "a".repeat(600 * 1024));
+        let z = zip_of(&[
+            ("theme.toml", toml.as_bytes()),
+            ("prompt.omp.json", big.as_bytes()),
+        ]);
+        assert!(import(&z, &cat(), None).unwrap_err().contains("512 KB"));
     }
 
     #[test]

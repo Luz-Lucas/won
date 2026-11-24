@@ -7,17 +7,20 @@ import {
   tweaksApplyChoice,
   tweaksList,
   tweaksUndo,
+  terminalStatus,
 } from "../api";
 import type {
   ApplyReport,
   TweakArea,
   TweakEffect,
   TweakItem,
+  TerminalStatus,
   TweaksPage,
   UndoReport,
   WallpaperStatus,
 } from "../api";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Terminal from "../components/Terminal";
 import Themes from "../components/Themes";
 import WallpaperGallery from "../components/WallpaperGallery";
 import { useJob } from "../jobs";
@@ -402,21 +405,31 @@ function Ajustes({ nav }: { nav: React.ReactNode }) {
   );
 }
 
-type Section = "ajustes" | "wallpaper" | "temas";
+type Section = "ajustes" | "wallpaper" | "temas" | "terminal";
 
 /** Ajustes do Windows, papel de parede (só com o Wallpaper Engine) e temas. */
 export default function Personalizar() {
   const [section, setSection] = useState<Section>("ajustes");
   const [engine, setEngine] = useState<WallpaperStatus | null>(null);
+  // A seção do terminal só aparece quando há PowerShell ou Windows Terminal.
+  const [term, setTerm] = useState<TerminalStatus | null>(null);
 
   useEffect(() => {
     wallpaperStatus().then(setEngine, () => setEngine(null));
   }, []);
 
+  const loadTerm = useCallback(() => {
+    terminalStatus().then(setTerm, () => setTerm(null));
+  }, []);
+  useEffect(loadTerm, [loadTerm]);
+
   const tabs: { id: Section; label: string }[] = [
     { id: "ajustes", label: "Ajustes" },
     ...(engine?.installed ? [{ id: "wallpaper" as const, label: "Papel de parede" }] : []),
     { id: "temas", label: "Temas" },
+    ...(term && (term.profiles.length > 0 || term.windows_terminal)
+      ? [{ id: "terminal" as const, label: "Terminal" }]
+      : []),
   ];
   // Se o Wallpaper Engine sumir com a aba aberta, volta para os ajustes.
   const current: Section = tabs.some((t) => t.id === section) ? section : "ajustes";
@@ -444,6 +457,9 @@ export default function Personalizar() {
       {nav}
       {current === "wallpaper" && engine && <WallpaperGallery status={engine} />}
       {current === "temas" && <Themes engine={engine?.installed ?? false} />}
+      {current === "terminal" && term && (
+        <Terminal status={term} engine={engine?.installed ?? false} onChanged={loadTerm} />
+      )}
     </section>
   );
 }

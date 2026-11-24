@@ -21,6 +21,7 @@ vi.mock("../api", () => ({
   tweaksApplyChoice: vi.fn(),
   tweaksUndo: vi.fn(),
   restartExplorer: vi.fn(),
+  terminalStatus: vi.fn().mockRejectedValue("sem terminal"),
   wallpaperStatus: vi.fn().mockResolvedValue({
     installed: false,
     running: false,
