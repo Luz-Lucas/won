@@ -68,12 +68,14 @@ fn scan_body(
     let opts = ScanOptions {
         roots: resolved.roots,
         files: resolved.files,
+        autostart: resolved.autostart,
         risky_only: resolved.risky_only,
         walk: WalkOptions {
             skip_dirs: own_dirs(),
             ..WalkOptions::default()
         },
         max_size: MAX_SIZE,
+        ..ScanOptions::default()
     };
     let progress = EventProgress::new(id, sink, Duration::from_millis(100));
     let mut report = run_scan_with_progress(&engine, &opts, cancel, &progress);

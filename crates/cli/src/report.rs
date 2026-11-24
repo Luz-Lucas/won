@@ -31,6 +31,7 @@ fn label(s: Severity) -> &'static str {
     match s {
         Severity::Malicious => "[MALICIOSO]",
         Severity::Suspicious => "[SUSPEITO]",
+        Severity::Risk => "[RISCO]",
         Severity::Info => "[INFO]",
     }
 }
@@ -39,6 +40,7 @@ pub fn write_scan(report: &ScanReport, json: bool, out: &mut dyn Write) -> std::
     let count = |s: Severity| report.items.iter().filter(|i| i.verdict == s).count();
     let malicious = count(Severity::Malicious);
     let suspicious = count(Severity::Suspicious);
+    let risk = count(Severity::Risk);
     if json {
         let doc = json!({
             "version": 1,
@@ -46,6 +48,7 @@ pub fn write_scan(report: &ScanReport, json: bool, out: &mut dyn Write) -> std::
                 "scanned": report.scanned,
                 "malicious": malicious,
                 "suspicious": suspicious,
+                "risk": risk,
                 "errors": report.errors.len(),
                 "interrupted": report.interrupted,
             },
@@ -57,10 +60,11 @@ pub fn write_scan(report: &ScanReport, json: bool, out: &mut dyn Write) -> std::
 
     writeln!(
         out,
-        "Verificados: {} | Maliciosos: {} | Suspeitos: {} | Erros: {}",
+        "Verificados: {} | Maliciosos: {} | Suspeitos: {} | Risco: {} | Erros: {}",
         report.scanned,
         malicious,
         suspicious,
+        risk,
         report.errors.len()
     )?;
     if report.interrupted {

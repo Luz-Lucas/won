@@ -1,5 +1,6 @@
 pub mod areas;
 pub mod authenticode;
+pub mod context;
 pub mod detector;
 pub mod exceptions;
 pub mod explain;
@@ -24,10 +25,14 @@ use crate::signatures::Database;
 use crate::walker::{Entry, WalkError, WalkItem, WalkOptions, is_link_like, is_under, walk};
 use detector::{Detector, FileData, Finding, Severity};
 
+#[derive(Default)]
 pub struct ScanOptions {
     pub roots: Vec<PathBuf>,
     /// Arquivos avulsos, sempre lidos (processos, itens de inicialização).
     pub files: Vec<PathBuf>,
+    /// Arquivos que iniciam sozinhos (chaves `Run`, tarefas, serviços, pasta
+    /// Inicializar): contam para o nível Risco.
+    pub autostart: Vec<PathBuf>,
     /// Nas `roots`, só arquivos de risco (`risk::file_is_risky`).
     pub risky_only: bool,
     pub walk: WalkOptions,
@@ -85,6 +90,7 @@ impl Engine {
             content.push(Box::new(yara::YaraDetector::new(rules)));
         }
         content.push(Box::new(pe::PeDetector));
+        content.push(Box::new(context::ContextDetector));
         let engine = Engine {
             hash: hash::HashDetector::new(db.hashes.clone()),
             content,
@@ -113,7 +119,12 @@ struct EntryScan {
 
 /// Scans one file. Returns the verdict and findings, or a `WalkError` if the
 /// file could not be read.
-fn scan_entry(engine: &Engine, entry: &Entry, max_size: u64) -> Result<EntryScan, WalkError> {
+fn scan_entry(
+    engine: &Engine,
+    entry: &Entry,
+    max_size: u64,
+    autostart: bool,
+) -> Result<EntryScan, WalkError> {
     let path = entry.path.as_path();
     // Big full reads are serialized to bound peak memory.
     let _guard = (entry.size > BIG_FILE && entry.size <= max_size)
@@ -132,7 +143,8 @@ fn scan_entry(engine: &Engine, entry: &Entry, max_size: u64) -> Result<EntryScan
     let sha256;
     let mut findings = if let Some(bytes) = full {
         sha256 = hash::sha256_bytes(&bytes);
-        let data = FileData::with_trust(path, Some(&bytes), sha256, Some(engine.trust));
+        let mut data = FileData::with_trust(path, Some(&bytes), sha256, Some(engine.trust));
+        data.autostart = autostart;
         let mut f = engine.hash.inspect(&data).unwrap_or_default();
         for d in &engine.content {
             match d.inspect(&data) {
@@ -265,6 +277,8 @@ pub fn run_scan_with_progress(
     let files_done = AtomicUsize::new(0);
     let bytes_done = AtomicU64::new(0);
 
+    let autostart: std::collections::HashSet<String> =
+        opts.autostart.iter().map(|p| path_key(p)).collect();
     let skipped = AtomicBool::new(skipped_in_walk);
     type Scanned = (Option<ScanItem>, Vec<WalkError>);
     let results: Vec<Result<Scanned, WalkError>> = entries
@@ -276,8 +290,9 @@ pub fn run_scan_with_progress(
             }
             let wanted = !only_risky || risk::file_is_risky(&entry.path);
             let scanned = wanted.then(|| {
-                scan_entry(engine, entry, opts.max_size).map(|r| {
-                    let item = (r.verdict >= Severity::Suspicious).then(|| ScanItem {
+                let starts = autostart.contains(&path_key(&entry.path));
+                scan_entry(engine, entry, opts.max_size, starts).map(|r| {
+                    let item = (r.verdict >= Severity::Risk).then(|| ScanItem {
                         path: entry.path.clone(),
                         verdict: r.verdict,
                         findings: r.findings,
@@ -342,10 +357,8 @@ mod tests {
     fn opts(dir: &Path, max_size: u64) -> ScanOptions {
         ScanOptions {
             roots: vec![dir.to_path_buf()],
-            files: vec![],
-            risky_only: false,
-            walk: WalkOptions::default(),
             max_size,
+            ..ScanOptions::default()
         }
     }
 
@@ -570,7 +583,7 @@ mod tests {
         };
         fs::remove_file(&path).unwrap();
         let (engine, _) = Engine::from_database(&marker_db());
-        let err = scan_entry(&engine, &entry, 1 << 20).unwrap_err();
+        let err = scan_entry(&engine, &entry, 1 << 20, false).unwrap_err();
         assert_eq!(err.path, path);
         assert!(!err.reason.is_empty());
     }
@@ -659,6 +672,40 @@ mod tests {
         };
         let report = run_scan(&engine, &opts(dir.path(), 1 << 20), &AtomicBool::new(false));
         assert_malicious(&report);
+    }
+
+    #[test]
+    fn risk_does_not_change_exit_code() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("foto.jpg.exe"), b"MZ nada").unwrap();
+        fs::write(dir.path().join("limpo.txt"), b"ok").unwrap();
+        let (engine, _) = Engine::from_database(&marker_db());
+        let report = run_scan(&engine, &opts(dir.path(), 1 << 20), &AtomicBool::new(false));
+        assert_eq!(report.items.len(), 1);
+        assert_eq!(report.items[0].verdict, Severity::Risk);
+        assert_eq!(report.items[0].findings[0].rule, "double-extension");
+        assert_eq!(report.exit_code(), 0);
+    }
+
+    #[test]
+    fn autostart_list_marks_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("AppData").join("Local");
+        fs::create_dir_all(&app).unwrap();
+        let exe = app.join("up.exe");
+        fs::write(&exe, b"MZ nada").unwrap();
+        let (mut engine, _) = Engine::from_database(&marker_db());
+        engine.trust = |_| authenticode::Trust::Unsigned;
+        let mut o = opts(dir.path(), 1 << 20);
+        assert!(
+            run_scan(&engine, &o, &AtomicBool::new(false))
+                .items
+                .is_empty()
+        );
+        o.autostart = vec![exe.clone()];
+        let report = run_scan(&engine, &o, &AtomicBool::new(false));
+        assert_eq!(report.items.len(), 1);
+        assert_eq!(report.items[0].findings[0].rule, "autostart-unsigned");
     }
 
     #[test]

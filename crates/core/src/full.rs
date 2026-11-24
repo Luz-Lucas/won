@@ -15,7 +15,7 @@ use crate::clean::{self, CleanReport};
 use crate::quarantine::{self, QuarantineEntry};
 use crate::scan::{Engine, Progress, ScanItem, ScanOptions, ScanReport, run_scan_with_progress};
 use crate::signatures;
-use crate::walker::{WalkError, WalkOptions};
+use crate::walker::WalkError;
 
 pub struct FullOptions<'a> {
     /// Categories to clean. Production passes `clean::all_categories()`;
@@ -132,10 +132,8 @@ pub fn run_full(opts: &FullOptions) -> FullReport {
         &engine,
         &ScanOptions {
             roots: opts.roots.clone(),
-            files: Vec::new(),
-            risky_only: false,
-            walk: WalkOptions::default(),
             max_size: opts.max_size,
+            ..ScanOptions::default()
         },
         opts.cancel,
         opts.progress,

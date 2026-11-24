@@ -69,6 +69,12 @@ impl LazyTrust {
         })
     }
 
+    /// Fixa o resultado sem consultar (testes).
+    #[cfg(test)]
+    pub fn set_for_test(&self, t: Trust) -> Result<(), Trust> {
+        self.cell.set(t)
+    }
+
     /// Já foi consultada (para os testes conferirem que não houve consulta à toa).
     pub fn consulted(&self) -> bool {
         self.cell.get().is_some()

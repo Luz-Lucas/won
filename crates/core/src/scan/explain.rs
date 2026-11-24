@@ -31,6 +31,7 @@ pub fn why(f: &Finding) -> String {
              cópia também têm esses sinais, então pode ser falso positivo.",
             f.detail
         ),
+        "context" => context_why(f),
         other => {
             if f.detail.is_empty() {
                 format!("{other}: {}", f.rule)
@@ -38,6 +39,41 @@ pub fn why(f: &Finding) -> String {
                 format!("{other}: {} — {}", f.rule, f.detail)
             }
         }
+    }
+}
+
+/// Nível Risco: o contexto, não uma regra, chamou a atenção.
+fn context_why(f: &Finding) -> String {
+    match f.rule.as_str() {
+        "autostart-unsigned" => "Programa sem assinatura válida que inicia sozinho com o Windows \
+                                 a partir de uma pasta temporária ou do AppData, um lugar comum \
+                                 para malware se esconder. Muitos atualizadores legítimos fazem o \
+                                 mesmo; confira se você reconhece o programa."
+            .to_string(),
+        "double-extension" => format!(
+            "O nome tem extensão dupla ({}): parece um documento, mas é um arquivo que executa \
+             ao abrir. É um truque comum para enganar quem abre.",
+            f.detail
+        ),
+        "disguised-executable" => format!(
+            "O arquivo tem extensão de documento ou mídia ({}), mas por dentro é um programa \
+             do Windows.",
+            f.detail
+        ),
+        "startup-script" => format!(
+            "Script ({}) na pasta Inicializar: roda toda vez que você entra no Windows. Confira \
+             se foi você quem colocou ali.",
+            f.detail
+        ),
+        "lnk-encoded-powershell" => "Atalho que abre o PowerShell com um comando escondido \
+                                     (codificado em Base64), técnica muito usada por malware."
+            .to_string(),
+        "office-auto-macro" => format!(
+            "Documento do Office com macro que roda sozinha ao abrir ({}). Só habilite macros \
+             de quem você confia.",
+            f.detail
+        ),
+        _ => format!("Contexto de risco: {}", f.rule),
     }
 }
 
@@ -96,5 +132,21 @@ mod tests {
             "seção executável gravável",
         ));
         assert!(p.contains("seção executável gravável"));
+        let c = why(&f(
+            "context",
+            "double-extension",
+            Severity::Risk,
+            ".jpg.exe",
+        ));
+        assert!(c.contains(".jpg.exe") && c.contains("extensão dupla"));
+        for rule in [
+            "autostart-unsigned",
+            "disguised-executable",
+            "startup-script",
+            "lnk-encoded-powershell",
+            "office-auto-macro",
+        ] {
+            assert!(!why(&f("context", rule, Severity::Risk, "")).starts_with("Contexto"));
+        }
     }
 }

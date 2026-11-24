@@ -270,6 +270,7 @@ mod tests {
                 .iter()
                 .filter(|i| i.item.verdict == Severity::Suspicious)
                 .count(),
+            risk: 0,
             items_total: items.len(),
             items,
             ignored: 0,
