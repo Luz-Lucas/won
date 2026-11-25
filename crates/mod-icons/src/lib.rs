@@ -53,7 +53,7 @@ mod imp {
         let Some(dir) = std::env::var_os("LOCALAPPDATA") else {
             return;
         };
-        let file = std::path::Path::new(&dir).join("Sentinela/mods/icons.rva");
+        let file = std::path::Path::new(&dir).join("WON/mods/icons.rva");
         let Some(rva) = std::fs::read_to_string(file)
             .ok()
             .and_then(|t| parse_rva(&t))

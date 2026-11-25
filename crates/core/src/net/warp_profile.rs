@@ -2,7 +2,7 @@
 //! dispositivo na API da Cloudflare com uma chave nova e monta o `.conf`.
 //!
 //! A chave privada nasce neste computador e só vai para o `.conf` em
-//! `%LOCALAPPDATA%\Sentinela\wireguard`; nunca para o repositório, o log, a
+//! `%LOCALAPPDATA%\WON\wireguard`; nunca para o repositório, o log, a
 //! janela ou a atividade. A conta é a gratuita do WARP (sem WARP+), criada
 //! só quando o usuário pede.
 

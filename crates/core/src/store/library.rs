@@ -63,9 +63,22 @@ struct Active {
 pub struct LibraryState {
     cursores: Option<Active>,
     icones: Option<Active>,
+    /// Tamanho do ponteiro escolhido na Loja e o valor que havia antes.
+    #[serde(default)]
+    cursor_size: Option<SizePrev>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct SizePrev {
+    size: u32,
+    value: Option<RegValue>,
 }
 
 impl LibraryState {
+    /// Tamanho do ponteiro aplicado pela Loja (em pixels), se houver.
+    pub fn cursor_size(&self) -> Option<u32> {
+        self.cursor_size.as_ref().map(|s| s.size)
+    }
     pub fn active(&self, kind: Kind) -> Option<&str> {
         self.slot(kind).as_ref().map(|a| a.id.as_str())
     }
@@ -149,10 +162,10 @@ impl Library {
         Library { dir }
     }
 
-    /// `%LOCALAPPDATA%\Sentinela\loja`.
+    /// `%LOCALAPPDATA%\WON\loja`.
     pub fn system() -> Option<Library> {
         let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)?;
-        Some(Library::new(base.join("Sentinela").join("loja")))
+        Some(Library::new(base.join("WON").join("loja")))
     }
 
     fn pack_dir(&self, kind: Kind, id: &str) -> PathBuf {
@@ -454,6 +467,55 @@ impl Library {
         }
     }
 
+    /// Muda o tamanho do ponteiro (`CursorBaseSize`, em pixels: 32 é o padrão do Windows).
+    /// `None` devolve o valor que havia antes da primeira mudança feita pela Loja.
+    pub fn set_cursor_size(
+        &self,
+        size: Option<u32>,
+        backend: &dyn SystemBackend,
+        sys: &dyn Sys,
+    ) -> Result<(), String> {
+        if !backend.hkcu_allowed() {
+            return Err(
+                "Esta janela está em outra conta do Windows; abra o WON na sua conta.".into(),
+            );
+        }
+        let mut state = self.state();
+        match size {
+            Some(px) => {
+                if !(16..=256).contains(&px) {
+                    return Err("Tamanho de ponteiro fora do limite (16 a 256).".into());
+                }
+                let before = match &state.cursor_size {
+                    Some(p) => p.value.clone(),
+                    None => match backend.read(&reg(CURSORS_KEY, "CursorBaseSize"))? {
+                        Snapshot::Registry { value } => value,
+                        _ => None,
+                    },
+                };
+                Self::write_value(
+                    backend,
+                    CURSORS_KEY,
+                    "CursorBaseSize",
+                    Some(RegValue::Dword(px)),
+                )?;
+                state.cursor_size = Some(SizePrev {
+                    size: px,
+                    value: before,
+                });
+            }
+            None => {
+                let Some(prev) = state.cursor_size.take() else {
+                    return Ok(());
+                };
+                Self::write_value(backend, CURSORS_KEY, "CursorBaseSize", prev.value)?;
+            }
+        }
+        self.save(&state)?;
+        sys.refresh_cursors();
+        Ok(())
+    }
+
     /// Devolve exatamente o que havia antes da primeira aplicação do tipo.
     pub fn revert(
         &self,
@@ -618,6 +680,26 @@ mod tests {
         assert_eq!(l.state().active(Kind::Cursores), None);
         assert!(l.revert(Kind::Cursores, &b, &FakeSys::default()).is_err());
         l.uninstall(item).unwrap();
+    }
+
+    #[test]
+    fn cursor_size_is_set_and_restored() {
+        let (_d, l) = lib();
+        let b = Fake::default();
+        let sys = FakeSys::default();
+        let key = (CURSORS_KEY.to_string(), "CursorBaseSize".to_string());
+        b.vals
+            .lock()
+            .unwrap()
+            .insert(key.clone(), RegValue::Dword(48));
+        l.set_cursor_size(Some(24), &b, &sys).unwrap();
+        assert_eq!(b.vals.lock().unwrap()[&key], RegValue::Dword(24));
+        l.set_cursor_size(Some(64), &b, &sys).unwrap();
+        assert_eq!(l.state().cursor_size(), Some(64));
+        assert!(l.set_cursor_size(Some(4), &b, &sys).is_err());
+        l.set_cursor_size(None, &b, &sys).unwrap();
+        assert_eq!(b.vals.lock().unwrap()[&key], RegValue::Dword(48));
+        assert_eq!(l.state().cursor_size(), None);
     }
 
     #[test]

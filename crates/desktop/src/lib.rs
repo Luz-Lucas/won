@@ -9,6 +9,8 @@ pub mod keys;
 pub mod launcher;
 pub mod launcher_theme;
 pub mod midclick;
+#[path = "../../core/src/migrate.rs"]
+pub mod migrate;
 pub mod rules;
 pub mod smartcopy;
 pub mod tiling;

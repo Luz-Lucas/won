@@ -10,6 +10,8 @@ vi.mock("../api", () => ({
   lojaApply: vi.fn(),
   lojaRemove: vi.fn(),
   lojaRevert: vi.fn(),
+  lojaCursorSize: vi.fn(),
+  lojaSetCursorSize: vi.fn(),
   restartExplorer: vi.fn(),
   themePreview: vi.fn(),
   themeApply: vi.fn(),
@@ -39,6 +41,8 @@ const page = (items: api.LojaItem[]): api.LojaPage => ({ items, online: false, o
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(api.lojaCursorSize).mockResolvedValue(null);
+  vi.mocked(api.lojaSetCursorSize).mockResolvedValue();
 });
 
 describe("Loja", () => {
@@ -77,5 +81,16 @@ describe("Loja", () => {
     await user.click(screen.getByRole("tab", { name: "Pacotes de ícones" }));
     expect(screen.queryByText("Noite")).toBeNull();
     expect(screen.getByText("Flat")).toBeTruthy();
+  });
+
+  it("muda o tamanho do ponteiro e desfaz", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.lojaList).mockResolvedValue(page([item({ id: "c1", name: "Noite" })]));
+    render(<Loja />);
+    await user.click(await screen.findByRole("button", { name: "Pequeno" }));
+    await waitFor(() => expect(api.lojaSetCursorSize).toHaveBeenCalledWith(24));
+    vi.mocked(api.lojaCursorSize).mockResolvedValue(24);
+    await user.click(await screen.findByRole("button", { name: "Desfazer tamanho" }));
+    await waitFor(() => expect(api.lojaSetCursorSize).toHaveBeenCalledWith(null));
   });
 });

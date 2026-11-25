@@ -23,6 +23,7 @@ impl Sink for TauriSink {
 }
 
 pub fn run() {
+    sentinela_core::migrate::migrate_data_dirs();
     // A instância elevada (`--wait-pid`) nunca registra a instância única.
     let relaunched = commands::system::wait_for_previous_instance();
     let mut builder = tauri::Builder::default();
@@ -123,6 +124,8 @@ pub fn run() {
             commands::loja::loja_remove,
             commands::loja::loja_apply,
             commands::loja::loja_revert,
+            commands::loja::loja_cursor_size,
+            commands::loja::loja_set_cursor_size,
             commands::theme::theme_list,
             commands::theme::theme_preview,
             commands::theme::theme_apply,

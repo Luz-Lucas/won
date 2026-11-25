@@ -1,5 +1,5 @@
 //! Preferências do usuário (início com o Windows, fechar para a bandeja...).
-//! Arquivo JSON em `%LOCALAPPDATA%\Sentinela\settings.json`.
+//! Arquivo JSON em `%LOCALAPPDATA%\WON\settings.json`.
 
 use std::path::{Path, PathBuf};
 
@@ -44,11 +44,11 @@ impl Settings {
     }
 }
 
-/// `%LOCALAPPDATA%\Sentinela\settings.json`.
+/// `%LOCALAPPDATA%\WON\settings.json`.
 pub fn default_settings_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("settings.json")
 }
 

@@ -1,4 +1,4 @@
-//! Destinos do usuário (`%LOCALAPPDATA%\Sentinela\net-targets.json`) e os
+//! Destinos do usuário (`%LOCALAPPDATA%\WON\net-targets.json`) e os
 //! padrões: o roteador e um DNS público.
 
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use super::{Target, parse_target};
 pub fn default_targets_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("net-targets.json")
 }
 
@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn add_remove_and_corrupt_file() {
         let d = tempfile::tempdir().unwrap();
-        let p = d.path().join("Sentinela/net-targets.json");
+        let p = d.path().join("WON/net-targets.json");
         assert!(load(&p).is_empty());
         add(&p, "servidor.example:27015").unwrap();
         let list = add(&p, "servidor.example:27015").unwrap();

@@ -962,6 +962,11 @@ export const lojaRemove = (id: string, online: boolean) =>
 export const lojaApply = (id: string, online: boolean) =>
   invoke<LojaApplied>("loja_apply", { id, online });
 export const lojaRevert = (kind: LojaKind) => invoke<LojaReverted>("loja_revert", { kind });
+/** Tamanho do ponteiro aplicado pela Loja (pixels); `null` = o do Windows. */
+export const lojaCursorSize = () => invoke<number | null>("loja_cursor_size");
+/** `null` devolve o tamanho que havia antes. */
+export const lojaSetCursorSize = (size: number | null) =>
+  invoke<void>("loja_set_cursor_size", { size });
 
 export interface TerminalProfile {
   shell: string;

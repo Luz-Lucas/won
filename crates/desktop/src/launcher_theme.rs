@@ -94,7 +94,7 @@ pub fn cfg_path() -> std::path::PathBuf {
         .unwrap_or_else(|| {
             dirs::data_local_dir()
                 .unwrap_or_else(std::env::temp_dir)
-                .join("Sentinela")
+                .join("WON")
                 .join("mods")
         });
     dir.join("xaml-barra.cfg")

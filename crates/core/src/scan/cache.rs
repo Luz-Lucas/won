@@ -74,7 +74,7 @@ pub fn rules_key(db: &Database) -> [u8; 32] {
 pub fn default_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
-        .join("Sentinela")
+        .join("WON")
         .join("scan-cache.bin")
 }
 

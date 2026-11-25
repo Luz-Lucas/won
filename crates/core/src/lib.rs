@@ -6,6 +6,7 @@ pub mod finder;
 pub mod format;
 pub mod full;
 pub mod games;
+pub mod migrate;
 pub mod net;
 pub mod platform_fs;
 pub mod quarantine;

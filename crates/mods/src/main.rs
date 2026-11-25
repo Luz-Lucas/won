@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
-use sentinela_mods::{eject, inject_mod, recovery, registry};
+use sentinela_mods::{eject, inject_mod, migrate, recovery, registry};
 
 #[derive(Parser)]
 #[command(name = "sentinela-mods", about = "Motor de mods do WON")]
@@ -54,6 +54,7 @@ enum Cmd {
 }
 
 fn main() -> Result<()> {
+    migrate::migrate_data_dirs();
     let dir = registry::data_dir();
     match Cli::parse().cmd {
         Cmd::List => {

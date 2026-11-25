@@ -30,7 +30,7 @@ pub struct Entry {
 pub fn default_history_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("net-history.json")
 }
 
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn history_caps_and_orders() {
         let d = tempfile::tempdir().unwrap();
-        let p = d.path().join("Sentinela/net-history.json");
+        let p = d.path().join("WON/net-history.json");
         for i in 0..(MAX_ENTRIES + 5) {
             append(&p, vec![entry(Kind::Latency, &format!("t{i}"), "x".into())]).unwrap();
         }

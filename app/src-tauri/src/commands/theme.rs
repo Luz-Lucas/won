@@ -150,7 +150,7 @@ fn with_env<T>(state: &TweaksState, f: impl FnOnce(&Env) -> T) -> T {
             .into_iter()
             .filter(|p| p.exists())
             .collect(),
-        prompts_dir: local.join("Sentinela").join("prompts"),
+        prompts_dir: local.join("WON").join("prompts"),
         omp_installed: omp::locate(local, &std::env::var_os("PATH").unwrap_or_default()).is_some(),
     });
     f(&Env {

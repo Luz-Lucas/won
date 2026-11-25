@@ -47,7 +47,7 @@ pub fn default_db_dir() -> PathBuf {
     }
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("db")
 }
 
@@ -422,7 +422,7 @@ mod tests {
     fn default_db_dir_fallback_shape() {
         // Avoid mutating process env (tests run in parallel).
         if std::env::var_os("SENTINELA_DB_DIR").is_none_or(|v| v.is_empty()) {
-            assert!(default_db_dir().ends_with("Sentinela/db"));
+            assert!(default_db_dir().ends_with("WON/db"));
         }
     }
 }

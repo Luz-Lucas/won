@@ -67,7 +67,7 @@ fn paths() -> Result<Paths, String> {
             .into_iter()
             .filter(|p| p.exists())
             .collect(),
-        prompts_dir: local.join("Sentinela").join("prompts"),
+        prompts_dir: local.join("WON").join("prompts"),
     })
 }
 

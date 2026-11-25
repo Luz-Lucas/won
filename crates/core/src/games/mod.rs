@@ -221,11 +221,11 @@ struct ManualFile {
     exes: Vec<PathBuf>,
 }
 
-/// `%LOCALAPPDATA%\Sentinela\games.json`: os jogos adicionados à mão.
+/// `%LOCALAPPDATA%\WON\games.json`: os jogos adicionados à mão.
 pub fn default_manual_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("games.json")
 }
 
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn manual_list_add_remove_and_reject_non_exe() {
         let d = tempfile::tempdir().unwrap();
-        let list = d.path().join("Sentinela/games.json");
+        let list = d.path().join("WON/games.json");
         let exe = d.path().join("x/jogo.exe");
         touch(&exe);
         let txt = d.path().join("x/leia.txt");

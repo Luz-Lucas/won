@@ -2,6 +2,8 @@
 //! com recusas fixas (sistema, anticheat) e um script de recuperação independente do app.
 
 pub mod inject;
+#[path = "../../core/src/migrate.rs"]
+pub mod migrate;
 pub mod policy;
 pub mod recovery;
 pub mod registry;

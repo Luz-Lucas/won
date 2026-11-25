@@ -126,6 +126,31 @@ pub async fn loja_apply(
     .await
 }
 
+/// Tamanho do ponteiro aplicado pela Loja (pixels), `None` se for o do Windows.
+#[tauri::command]
+pub async fn loja_cursor_size() -> Result<Option<u32>, String> {
+    blocking(move || Ok(library()?.state().cursor_size())).await
+}
+
+/// `size`: pixels (32 = padrão do Windows); `None` devolve o valor de antes.
+#[tauri::command]
+pub async fn loja_set_cursor_size(
+    size: Option<u32>,
+    state: State<'_, TweaksState>,
+) -> Result<(), String> {
+    let state = state.inner().clone();
+    blocking(move || {
+        let backend = state.backend();
+        library()?.set_cursor_size(size, backend.as_ref(), &WinSys)?;
+        log(&match size {
+            Some(px) => format!("Loja: ponteiro em {px} px"),
+            None => "Loja: tamanho do ponteiro restaurado".to_string(),
+        });
+        Ok(())
+    })
+    .await
+}
+
 /// `kind`: `cursores` ou `icones`.
 #[tauri::command]
 pub async fn loja_revert(kind: Kind, state: State<'_, TweaksState>) -> Result<Reverted, String> {

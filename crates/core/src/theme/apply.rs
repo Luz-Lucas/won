@@ -440,11 +440,11 @@ fn save_history(path: &Path, h: &History) -> Result<(), String> {
     write().map_err(|e| format!("não foi possível gravar o histórico de temas: {e}"))
 }
 
-/// `%LOCALAPPDATA%\\Sentinela\\themes\\history.json`.
+/// `%LOCALAPPDATA%\\WON\\themes\\history.json`.
 pub fn default_history_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
-        .join("Sentinela")
+        .join("WON")
         .join("themes")
         .join("history.json")
 }

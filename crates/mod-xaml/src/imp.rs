@@ -1,8 +1,8 @@
 use super::{Style, parse_style};
 use crate::xaml_bindings::{
     Border, Brush, Color, CoreDispatcherPriority, CornerRadius, DispatchedHandler,
-    FrameworkElement, Point, Rectangle, ScaleTransform, Shape, SolidColorBrush, Thickness,
-    Transform, TranslateTransform, UIElement, VerticalAlignment, VisualTreeHelper,
+    FrameworkElement, ItemsControl, Point, Rectangle, ScaleTransform, Shape, SolidColorBrush,
+    Thickness, Transform, TranslateTransform, UIElement, VerticalAlignment, VisualTreeHelper,
 };
 use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
@@ -118,7 +118,7 @@ fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
 fn hide_wanted(kind: u8, st: &Style) -> bool {
     match kind {
         0 => st.start_hide_all,
-        4 => st.start_hide_list || st.start_hide_all,
+        4 | 6 => st.start_hide_list || st.start_hide_all,
         1 => st.hide_start_button,
         2 => st.hide_widgets,
         3 => st.hide_search_gleam,
@@ -131,11 +131,32 @@ struct TrackedHide {
     handle: u64,
     fe: FrameworkElement,
     orig: Option<(f64, f64, bool)>, // MaxHeight, Opacity, IsHitTestVisible
+    /// Lista A-Z (kind 4): fonte de itens original, guardada para restaurar.
+    src: Option<Option<windows_core::IInspectable>>,
 }
 unsafe impl Send for TrackedHide {}
 static HIDE: Mutex<Vec<TrackedHide>> = Mutex::new(Vec::new());
 
 fn apply_hide(t: &mut TrackedHide, on: bool) -> Result<()> {
+    if t.kind == 4 {
+        // A lista A-Z é o cabeçalho dos fixados dentro do mesmo GridView: esconder o grid
+        // esvazia tudo. Esvazia só os itens (a fonte de dados) e restaura ao desligar.
+        let ic: ItemsControl = t.fe.cast()?;
+        if on {
+            let cur = ic.ItemsSource().ok();
+            if cur.is_some() {
+                if t.src.is_none() {
+                    t.src = Some(cur);
+                }
+                ic.SetItemsSource(None::<&windows_core::IInspectable>)?;
+            }
+        } else if let Some(orig) = t.src.take() {
+            if let Some(o) = orig {
+                ic.SetItemsSource(&o)?;
+            }
+        }
+        return Ok(());
+    }
     let ui: UIElement = t.fe.cast()?;
     if on {
         if t.orig.is_none() {
@@ -153,10 +174,15 @@ fn apply_hide(t: &mut TrackedHide, on: bool) -> Result<()> {
 }
 
 fn apply_all_hide(on: bool, st: Style) {
+    apply_all_hide_kind(on, st, None);
+}
+
+fn apply_all_hide_kind(on: bool, st: Style, only: Option<u8>) {
     let items: Vec<(u64, FrameworkElement, bool)> = HIDE
         .lock()
         .unwrap()
         .iter()
+        .filter(|t| only.is_none_or(|k| t.kind == k))
         .map(|t| (t.handle, t.fe.clone(), on && hide_wanted(t.kind, &st)))
         .collect();
     for (handle, fe, on) in items {
@@ -692,12 +718,12 @@ fn mods_dir() -> Option<std::path::PathBuf> {
                     && name(programs).as_deref() == Some("programs")
                     && let Some(local) = programs.parent()
                 {
-                    return Some(local.join("Sentinela/mods"));
+                    return Some(local.join("WON/mods"));
                 }
             }
         }
     }
-    Some(std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Sentinela/mods"))
+    Some(std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("WON/mods"))
 }
 
 /// A pesquisa (SearchHost.exe) sempre registra a árvore, para descobrir os alvos de estilo dela.
@@ -1047,6 +1073,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                         handle: element.handle,
                         fe,
                         orig: None,
+                        src: None,
                     };
                     let (on, st) = want_on();
                     if on && hide_wanted(kind, &st) {
@@ -1108,10 +1135,11 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                     unsafe { windows::core::IInspectable::from_raw(raw) };
                 if let Ok(fe) = insp.cast::<FrameworkElement>() {
                     let mut t = TrackedHide {
-                        kind: 4,
+                        kind: if name == "AllAppsGrid" { 4 } else { 6 },
                         handle: element.handle,
                         fe,
                         orig: None,
+                        src: None,
                     };
                     let (on, st) = want_on();
                     if on && (st.start_hide_list || st.start_hide_all) {
@@ -1144,6 +1172,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                         handle: element.handle,
                         fe,
                         orig: None,
+                        src: None,
                     };
                     let (on, st) = want_on();
                     if on && st.start_hide_all {
@@ -1292,6 +1321,10 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                         n = n.wrapping_add(1);
                         if cfg.0 && (cfg.1.start_fill.is_some() || cfg.1.start_radius.is_some()) {
                             apply_all_start(true, cfg.1.clone());
+                        }
+                        // O Iniciar repovoa a lista A-Z sozinho (atualizações): esvazia de novo.
+                        if cfg.0 && (cfg.1.start_hide_all || cfg.1.start_hide_list) {
+                            apply_all_hide_kind(true, cfg.1.clone(), Some(4));
                         }
                     }
                 });

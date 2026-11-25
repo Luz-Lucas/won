@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   lojaApply,
+  lojaCursorSize,
+  lojaSetCursorSize,
   lojaInstall,
   lojaList,
   lojaRemove,
@@ -31,6 +33,14 @@ const KIND_LABEL: Record<LojaKind, string> = {
 
 const size = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
+const CURSOR_SIZES: { px: number; label: string }[] = [
+  { px: 16, label: "Mini" },
+  { px: 24, label: "Pequeno" },
+  { px: 32, label: "Padrão" },
+  { px: 48, label: "Médio" },
+  { px: 64, label: "Grande" },
+];
+
 interface PendingTheme {
   item: LojaItem;
   preview: ThemePreview;
@@ -48,6 +58,18 @@ export default function Loja() {
   const [note, setNote] = useState<string | null>(null);
   const [askExplorer, setAskExplorer] = useState(false);
   const [pending, setPending] = useState<PendingTheme | null>(null);
+  const [cursorPx, setCursorPx] = useState<number | null>(null);
+
+  useEffect(() => {
+    void lojaCursorSize().then(setCursorPx, () => undefined);
+  }, []);
+
+  const changeCursorSize = (px: number | null) =>
+    run("cursor-size", async () => {
+      await lojaSetCursorSize(px);
+      setCursorPx(px);
+      setNote(px === null ? "Tamanho do ponteiro devolvido ao de antes." : `Ponteiro em ${px} px.`);
+    });
 
   const load = useCallback((wantOnline: boolean) => {
     return lojaList(wantOnline).then(
@@ -214,6 +236,28 @@ export default function Loja() {
         <p className="muted" role="status">
           {`Catálogo online indisponível agora (${onlineError}). Os itens do programa continuam funcionando.`}
         </p>
+      )}
+      {(tab === "todos" || tab === "cursores") && (
+        <div className="loja-size" role="group" aria-label="Tamanho do ponteiro">
+          <strong>Tamanho do ponteiro</strong>
+          {CURSOR_SIZES.map((c) => (
+            <button
+              key={c.px}
+              type="button"
+              className={`btn${(cursorPx ?? 32) === c.px ? " btn-primary" : ""}`}
+              aria-pressed={(cursorPx ?? 32) === c.px}
+              disabled={busy !== null}
+              onClick={() => void changeCursorSize(c.px === 32 && cursorPx === null ? null : c.px)}
+            >
+              {c.label}
+            </button>
+          ))}
+          {cursorPx !== null && (
+            <button type="button" className="btn" disabled={busy !== null} onClick={() => void changeCursorSize(null)}>
+              Desfazer tamanho
+            </button>
+          )}
+        </div>
       )}
       {shown.length === 0 && <p className="muted">Nada encontrado.</p>}
       <ul className="loja-grid" aria-label="Itens da Loja">

@@ -1,5 +1,5 @@
 //! Escrita dos arquivos do terminal com backup e desfazer. Antes de gravar,
-//! o conteúdo anterior vai para `%LOCALAPPDATA%\Sentinela\backups\terminal\`
+//! o conteúdo anterior vai para `%LOCALAPPDATA%\WON\backups\terminal\`
 //! (e, na primeira vez que o WON toca num arquivo, uma cópia
 //! `.original.bak` que nunca é sobrescrita). Cada mudança vira um item do
 //! histórico; desfazer devolve os bytes de antes, e só sem perguntar se o
@@ -21,7 +21,7 @@ impl Store {
     pub fn system() -> Store {
         let base = dirs::data_local_dir()
             .unwrap_or_else(std::env::temp_dir)
-            .join("Sentinela");
+            .join("WON");
         Store {
             backups: base.join("backups").join("terminal"),
             history: base.join("terminal").join("history.json"),

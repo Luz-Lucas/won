@@ -46,11 +46,11 @@ pub struct Journal {
     pub entries: Vec<JournalEntry>,
 }
 
-/// `%LOCALAPPDATA%\Sentinela\tweaks\journal.json`.
+/// `%LOCALAPPDATA%\WON\tweaks\journal.json`.
 pub fn default_journal_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("tweaks")
         .join("journal.json")
 }

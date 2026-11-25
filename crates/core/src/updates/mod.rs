@@ -326,11 +326,11 @@ pub struct Suspended {
     pub until: Option<String>,
 }
 
-/// `%LOCALAPPDATA%\Sentinela\updates-suspended.json`.
+/// `%LOCALAPPDATA%\WON\updates-suspended.json`.
 pub fn default_suspended_path() -> std::path::PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("updates-suspended.json")
 }
 
@@ -654,7 +654,7 @@ mod tests {
     #[test]
     fn suspended_round_trip_and_clear() {
         let d = tempfile::tempdir().unwrap();
-        let p = d.path().join("Sentinela/updates-suspended.json");
+        let p = d.path().join("WON/updates-suspended.json");
         assert_eq!(load_suspended(&p), None);
         let s = Suspended {
             mode: Mode::Paused,

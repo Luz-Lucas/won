@@ -1,4 +1,4 @@
-//! Diagnóstico do desktop: `%LOCALAPPDATA%\Sentinela\desktop.log` (volta ao começo ao passar de 200 KB).
+//! Diagnóstico do desktop: `%LOCALAPPDATA%\WON\desktop.log` (volta ao começo ao passar de 200 KB).
 
 use std::io::Write;
 
@@ -7,7 +7,7 @@ const MAX: u64 = 200 * 1024;
 fn path() -> std::path::PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
-        .join("Sentinela")
+        .join("WON")
         .join("desktop.log")
 }
 

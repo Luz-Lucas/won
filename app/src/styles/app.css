@@ -1433,3 +1433,11 @@ body {
   gap: var(--sp-2);
   margin-top: auto;
 }
+
+.loja-size {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}

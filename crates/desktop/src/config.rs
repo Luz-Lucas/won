@@ -640,11 +640,11 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
     }
 }
 
-/// `%APPDATA%\Sentinela\desktop.toml`.
+/// `%APPDATA%\WON\desktop.toml`.
 pub fn default_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(std::env::temp_dir)
-        .join("Sentinela")
+        .join("WON")
         .join("desktop.toml")
 }
 
