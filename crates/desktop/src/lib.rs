@@ -9,6 +9,7 @@ pub mod keys;
 pub mod launcher;
 pub mod launcher_theme;
 pub mod rules;
+pub mod smartcopy;
 pub mod tiling;
 
 #[cfg(windows)]
@@ -25,3 +26,6 @@ pub mod wintile;
 
 #[cfg(windows)]
 pub mod winlauncher;
+
+#[cfg(windows)]
+pub mod winclip;

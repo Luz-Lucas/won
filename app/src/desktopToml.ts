@@ -58,11 +58,32 @@ export interface LauncherModel {
   apps: LauncherApp[];
 }
 
+export interface ClipboardModel {
+  stripTracking: boolean;
+  trim: boolean;
+  unwrap: boolean;
+  casing: "keep" | "lower" | "upper" | "title";
+  paths: "keep" | "double_backslash" | "forward";
+  extract: "off" | "urls" | "emails";
+  replace: { from: string; to: string }[];
+}
+
 export interface Sections {
   bar: BarModel | null;
   tiling: TilingModel | null;
   launcher: LauncherModel | null;
+  clipboard?: ClipboardModel | null;
 }
+
+export const DEFAULT_CLIPBOARD: ClipboardModel = {
+  stripTracking: true,
+  trim: true,
+  unwrap: false,
+  casing: "keep",
+  paths: "keep",
+  extract: "off",
+  replace: [],
+};
 
 export const MODULES: Module[] = ["title", "network", "volume", "cpu", "ram", "clock"];
 export const LAYOUTS: Layout[] = ["master-stack", "columns", "grid", "monocle", "rows"];
@@ -112,6 +133,7 @@ export function readSections(text: string): Sections | null {
   const b = rec(doc.bar);
   const t = rec(doc.tiling);
   const l = rec(doc.launcher);
+  const c = rec(doc.clipboard);
   return {
     bar: b && {
       edge: b.edge === "bottom" ? "bottom" : "top",
@@ -155,6 +177,19 @@ export function readSections(text: string): Sections | null {
             }),
           }
         : null,
+    clipboard:
+      c && {
+        stripTracking: c.strip_tracking === true,
+        trim: c.trim === true,
+        unwrap: c.unwrap === true,
+        casing: (["lower", "upper", "title"] as const).find((x) => x === c.casing) ?? "keep",
+        paths: (["double_backslash", "forward"] as const).find((x) => x === c.paths) ?? "keep",
+        extract: (["urls", "emails"] as const).find((x) => x === c.extract) ?? "off",
+        replace: (Array.isArray(c.replace) ? c.replace : []).flatMap((r) => {
+          const x = rec(r);
+          return x && typeof x.from === "string" && typeof x.to === "string" ? [{ from: x.from, to: x.to }] : [];
+        }),
+      },
     launcher: l && {
       hotkey: str(l.hotkey, DEFAULT_LAUNCHER.hotkey),
       maxResults: num(l.max_results, DEFAULT_LAUNCHER.maxResults),
@@ -227,7 +262,19 @@ const launcherToml = (l: LauncherModel) =>
     ),
   ].join("\n");
 
-const MANAGED = new Set(["bar", "tiling", "tiling.monitor", "launcher", "launcher.app"]);
+const clipboardToml = (c: ClipboardModel) =>
+  [
+    "[clipboard]",
+    `strip_tracking = ${c.stripTracking}`,
+    `trim = ${c.trim}`,
+    `unwrap = ${c.unwrap}`,
+    `casing = ${q(c.casing)}`,
+    `paths = ${q(c.paths)}`,
+    `extract = ${q(c.extract)}`,
+    ...c.replace.map((r) => `\n[[clipboard.replace]]\nfrom = ${q(r.from)}\nto = ${q(r.to)}`),
+  ].join("\n");
+
+const MANAGED = new Set(["bar", "tiling", "tiling.monitor", "launcher", "launcher.app", "clipboard", "clipboard.replace"]);
 const HEADER = /^\s*\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$/;
 
 /** Troca as seções gerenciadas pelas do modelo; o resto do texto fica como está. */
@@ -243,6 +290,7 @@ export function applySections(text: string, s: Sections): string {
     s.bar && barToml(s.bar),
     s.tiling && tilingToml(s.tiling),
     s.launcher && launcherToml(s.launcher),
+    s.clipboard && clipboardToml(s.clipboard),
   ].filter((b): b is string => !!b);
   const base = kept.join("\n").replace(/\s+$/, "");
   return `${base}${base ? "\n\n" : ""}${blocks.join("\n\n")}${blocks.length ? "\n" : base ? "\n" : ""}`;

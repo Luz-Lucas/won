@@ -587,6 +587,7 @@ fn reload(st: &mut State) {
             let fg = unsafe { GetForegroundWindow() };
             paint_borders(st, fg);
             winbar::apply(st.loader.config().bar.as_ref());
+            crate::winclip::apply(st.loader.config().clipboard.as_ref());
             let cfg = st.loader.config().clone();
             crate::dlog::log(&format!(
                 "config recarregada: tiling={} bar={}",
@@ -605,6 +606,7 @@ fn shutdown(st: &mut State) {
     st.tiler.disable();
     winbar::destroy();
     winlauncher::destroy();
+    crate::winclip::destroy();
     for (id, _) in st.registered.drain(..) {
         unsafe { UnregisterHotKey(std::ptr::null_mut(), id) };
     }

@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import {
   DEFAULT_BAR,
+  DEFAULT_CLIPBOARD,
   DEFAULT_LAUNCHER,
+  type ClipboardModel,
   DEFAULT_TILING,
   LAYOUTS,
   MODULES,
@@ -219,6 +221,8 @@ export default function DesktopVisual({
   const setTil = (p: Partial<TilingModel>) => til && update({ tiling: { ...til, ...p } });
   const lau = s.launcher;
   const setLau = (p: Partial<LauncherModel>) => lau && update({ launcher: { ...lau, ...p } });
+  const clip = s.clipboard ?? null;
+  const setClip = (p: Partial<ClipboardModel>) => clip && update({ clipboard: { ...clip, ...p } });
 
   const moveModule = (m: Module, to: Zone | "off") => {
     if (!bar) return;
@@ -538,6 +542,67 @@ export default function DesktopVisual({
               {lau.apps.length > 0 && (
                 <p className="muted">{`${lau.apps.length} app(s) extra(s) definidos no arquivo são mantidos.`}</p>
               )}
+            </div>
+          </div>
+        )}
+      </article>
+
+      <article className="card dv-card" aria-labelledby="dv-clip-title">
+        <header className="dv-head">
+          <h2 id="dv-clip-title">Copiar e colar inteligente</h2>
+          <label className="clean-check">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Usar copiar e colar inteligente"
+              checked={clip !== null}
+              onChange={(e) => update({ clipboard: e.target.checked ? { ...DEFAULT_CLIPBOARD } : null })}
+            />
+            <span>{clip ? "Ligado" : "Desligado"}</span>
+          </label>
+        </header>
+        <p className="muted">Limpa o texto assim que você copia: tira rastreadores de links, espaços e quebras de linha.</p>
+        {clip && (
+          <div className="dv-body">
+            <div className="dv-controls">
+              <label className="clean-check">
+                <input type="checkbox" checked={clip.stripTracking} onChange={(e) => setClip({ stripTracking: e.target.checked })} />
+                <span>Tirar rastreadores dos links (utm, fbclid, gclid)</span>
+              </label>
+              <label className="clean-check">
+                <input type="checkbox" checked={clip.trim} onChange={(e) => setClip({ trim: e.target.checked })} />
+                <span>Tirar espaços do começo e do fim</span>
+              </label>
+              <label className="clean-check">
+                <input type="checkbox" checked={clip.unwrap} onChange={(e) => setClip({ unwrap: e.target.checked })} />
+                <span>Juntar linhas quebradas (texto de PDF)</span>
+              </label>
+              <label className="dv-field">
+                <span>Maiúsculas e minúsculas</span>
+                <select aria-label="Maiúsculas e minúsculas" value={clip.casing} onChange={(e) => setClip({ casing: e.target.value as ClipboardModel["casing"] })}>
+                  <option value="keep">Manter</option>
+                  <option value="lower">minúsculas</option>
+                  <option value="upper">MAIÚSCULAS</option>
+                  <option value="title">Cada Palavra</option>
+                </select>
+              </label>
+              <label className="dv-field">
+                <span>Caminhos de pasta</span>
+                <select aria-label="Caminhos de pasta" value={clip.paths} onChange={(e) => setClip({ paths: e.target.value as ClipboardModel["paths"] })}>
+                  <option value="keep">Manter</option>
+                  <option value="double_backslash">Barra dupla (C:\\a\\b)</option>
+                  <option value="forward">Barra normal (C:/a/b)</option>
+                </select>
+              </label>
+              <label className="dv-field">
+                <span>Extrair do texto</span>
+                <select aria-label="Extrair do texto" value={clip.extract} onChange={(e) => setClip({ extract: e.target.value as ClipboardModel["extract"] })}>
+                  <option value="off">Nada</option>
+                  <option value="urls">Só os links</option>
+                  <option value="emails">Só os e-mails</option>
+                </select>
+              </label>
+              {clip.replace.length > 0 && <p className="muted">{`${clip.replace.length} troca(s) definidas no arquivo são mantidas.`}</p>}
             </div>
           </div>
         )}

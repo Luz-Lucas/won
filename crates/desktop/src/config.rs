@@ -76,6 +76,8 @@ pub struct Config {
     /// Presente = tiling ligado ao iniciar (`[tiling]`).
     pub tiling: Option<TilingConfig>,
     pub launcher: Option<LauncherConfig>,
+    /// Presente = copiar e colar inteligente ligado (`[clipboard]`).
+    pub clipboard: Option<crate::smartcopy::Options>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -89,6 +91,77 @@ struct RawFile {
     bar: Option<RawBar>,
     tiling: Option<RawTiling>,
     launcher: Option<RawLauncher>,
+    clipboard: Option<RawClipboard>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawClipboard {
+    #[serde(default)]
+    strip_tracking: bool,
+    #[serde(default)]
+    trim: bool,
+    #[serde(default)]
+    unwrap: bool,
+    /// keep, lower, upper, title
+    casing: Option<String>,
+    /// keep, double_backslash, forward
+    paths: Option<String>,
+    /// off, urls, emails
+    extract: Option<String>,
+    #[serde(default)]
+    replace: Vec<RawReplace>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawReplace {
+    from: String,
+    to: String,
+}
+
+fn parse_clipboard(c: &RawClipboard, errors: &mut Vec<String>) -> Option<crate::smartcopy::Options> {
+    use crate::smartcopy::{Casing, Extract, Options, PathMode};
+    let casing = match c.casing.as_deref().unwrap_or("keep") {
+        "keep" => Casing::Keep,
+        "lower" => Casing::Lower,
+        "upper" => Casing::Upper,
+        "title" => Casing::Title,
+        o => {
+            errors.push(format!("clipboard: casing \"{o}\" inválido"));
+            Casing::Keep
+        }
+    };
+    let paths = match c.paths.as_deref().unwrap_or("keep") {
+        "keep" => PathMode::Keep,
+        "double_backslash" => PathMode::DoubleBackslash,
+        "forward" => PathMode::Forward,
+        o => {
+            errors.push(format!("clipboard: paths \"{o}\" inválido"));
+            PathMode::Keep
+        }
+    };
+    let extract = match c.extract.as_deref().unwrap_or("off") {
+        "off" => Extract::Off,
+        "urls" => Extract::Urls,
+        "emails" => Extract::Emails,
+        o => {
+            errors.push(format!("clipboard: extract \"{o}\" inválido"));
+            Extract::Off
+        }
+    };
+    if c.replace.len() > 50 {
+        errors.push("clipboard: no máximo 50 trocas".into());
+    }
+    Some(Options {
+        strip_tracking: c.strip_tracking,
+        trim: c.trim,
+        unwrap: c.unwrap,
+        casing,
+        paths,
+        extract,
+        replacements: c.replace.iter().map(|r| (r.from.clone(), r.to.clone())).collect(),
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -515,6 +588,10 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
         .launcher
         .as_ref()
         .and_then(|l| parse_launcher(l, &mut hotkeys, &mut errors));
+    let clipboard = raw
+        .clipboard
+        .as_ref()
+        .and_then(|c| parse_clipboard(c, &mut errors));
 
     if errors.is_empty() {
         Ok(Config {
@@ -524,6 +601,7 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
             bar,
             tiling,
             launcher,
+            clipboard,
         })
     } else {
         Err(errors)
@@ -644,6 +722,17 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # inactive = "#3A3A3C"
 
 # Lançador: caixa de busca de apps, janelas abertas e contas (ex.: 2*(3+4)).
+# [clipboard]                 # copiar e colar inteligente (limpa o texto ao copiar)
+# strip_tracking = true       # tira utm_*, fbclid, gclid das URLs
+# trim = true                 # tira espaços do começo e do fim
+# unwrap = false              # junta linhas quebradas (texto de PDF)
+# casing = "keep"             # keep, lower, upper, title
+# paths = "keep"              # keep, double_backslash, forward
+# extract = "off"             # off, urls, emails
+# [[clipboard.replace]]
+# from = "foo"
+# to = "bar"
+#
 # [launcher]
 # hotkey = "Alt+Space"
 # max_results = 8              # 3 a 15
