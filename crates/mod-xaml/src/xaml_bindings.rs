@@ -828,6 +828,51 @@ impl Border {
             .ok()
         }
     }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
     pub fn IsHitTestVisible(&self) -> windows_core::Result<bool> {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
@@ -1889,6 +1934,54 @@ impl Brush {
             (windows_core::Interface::vtable(this).SetOpacity)(
                 windows_core::Interface::as_raw(this),
                 value,
+            )
+            .ok()
+        }
+    }
+    pub fn Transform(&self) -> windows_core::Result<Transform> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Transform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RelativeTransform(&self) -> windows_core::Result<Transform> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RelativeTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRelativeTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRelativeTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
             )
             .ok()
         }
@@ -3252,6 +3345,51 @@ impl Control {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
             (windows_core::Interface::vtable(this).SetOpacity)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
                 windows_core::Interface::as_raw(this),
                 value,
             )
@@ -5362,6 +5500,51 @@ impl FrameworkElement {
             .ok()
         }
     }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
     pub fn IsHitTestVisible(&self) -> windows_core::Result<bool> {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
@@ -6486,6 +6669,31 @@ impl GeneralTransform {
             .and_then(|| windows_core::Type::from_abi(result__))
         }
     }
+    pub fn TransformPoint(&self, point: Point) -> windows_core::Result<Point> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TransformPoint)(
+                windows_core::Interface::as_raw(this),
+                point,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn TryTransform(&self, inpoint: Point, outpoint: &mut Point) -> windows_core::Result<bool> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransform)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
     pub fn new() -> windows_core::Result<GeneralTransform> {
         Self::IGeneralTransformFactory(|this| unsafe {
             let mut result__ = core::mem::zeroed();
@@ -6507,6 +6715,23 @@ impl GeneralTransform {
                 &mut result__,
             )
             .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn TryTransformCore(
+        &self,
+        inpoint: Point,
+        outpoint: &mut Point,
+    ) -> windows_core::Result<bool> {
+        let this = &windows_core::Interface::cast::<IGeneralTransformOverrides>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransformCore)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
         }
     }
     fn IGeneralTransformFactory<
@@ -7484,6 +7709,51 @@ impl Grid {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
             (windows_core::Interface::vtable(this).SetOpacity)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
                 windows_core::Interface::as_raw(this),
                 value,
             )
@@ -8719,10 +8989,22 @@ pub struct IBrush_Vtbl {
     pub Opacity:
         unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
     pub SetOpacity: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
-    Transform: usize,
-    SetTransform: usize,
-    RelativeTransform: usize,
-    SetRelativeTransform: usize,
+    pub Transform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
+    pub SetTransform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
+    pub RelativeTransform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
+    pub SetRelativeTransform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
 }
 windows_core::imp::define_interface!(
     IBrushFactory,
@@ -9895,8 +10177,17 @@ pub struct IGeneralTransform_Vtbl {
         *mut core::ffi::c_void,
         *mut *mut core::ffi::c_void,
     ) -> windows_core::HRESULT,
-    TransformPoint: usize,
-    TryTransform: usize,
+    pub TransformPoint: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        Point,
+        *mut Point,
+    ) -> windows_core::HRESULT,
+    pub TryTransform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        Point,
+        *mut Point,
+        *mut bool,
+    ) -> windows_core::HRESULT,
     TransformBounds: usize,
 }
 windows_core::imp::define_interface!(
@@ -9936,7 +10227,12 @@ pub struct IGeneralTransformOverrides_Vtbl {
         *mut core::ffi::c_void,
         *mut *mut core::ffi::c_void,
     ) -> windows_core::HRESULT,
-    TryTransformCore: usize,
+    pub TryTransformCore: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        Point,
+        *mut Point,
+        *mut bool,
+    ) -> windows_core::HRESULT,
     TransformBoundsCore: usize,
 }
 windows_core::imp::define_interface!(IGrid, IGrid_Vtbl, 0xfd104460_2e15_4ba3_8b8f_fa693a4161e9);
@@ -10252,6 +10548,50 @@ pub struct IRectangleStatics_Vtbl {
     RadiusXProperty: usize,
     RadiusYProperty: usize,
 }
+windows_core::imp::define_interface!(
+    IScaleTransform,
+    IScaleTransform_Vtbl,
+    0xed67f18d_936e_43ab_929a_e9cd0a511e52
+);
+impl windows_core::RuntimeType for IScaleTransform {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_interface::<Self>();
+}
+#[repr(C)]
+#[doc(hidden)]
+pub struct IScaleTransform_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
+    pub CenterX:
+        unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
+    pub SetCenterX: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
+    pub CenterY:
+        unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
+    pub SetCenterY: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
+    pub ScaleX:
+        unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
+    pub SetScaleX: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
+    pub ScaleY:
+        unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
+    pub SetScaleY: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
+}
+windows_core::imp::define_interface!(
+    IScaleTransformStatics,
+    IScaleTransformStatics_Vtbl,
+    0x9d9436f4_40a7_46dd_975a_07d337cd852e
+);
+impl windows_core::RuntimeType for IScaleTransformStatics {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_interface::<Self>();
+}
+#[repr(C)]
+#[doc(hidden)]
+pub struct IScaleTransformStatics_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
+    CenterXProperty: usize,
+    CenterYProperty: usize,
+    ScaleXProperty: usize,
+    ScaleYProperty: usize,
+}
 windows_core::imp::define_interface!(IShape, IShape_Vtbl, 0x786f2b75_9aa0_454d_ae06_a2466e37c832);
 impl windows_core::RuntimeType for IShape {
     const SIGNATURE: windows_core::imp::ConstBuffer =
@@ -10301,7 +10641,10 @@ pub struct IShape_Vtbl {
     SetStrokeDashArray: usize,
     Stretch: usize,
     SetStretch: usize,
-    GeometryTransform: usize,
+    pub GeometryTransform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
 }
 windows_core::imp::define_interface!(
     IShape2,
@@ -10737,6 +11080,68 @@ pub struct ITextBlockStatics7_Vtbl {
     SelectionFlyoutProperty: usize,
 }
 windows_core::imp::define_interface!(
+    ITransform,
+    ITransform_Vtbl,
+    0x4df74078_bfd6_4ed1_9682_d2fd8bf2fe6f
+);
+impl windows_core::RuntimeType for ITransform {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_interface::<Self>();
+}
+#[repr(C)]
+#[doc(hidden)]
+pub struct ITransform_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
+}
+windows_core::imp::define_interface!(
+    ITransformFactory,
+    ITransformFactory_Vtbl,
+    0x1a955a66_7cf4_4320_b416_6181192fcc6d
+);
+impl windows_core::RuntimeType for ITransformFactory {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_interface::<Self>();
+}
+#[repr(C)]
+#[doc(hidden)]
+pub struct ITransformFactory_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
+}
+windows_core::imp::define_interface!(
+    ITranslateTransform,
+    ITranslateTransform_Vtbl,
+    0xc975905c_3c36_4229_817b_178f64c0e113
+);
+impl windows_core::RuntimeType for ITranslateTransform {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_interface::<Self>();
+}
+#[repr(C)]
+#[doc(hidden)]
+pub struct ITranslateTransform_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
+    pub X: unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
+    pub SetX: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
+    pub Y: unsafe extern "system" fn(*mut core::ffi::c_void, *mut f64) -> windows_core::HRESULT,
+    pub SetY: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
+}
+windows_core::imp::define_interface!(
+    ITranslateTransformStatics,
+    ITranslateTransformStatics_Vtbl,
+    0xf419aa91_e042_4111_9c2f_d201304123dd
+);
+impl windows_core::RuntimeType for ITranslateTransformStatics {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_interface::<Self>();
+}
+#[repr(C)]
+#[doc(hidden)]
+pub struct ITranslateTransformStatics_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
+    XProperty: usize,
+    YProperty: usize,
+}
+windows_core::imp::define_interface!(
     IUIElement,
     IUIElement_Vtbl,
     0x676d0be9_b65c_41c6_ba40_58cf87f201c1
@@ -10759,12 +11164,20 @@ pub struct IUIElement_Vtbl {
     pub SetOpacity: unsafe extern "system" fn(*mut core::ffi::c_void, f64) -> windows_core::HRESULT,
     Clip: usize,
     SetClip: usize,
-    RenderTransform: usize,
-    SetRenderTransform: usize,
+    pub RenderTransform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
+    pub SetRenderTransform: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
     Projection: usize,
     SetProjection: usize,
-    RenderTransformOrigin: usize,
-    SetRenderTransformOrigin: usize,
+    pub RenderTransformOrigin:
+        unsafe extern "system" fn(*mut core::ffi::c_void, *mut Point) -> windows_core::HRESULT,
+    pub SetRenderTransformOrigin:
+        unsafe extern "system" fn(*mut core::ffi::c_void, Point) -> windows_core::HRESULT,
     pub IsHitTestVisible:
         unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
     pub SetIsHitTestVisible:
@@ -11567,9 +11980,21 @@ impl windows_core::RuntimeType for IVisualTreeHelperStatics {
 #[doc(hidden)]
 pub struct IVisualTreeHelperStatics_Vtbl {
     pub base__: windows_core::IInspectable_Vtbl,
-    FindElementsInHostCoordinatesPoint: usize,
+    pub FindElementsInHostCoordinatesPoint: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        Point,
+        *mut core::ffi::c_void,
+        *mut *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
     FindElementsInHostCoordinatesRect: usize,
-    FindAllElementsInHostCoordinatesPoint: usize,
+    pub FindAllElementsInHostCoordinatesPoint: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        Point,
+        *mut core::ffi::c_void,
+        bool,
+        *mut *mut core::ffi::c_void,
+    )
+        -> windows_core::HRESULT,
     FindAllElementsInHostCoordinatesRect: usize,
     pub GetChild: unsafe extern "system" fn(
         *mut core::ffi::c_void,
@@ -12335,6 +12760,51 @@ impl Panel {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
             (windows_core::Interface::vtable(this).SetOpacity)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
                 windows_core::Interface::as_raw(this),
                 value,
             )
@@ -13379,6 +13849,19 @@ impl windows_core::RuntimeName for Panel {
 }
 unsafe impl Send for Panel {}
 unsafe impl Sync for Panel {}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Point {
+    pub X: f32,
+    pub Y: f32,
+}
+impl windows_core::TypeKind for Point {
+    type TypeKind = windows_core::CopyType;
+}
+impl windows_core::RuntimeType for Point {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::from_slice(b"struct(Windows.Foundation.Point;f4;f4)");
+}
 #[repr(transparent)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rectangle(windows_core::IUnknown);
@@ -14182,6 +14665,17 @@ impl Rectangle {
             .ok()
         }
     }
+    pub fn GeometryTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IShape>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).GeometryTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
     pub fn AllowDrop(&self) -> windows_core::Result<bool> {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
@@ -14218,6 +14712,51 @@ impl Rectangle {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
             (windows_core::Interface::vtable(this).SetOpacity)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
                 windows_core::Interface::as_raw(this),
                 value,
             )
@@ -15257,6 +15796,216 @@ unsafe impl Send for Rectangle {}
 unsafe impl Sync for Rectangle {}
 #[repr(transparent)]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScaleTransform(windows_core::IUnknown);
+windows_core::imp::interface_hierarchy!(
+    ScaleTransform,
+    windows_core::IUnknown,
+    windows_core::IInspectable
+);
+windows_core::imp::required_hierarchy!(
+    ScaleTransform,
+    Transform,
+    GeneralTransform,
+    DependencyObject
+);
+impl ScaleTransform {
+    pub fn new() -> windows_core::Result<Self> {
+        Self::IActivationFactory(|f| f.ActivateInstance::<Self>())
+    }
+    fn IActivationFactory<
+        R,
+        F: FnOnce(&windows_core::imp::IGenericFactory) -> windows_core::Result<R>,
+    >(
+        callback: F,
+    ) -> windows_core::Result<R> {
+        static SHARED: windows_core::imp::FactoryCache<
+            ScaleTransform,
+            windows_core::imp::IGenericFactory,
+        > = windows_core::imp::FactoryCache::new();
+        SHARED.call(callback)
+    }
+    pub fn Dispatcher(&self) -> windows_core::Result<CoreDispatcher> {
+        let this = &windows_core::Interface::cast::<IDependencyObject>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Dispatcher)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn Inverse(&self) -> windows_core::Result<GeneralTransform> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Inverse)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn TransformPoint(&self, point: Point) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TransformPoint)(
+                windows_core::Interface::as_raw(this),
+                point,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn TryTransform(&self, inpoint: Point, outpoint: &mut Point) -> windows_core::Result<bool> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransform)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn InverseCore(&self) -> windows_core::Result<GeneralTransform> {
+        let this = &windows_core::Interface::cast::<IGeneralTransformOverrides>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).InverseCore)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn TryTransformCore(
+        &self,
+        inpoint: Point,
+        outpoint: &mut Point,
+    ) -> windows_core::Result<bool> {
+        let this = &windows_core::Interface::cast::<IGeneralTransformOverrides>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransformCore)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn CenterX(&self) -> windows_core::Result<f64> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).CenterX)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetCenterX(&self, value: f64) -> windows_core::Result<()> {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetCenterX)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn CenterY(&self) -> windows_core::Result<f64> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).CenterY)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetCenterY(&self, value: f64) -> windows_core::Result<()> {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetCenterY)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn ScaleX(&self) -> windows_core::Result<f64> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).ScaleX)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetScaleX(&self, value: f64) -> windows_core::Result<()> {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetScaleX)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn ScaleY(&self) -> windows_core::Result<f64> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).ScaleY)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetScaleY(&self, value: f64) -> windows_core::Result<()> {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetScaleY)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    fn IScaleTransformStatics<R, F: FnOnce(&IScaleTransformStatics) -> windows_core::Result<R>>(
+        callback: F,
+    ) -> windows_core::Result<R> {
+        static SHARED: windows_core::imp::FactoryCache<ScaleTransform, IScaleTransformStatics> =
+            windows_core::imp::FactoryCache::new();
+        SHARED.call(callback)
+    }
+}
+impl windows_core::RuntimeType for ScaleTransform {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_class::<Self, IScaleTransform>();
+}
+unsafe impl windows_core::Interface for ScaleTransform {
+    type Vtable = <IScaleTransform as windows_core::Interface>::Vtable;
+    const IID: windows_core::GUID = <IScaleTransform as windows_core::Interface>::IID;
+}
+impl windows_core::RuntimeName for ScaleTransform {
+    const NAME: &'static str = "Windows.UI.Xaml.Media.ScaleTransform";
+}
+unsafe impl Send for ScaleTransform {}
+unsafe impl Sync for ScaleTransform {}
+#[repr(transparent)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Shape(windows_core::IUnknown);
 windows_core::imp::interface_hierarchy!(Shape, windows_core::IUnknown, windows_core::IInspectable);
 windows_core::imp::required_hierarchy!(
@@ -15996,6 +16745,17 @@ impl Shape {
             .ok()
         }
     }
+    pub fn GeometryTransform(&self) -> windows_core::Result<Transform> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).GeometryTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
     pub fn new() -> windows_core::Result<Shape> {
         Self::IShapeFactory(|this| unsafe {
             let mut result__ = core::mem::zeroed();
@@ -16044,6 +16804,51 @@ impl Shape {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
             (windows_core::Interface::vtable(this).SetOpacity)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
                 windows_core::Interface::as_raw(this),
                 value,
             )
@@ -17134,6 +17939,54 @@ impl SolidColorBrush {
             .ok()
         }
     }
+    pub fn Transform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IBrush>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Transform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IBrush>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RelativeTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IBrush>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RelativeTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRelativeTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IBrush>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRelativeTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
     pub fn Dispatcher(&self) -> windows_core::Result<CoreDispatcher> {
         let this = &windows_core::Interface::cast::<IDependencyObject>(self)?;
         unsafe {
@@ -18212,6 +19065,51 @@ impl TextBlock {
         let this = &windows_core::Interface::cast::<IUIElement>(self)?;
         unsafe {
             (windows_core::Interface::vtable(this).SetOpacity)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = &windows_core::Interface::cast::<IUIElement>(self)?;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
                 windows_core::Interface::as_raw(this),
                 value,
             )
@@ -19302,6 +20200,278 @@ impl windows_core::RuntimeType for Thickness {
 }
 #[repr(transparent)]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Transform(windows_core::IUnknown);
+windows_core::imp::interface_hierarchy!(
+    Transform,
+    windows_core::IUnknown,
+    windows_core::IInspectable
+);
+windows_core::imp::required_hierarchy!(Transform, GeneralTransform, DependencyObject);
+impl Transform {
+    pub fn Dispatcher(&self) -> windows_core::Result<CoreDispatcher> {
+        let this = &windows_core::Interface::cast::<IDependencyObject>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Dispatcher)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn Inverse(&self) -> windows_core::Result<GeneralTransform> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Inverse)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn TransformPoint(&self, point: Point) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TransformPoint)(
+                windows_core::Interface::as_raw(this),
+                point,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn TryTransform(&self, inpoint: Point, outpoint: &mut Point) -> windows_core::Result<bool> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransform)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn InverseCore(&self) -> windows_core::Result<GeneralTransform> {
+        let this = &windows_core::Interface::cast::<IGeneralTransformOverrides>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).InverseCore)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn TryTransformCore(
+        &self,
+        inpoint: Point,
+        outpoint: &mut Point,
+    ) -> windows_core::Result<bool> {
+        let this = &windows_core::Interface::cast::<IGeneralTransformOverrides>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransformCore)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+}
+impl windows_core::RuntimeType for Transform {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_class::<Self, ITransform>();
+}
+unsafe impl windows_core::Interface for Transform {
+    type Vtable = <ITransform as windows_core::Interface>::Vtable;
+    const IID: windows_core::GUID = <ITransform as windows_core::Interface>::IID;
+}
+impl windows_core::RuntimeName for Transform {
+    const NAME: &'static str = "Windows.UI.Xaml.Media.Transform";
+}
+unsafe impl Send for Transform {}
+unsafe impl Sync for Transform {}
+#[repr(transparent)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranslateTransform(windows_core::IUnknown);
+windows_core::imp::interface_hierarchy!(
+    TranslateTransform,
+    windows_core::IUnknown,
+    windows_core::IInspectable
+);
+windows_core::imp::required_hierarchy!(
+    TranslateTransform,
+    Transform,
+    GeneralTransform,
+    DependencyObject
+);
+impl TranslateTransform {
+    pub fn new() -> windows_core::Result<Self> {
+        Self::IActivationFactory(|f| f.ActivateInstance::<Self>())
+    }
+    fn IActivationFactory<
+        R,
+        F: FnOnce(&windows_core::imp::IGenericFactory) -> windows_core::Result<R>,
+    >(
+        callback: F,
+    ) -> windows_core::Result<R> {
+        static SHARED: windows_core::imp::FactoryCache<
+            TranslateTransform,
+            windows_core::imp::IGenericFactory,
+        > = windows_core::imp::FactoryCache::new();
+        SHARED.call(callback)
+    }
+    pub fn Dispatcher(&self) -> windows_core::Result<CoreDispatcher> {
+        let this = &windows_core::Interface::cast::<IDependencyObject>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Dispatcher)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn Inverse(&self) -> windows_core::Result<GeneralTransform> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Inverse)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn TransformPoint(&self, point: Point) -> windows_core::Result<Point> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TransformPoint)(
+                windows_core::Interface::as_raw(this),
+                point,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn TryTransform(&self, inpoint: Point, outpoint: &mut Point) -> windows_core::Result<bool> {
+        let this = &windows_core::Interface::cast::<IGeneralTransform>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransform)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn InverseCore(&self) -> windows_core::Result<GeneralTransform> {
+        let this = &windows_core::Interface::cast::<IGeneralTransformOverrides>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).InverseCore)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn TryTransformCore(
+        &self,
+        inpoint: Point,
+        outpoint: &mut Point,
+    ) -> windows_core::Result<bool> {
+        let this = &windows_core::Interface::cast::<IGeneralTransformOverrides>(self)?;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).TryTransformCore)(
+                windows_core::Interface::as_raw(this),
+                inpoint,
+                outpoint,
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn X(&self) -> windows_core::Result<f64> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).X)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetX(&self, value: f64) -> windows_core::Result<()> {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetX)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn Y(&self) -> windows_core::Result<f64> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).Y)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetY(&self, value: f64) -> windows_core::Result<()> {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetY)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    fn ITranslateTransformStatics<
+        R,
+        F: FnOnce(&ITranslateTransformStatics) -> windows_core::Result<R>,
+    >(
+        callback: F,
+    ) -> windows_core::Result<R> {
+        static SHARED: windows_core::imp::FactoryCache<
+            TranslateTransform,
+            ITranslateTransformStatics,
+        > = windows_core::imp::FactoryCache::new();
+        SHARED.call(callback)
+    }
+}
+impl windows_core::RuntimeType for TranslateTransform {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_class::<Self, ITranslateTransform>();
+}
+unsafe impl windows_core::Interface for TranslateTransform {
+    type Vtable = <ITranslateTransform as windows_core::Interface>::Vtable;
+    const IID: windows_core::GUID = <ITranslateTransform as windows_core::Interface>::IID;
+}
+impl windows_core::RuntimeName for TranslateTransform {
+    const NAME: &'static str = "Windows.UI.Xaml.Media.TranslateTransform";
+}
+unsafe impl Send for TranslateTransform {}
+unsafe impl Sync for TranslateTransform {}
+#[repr(transparent)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UIElement(windows_core::IUnknown);
 windows_core::imp::interface_hierarchy!(
     UIElement,
@@ -19362,6 +20532,51 @@ impl UIElement {
         let this = self;
         unsafe {
             (windows_core::Interface::vtable(this).SetOpacity)(
+                windows_core::Interface::as_raw(this),
+                value,
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransform(&self) -> windows_core::Result<Transform> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransform)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        }
+    }
+    pub fn SetRenderTransform<P0>(&self, value: P0) -> windows_core::Result<()>
+    where
+        P0: windows_core::Param<Transform>,
+    {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransform)(
+                windows_core::Interface::as_raw(this),
+                value.param().abi(),
+            )
+            .ok()
+        }
+    }
+    pub fn RenderTransformOrigin(&self) -> windows_core::Result<Point> {
+        let this = self;
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).RenderTransformOrigin)(
+                windows_core::Interface::as_raw(this),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn SetRenderTransformOrigin(&self, value: Point) -> windows_core::Result<()> {
+        let this = self;
+        unsafe {
+            (windows_core::Interface::vtable(this).SetRenderTransformOrigin)(
                 windows_core::Interface::as_raw(this),
                 value,
             )
@@ -20513,6 +21728,44 @@ windows_core::imp::interface_hierarchy!(
     windows_core::IInspectable
 );
 impl VisualTreeHelper {
+    pub fn FindElementsInHostCoordinatesPoint<P1>(
+        intersectingpoint: Point,
+        subtree: P1,
+    ) -> windows_core::Result<windows_collections::IIterable<UIElement>>
+    where
+        P1: windows_core::Param<UIElement>,
+    {
+        Self::IVisualTreeHelperStatics(|this| unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).FindElementsInHostCoordinatesPoint)(
+                windows_core::Interface::as_raw(this),
+                intersectingpoint,
+                subtree.param().abi(),
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        })
+    }
+    pub fn FindAllElementsInHostCoordinatesPoint<P1>(
+        intersectingpoint: Point,
+        subtree: P1,
+        includeallelements: bool,
+    ) -> windows_core::Result<windows_collections::IIterable<UIElement>>
+    where
+        P1: windows_core::Param<UIElement>,
+    {
+        Self::IVisualTreeHelperStatics(|this| unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(this).FindAllElementsInHostCoordinatesPoint)(
+                windows_core::Interface::as_raw(this),
+                intersectingpoint,
+                subtree.param().abi(),
+                includeallelements,
+                &mut result__,
+            )
+            .and_then(|| windows_core::Type::from_abi(result__))
+        })
+    }
     pub fn GetChild<P0>(reference: P0, childindex: i32) -> windows_core::Result<DependencyObject>
     where
         P0: windows_core::Param<DependencyObject>,

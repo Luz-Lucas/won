@@ -1,7 +1,8 @@
 use super::{Style, parse_style};
 use crate::xaml_bindings::{
     Border, Brush, Color, CoreDispatcherPriority, CornerRadius, DispatchedHandler,
-    FrameworkElement, Rectangle, Shape, SolidColorBrush, Thickness, UIElement, VisualTreeHelper,
+    FrameworkElement, Point, Rectangle, ScaleTransform, Shape, SolidColorBrush, Thickness,
+    Transform, TranslateTransform, UIElement, VerticalAlignment, VisualTreeHelper,
 };
 use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
@@ -101,6 +102,13 @@ static START: Mutex<Vec<TrackedStart>> = Mutex::new(Vec::new());
 /// Só o botão/rótulo "Todos os aplicativos" (controles-folha com esse nome). Nunca contêineres,
 /// páginas ou painéis: esconder um pai esvaziaria também os apps fixados.
 fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
+    // Modo lista do Iniciar (árvore real do PC): a lista A-Z é o GridView `AllAppsGrid` e a de
+    // letras o ListView `ZoomedOutListView`. Os apps fixados ficam em outro painel.
+    if (name == "AllAppsGrid" || name == "ZoomedOutListView")
+        && (ty.ends_with("GridView") || ty.ends_with("ListView"))
+    {
+        return true;
+    }
     let n = name.to_ascii_lowercase();
     if !n.contains("allapps") || n.contains("pinned") || n.contains("recommend") {
         return false;
@@ -246,12 +254,144 @@ fn apply_all_size(on: bool, st: Style) {
     }
 }
 
+/// Botões da barra para o movimento (dock e Iniciar à esquerda). Só tocados na thread de UI.
+struct Btn {
+    handle: u64,
+    start: bool,
+    fe: FrameworkElement,
+    scale: Option<ScaleTransform>,
+    shift: Option<TranslateTransform>,
+}
+unsafe impl Send for Btn {}
+static BTNS: Mutex<Vec<Btn>> = Mutex::new(Vec::new());
+
+/// Retângulo da barra principal em pixels e o seu DPI.
+fn primary_bar() -> Option<([i32; 4], f64)> {
+    let w = |s: &str| s.encode_utf16().chain(Some(0)).collect::<Vec<u16>>();
+    unsafe {
+        let bar = FindWindowW(w("Shell_TrayWnd").as_ptr(), std::ptr::null());
+        if bar == 0 {
+            return None;
+        }
+        let mut r = WinRect {
+            l: 0,
+            t: 0,
+            r: 0,
+            b: 0,
+        };
+        if GetWindowRect(bar, &mut r) == 0 {
+            return None;
+        }
+        let dpi = f64::from(GetDpiForWindow(bar).max(96));
+        Some(([r.l, r.t, r.r, r.b], dpi))
+    }
+}
+
+/// Um passo do movimento: Iniciar à esquerda e animação de dock. Com tudo desligado, desfaz.
+fn motion_step(st: &Style, on: bool) {
+    let want_left = on && st.start_left;
+    let want_dock = on && st.dock;
+    let items: Vec<(u64, FrameworkElement)> = BTNS
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|b| (b.handle, b.fe.clone()))
+        .collect();
+    if items.is_empty() {
+        return;
+    }
+    let bar = primary_bar();
+    let mut cur = [0i32; 2];
+    let have_cursor = unsafe { GetCursorPos(&mut cur) } != 0;
+    for (handle, fe) in items {
+        let Ok(ui) = fe.cast::<UIElement>() else {
+            continue;
+        };
+        let Ok(disp) = ui.Dispatcher() else { continue };
+        let (st, cur) = (st.clone(), cur);
+        struct S(Style);
+        unsafe impl Send for S {}
+        let st = S(st);
+        let h = DispatchedHandler::new(move || {
+            let mut g = BTNS.lock().unwrap();
+            let Some(b) = g.iter_mut().find(|b| b.handle == handle) else {
+                return Ok(());
+            };
+            let _ = motion_one(
+                b,
+                &st.0,
+                want_left,
+                want_dock,
+                bar,
+                have_cursor.then_some(cur),
+            );
+            Ok(())
+        });
+        let _ = disp.RunAsync(CoreDispatcherPriority::Normal, &h);
+    }
+}
+
+fn motion_one(
+    b: &mut Btn,
+    st: &Style,
+    want_left: bool,
+    want_dock: bool,
+    bar: Option<([i32; 4], f64)>,
+    cursor: Option<[i32; 2]>,
+) -> Result<()> {
+    let ui: UIElement = b.fe.cast()?;
+    if b.start {
+        if want_left {
+            let (_, x) = root_and_x(&ui).ok_or_else(|| windows::core::Error::from(E_POINTER))?;
+            if b.shift.is_none() {
+                let t = TranslateTransform::new()?;
+                ui.SetRenderTransform(&t.cast::<Transform>()?)?;
+                b.shift = Some(t);
+            }
+            if let Some(t) = &b.shift {
+                t.SetX(st.start_left_edge - x)?;
+            }
+        } else if let Some(t) = &b.shift {
+            t.SetX(0.0)?;
+        }
+        return Ok(());
+    }
+    let mut s = 1.0;
+    if want_dock && let (Some(([bl, bt, br, bb], dpi)), Some([cx, cy])) = (bar, cursor) {
+        // Só a barra principal: confere que este botão está numa árvore da largura dela.
+        let bar_dip = f64::from(br - bl) * 96.0 / dpi;
+        if (bar_width(&b.fe) - bar_dip).abs() < 3.0 && cy >= bt - 12 && cy <= bb {
+            let (_, x) = root_and_x(&ui).ok_or_else(|| windows::core::Error::from(E_POINTER))?;
+            let center = f64::from(bl) + (x + width_of(&b.fe) / 2.0) * dpi / 96.0;
+            let d = (f64::from(cx) - center).abs() * 96.0 / dpi;
+            let k = (1.0 - d / st.dock_radius).max(0.0);
+            s = 1.0 + (st.dock_max - 1.0) * k * k;
+        }
+    }
+    if b.scale.is_none() {
+        if (s - 1.0).abs() < 0.001 {
+            return Ok(());
+        }
+        let t = ScaleTransform::new()?;
+        ui.SetRenderTransformOrigin(Point { X: 0.5, Y: 1.0 })?;
+        ui.SetRenderTransform(&t.cast::<Transform>()?)?;
+        b.scale = Some(t);
+    }
+    if let Some(t) = &b.scale {
+        t.SetScaleX(s)?;
+        t.SetScaleY(s)?;
+    }
+    Ok(())
+}
+
 struct Orig {
     fill: Option<Brush>,
     margin: Thickness,
     rx: f64,
     ry: f64,
     opacity: f64,
+    height: f64,
+    valign: VerticalAlignment,
 }
 // Os objetos XAML só são tocados na thread de UI (via callback ou `Dispatcher.RunAsync`).
 unsafe impl Send for Tracked {}
@@ -278,6 +418,7 @@ unsafe extern "system" {
     fn FindWindowExW(parent: isize, after: isize, class: *const u16, title: *const u16) -> isize;
     fn GetWindowRect(hwnd: isize, rect: *mut WinRect) -> i32;
     fn GetDpiForWindow(hwnd: isize) -> u32;
+    fn GetCursorPos(p: *mut [i32; 2]) -> i32;
 }
 
 /// Largura da área de notificação em DIPs, lida da janela Win32 (sem tocar no XAML).
@@ -398,7 +539,13 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         if cw <= 0.0 {
             continue;
         }
-        let cx = rep_x + f64::from(cu.ActualOffset().ok()?.X);
+        let off = f64::from(cu.ActualOffset().ok()?.X);
+        // Botão recém-criado ou saindo (ainda sem posição): offset 0 puxaria a ilha para a
+        // esquerda da tela. Ignora até o repetidor reorganizar (a vigia reaplica a cada 500 ms).
+        if n > 1 && off <= 0.5 {
+            continue;
+        }
+        let cx = rep_x + off;
         lo = lo.min(cx);
         hi = hi.max(cx + cw);
     }
@@ -500,6 +647,8 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
                 rx: t.rect.RadiusX()?,
                 ry: t.rect.RadiusY()?,
                 opacity: ui.Opacity()?,
+                height: fe.Height()?,
+                valign: fe.VerticalAlignment()?,
             });
         }
         if st.islands {
@@ -535,6 +684,19 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
                         }
                         seen.push(key);
                     }
+                }
+                // O traço da bandeja nem sempre vem esticado na vertical: força a altura toda,
+                // igual à ilha dos apps.
+                fe.SetHeight(f64::NAN)?;
+                fe.SetVerticalAlignment(VerticalAlignment(3))?;
+                static HLOG: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if t.is_border && HLOG.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 4 {
+                    log(&format!(
+                        "ilha bandeja altura={:.1} (original={:.1} alinh={})",
+                        fe.ActualHeight().unwrap_or(0.0),
+                        t.orig.as_ref().map(|o| o.height).unwrap_or(0.0),
+                        t.orig.as_ref().map(|o| o.valign.0).unwrap_or(-1)
+                    ));
                 }
                 fe.SetMargin(m)?;
             } else if !t.is_border {
@@ -579,6 +741,8 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
             None => shape.SetFill(None::<&Brush>)?,
         }
         fe.SetMargin(o.margin)?;
+        fe.SetHeight(o.height)?;
+        fe.SetVerticalAlignment(o.valign)?;
         t.rect.SetRadiusX(o.rx)?;
         t.rect.SetRadiusY(o.ry)?;
         ui.SetOpacity(o.opacity)?;
@@ -663,9 +827,13 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             START.lock().unwrap().retain(|t| t.handle != element.handle);
             HIDE.lock().unwrap().retain(|t| t.handle != element.handle);
             SIZED.lock().unwrap().retain(|t| t.handle != element.handle);
+            BTNS.lock().unwrap().retain(|b| b.handle != element.handle);
             return S_OK;
         }
-        if ty == "Windows.UI.Xaml.Controls.Border" && name == "AcrylicBorder" {
+        if ty == "Windows.UI.Xaml.Controls.Border"
+            && (name == "AcrylicBorder"
+                || (is_search_host() && (name == "AppBorder" || name == "LayerBorder")))
+        {
             let mut raw: *mut c_void = std::ptr::null_mut();
             if unsafe {
                 self.diag
@@ -695,6 +863,34 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             }
             START.lock().unwrap().push(t);
             return S_OK;
+        }
+        // Botões da barra (dock e Iniciar à esquerda).
+        if !is_start_host()
+            && !is_search_host()
+            && (ty == "Taskbar.TaskListButton"
+                || (ty == "Taskbar.ExperienceToggleButton" && name == "LaunchListButton"))
+        {
+            let mut raw: *mut c_void = std::ptr::null_mut();
+            if unsafe {
+                self.diag
+                    .GetIInspectableFromHandle(element.handle, &mut raw)
+            }
+            .is_ok()
+                && !raw.is_null()
+            {
+                let insp: windows::core::IInspectable =
+                    unsafe { windows::core::IInspectable::from_raw(raw) };
+                if let Ok(fe) = insp.cast::<FrameworkElement>() {
+                    BTNS.lock().unwrap().push(Btn {
+                        handle: element.handle,
+                        start: ty == "Taskbar.ExperienceToggleButton",
+                        fe,
+                        scale: None,
+                        shift: None,
+                    });
+                }
+            }
+            // Segue: o botão Iniciar também entra na regra de esconder.
         }
         // Itens da barra que o guia do Taskbar Styler esconde com Visibility=Collapsed.
         let taskbar_kind = if !is_start_host() && !is_search_host() {
@@ -907,6 +1103,24 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                     let cb: IVisualTreeServiceCallback = pack.1.cast().unwrap();
                     let _ = unsafe { svc.AdviseVisualTreeChange(cb.as_raw()) };
                 }
+                // Movimento (dock, Iniciar à esquerda): ~30 quadros por segundo só quando ligado.
+                std::thread::spawn(|| {
+                    let mut cfg = (false, Style::default());
+                    let mut n = 0u32;
+                    let mut active = false;
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_millis(33));
+                        if n % 15 == 0 {
+                            cfg = want_on();
+                        }
+                        n = n.wrapping_add(1);
+                        let wanted = cfg.0 && (cfg.1.dock || cfg.1.start_left);
+                        if wanted || active {
+                            motion_step(&cfg.1, cfg.0);
+                            active = wanted;
+                        }
+                    }
+                });
                 // Vigia: arquivo de eject / cfg mudando reaplica ou restaura.
                 let mut last: Option<(bool, Style)> = None;
                 loop {

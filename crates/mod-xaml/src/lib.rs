@@ -48,6 +48,13 @@ pub struct Style {
     /// Tamanho do menu Iniciar em DIPs; `None` não mexe.
     pub start_w: Option<f64>,
     pub start_h: Option<f64>,
+    /// Botão Iniciar encostado na esquerda mesmo com os ícones centralizados (experimental).
+    pub start_left: bool,
+    pub start_left_edge: f64,
+    /// Animação de dock: os ícones crescem perto do cursor (experimental).
+    pub dock: bool,
+    pub dock_max: f64,
+    pub dock_radius: f64,
 }
 
 impl Default for Style {
@@ -71,6 +78,11 @@ impl Default for Style {
             hide_search_gleam: false,
             start_w: None,
             start_h: None,
+            start_left: false,
+            start_left_edge: 8.0,
+            dock: false,
+            dock_max: 1.4,
+            dock_radius: 110.0,
         }
     }
 }
@@ -154,6 +166,19 @@ pub fn parse_style(text: &str) -> Style {
             "hide_start_button" => st.hide_start_button = v == "true" || v == "1",
             "hide_widgets" => st.hide_widgets = v == "true" || v == "1",
             "hide_search_gleam" => st.hide_search_gleam = v == "true" || v == "1",
+            "start_left" => st.start_left = v == "true" || v == "1",
+            "start_left_edge" => {
+                st.start_left_edge = v
+                    .parse::<f64>()
+                    .map_or(st.start_left_edge, |x| x.clamp(0.0, 400.0))
+            }
+            "dock" => st.dock = v == "true" || v == "1",
+            "dock_max" => st.dock_max = v.parse::<f64>().map_or(st.dock_max, |x| x.clamp(1.0, 2.0)),
+            "dock_radius" => {
+                st.dock_radius = v
+                    .parse::<f64>()
+                    .map_or(st.dock_radius, |x| x.clamp(40.0, 400.0))
+            }
             "start_w" => st.start_w = v.parse::<f64>().ok().map(|x| x.clamp(300.0, 2400.0)),
             "start_h" => st.start_h = v.parse::<f64>().ok().map(|x| x.clamp(300.0, 1600.0)),
             _ => {}
@@ -174,6 +199,17 @@ pub use imp::*;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn movimento_da_barra() {
+        let st =
+            parse_style("start_left=true\nstart_left_edge=12\ndock=1\ndock_max=5\ndock_radius=10");
+        assert!(st.start_left && st.dock);
+        assert_eq!(st.start_left_edge, 12.0);
+        assert_eq!(st.dock_max, 2.0);
+        assert_eq!(st.dock_radius, 40.0);
+        assert!(!parse_style("").start_left);
+    }
 
     #[test]
     fn cor_argb_e_rgb() {

@@ -24,6 +24,13 @@ export interface XamlStyle {
   /** Tamanho do menu Iniciar em px; null = não mexe. */
   startW: number | null;
   startH: number | null;
+  /** Experimental: botão Iniciar sempre à esquerda. */
+  startLeft: boolean;
+  startLeftEdge: number;
+  /** Experimental: animação de dock (ícones crescem perto do mouse). */
+  dock: boolean;
+  dockMax: number;
+  dockRadius: number;
 }
 
 export const DEFAULT_XAML: XamlStyle = {
@@ -46,6 +53,11 @@ export const DEFAULT_XAML: XamlStyle = {
   hideSearchGleam: false,
   startW: null,
   startH: null,
+  startLeft: false,
+  startLeftEdge: 8,
+  dock: false,
+  dockMax: 1.4,
+  dockRadius: 110,
 };
 
 const hex2 = (n: number) =>
@@ -111,6 +123,17 @@ export function parseXamlCfg(text: string): XamlStyle {
     } else if (k === "start_w" || k === "start_h") {
       const n = Number(v);
       if (Number.isFinite(n)) s[k === "start_w" ? "startW" : "startH"] = Math.max(300, Math.min(2400, n));
+    } else if (k === "start_left") {
+      s.startLeft = v === "true" || v === "1";
+    } else if (k === "dock") {
+      s.dock = v === "true" || v === "1";
+    } else if (k === "start_left_edge" || k === "dock_max" || k === "dock_radius") {
+      const n = Number(v);
+      if (Number.isFinite(n)) {
+        if (k === "start_left_edge") s.startLeftEdge = Math.max(0, Math.min(400, n));
+        else if (k === "dock_max") s.dockMax = Math.max(1, Math.min(2, n));
+        else s.dockRadius = Math.max(40, Math.min(400, n));
+      }
     } else if (k === "start_radius") {
       const n = Number(v);
       if (Number.isFinite(n)) s.startRadius = Math.max(0, Math.min(60, n));
@@ -137,6 +160,8 @@ export function buildXamlCfg(s: XamlStyle): string {
   if (s.hideStartButton) lines.push("hide_start_button=true");
   if (s.hideWidgets) lines.push("hide_widgets=true");
   if (s.hideSearchGleam) lines.push("hide_search_gleam=true");
+  if (s.startLeft) lines.push("start_left=true", `start_left_edge=${s.startLeftEdge}`);
+  if (s.dock) lines.push("dock=true", `dock_max=${s.dockMax}`, `dock_radius=${s.dockRadius}`);
   if (s.startW !== null) lines.push(`start_w=${s.startW}`);
   if (s.startH !== null) lines.push(`start_h=${s.startH}`);
   if (s.startFill) lines.push(`start_fill=${argb(s.startFill, s.startAlpha)}`);

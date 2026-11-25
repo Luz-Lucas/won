@@ -313,6 +313,22 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
               />{" "}
               Esconder o brilho da caixa de pesquisa
             </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={style.startLeft}
+                onChange={(e) => set({ startLeft: e.target.checked })}
+              />{" "}
+              Botão Iniciar sempre à esquerda (experimental)
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={style.dock}
+                onChange={(e) => set({ dock: e.target.checked })}
+              />{" "}
+              Animação de dock nos ícones (experimental)
+            </label>
           </div>
           <div className="row">
             <label>
