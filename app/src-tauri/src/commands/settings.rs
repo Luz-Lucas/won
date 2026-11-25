@@ -274,8 +274,8 @@ pub fn explorer_menu_set(
 ) -> Result<ExplorerMenuView, String> {
     let mode = autostart_mode();
     if mode == AutostartMode::Register {
-        let exe = std::env::current_exe()
-            .map_err(|_| "Não foi possível localizar o WON.".to_string())?;
+        let exe =
+            std::env::current_exe().map_err(|_| "Não foi possível localizar o WON.".to_string())?;
         scan_explorer::set_enabled(on, &exe)?;
     }
     let saved = state.update(|s| s.explorer_menu = on)?;

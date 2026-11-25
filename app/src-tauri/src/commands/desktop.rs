@@ -74,8 +74,7 @@ pub async fn desktop_status() -> Result<DesktopStatus, String> {
 #[tauri::command]
 pub async fn desktop_start() -> Result<(), String> {
     blocking(|| {
-        let exe =
-            exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do WON.")?;
+        let exe = exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do WON.")?;
         if running() {
             return Ok(());
         }
@@ -91,8 +90,7 @@ pub async fn desktop_start() -> Result<(), String> {
 #[tauri::command]
 pub async fn desktop_stop() -> Result<(), String> {
     blocking(|| {
-        let exe =
-            exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do WON.")?;
+        let exe = exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do WON.")?;
         std::process::Command::new(exe)
             .arg("--stop")
             .status()

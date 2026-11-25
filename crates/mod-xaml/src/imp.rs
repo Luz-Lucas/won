@@ -118,7 +118,7 @@ fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
 fn hide_wanted(kind: u8, st: &Style) -> bool {
     match kind {
         0 => st.start_hide_all,
-        4 => st.start_hide_list,
+        4 => st.start_hide_list || st.start_hide_all,
         1 => st.hide_start_button,
         2 => st.hide_widgets,
         3 => st.hide_search_gleam,
@@ -1092,7 +1092,10 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             // Não retorna: outros ramos (AcrylicBorder está em outro elemento).
         }
         // Experimental: a lista A-Z inteira (só com `start_hide_list`; desligado por padrão).
-        if is_start_host() && name == "AllAppsGrid" && ty.ends_with("GridView") {
+        if is_start_host()
+            && ((name == "AllAppsGrid" && ty.ends_with("GridView"))
+                || (name == "AllListHeading" && ty.ends_with("Grid")))
+        {
             let mut raw: *mut c_void = std::ptr::null_mut();
             if unsafe {
                 self.diag
@@ -1111,9 +1114,9 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                         orig: None,
                     };
                     let (on, st) = want_on();
-                    if on && st.start_hide_list {
+                    if on && (st.start_hide_list || st.start_hide_all) {
                         log(&format!(
-                            "esconder lista A-Z: {:?}",
+                            "esconder lista A-Z ({name}): {:?}",
                             apply_hide(&mut t, true)
                         ));
                     }
