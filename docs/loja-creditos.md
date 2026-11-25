@@ -1,8 +1,9 @@
 # Loja: créditos e licenças
 
-Todo o conteúdo que acompanha o Sentinela na Loja é **original do projeto** e
-foi desenhado por código (`tools/loja/gerar.py`), sem copiar arte de terceiros.
-Por isso não há créditos externos a repartir.
+O conteúdo original da Loja (ponteiros, ícones e temas) foi desenhado por código
+(`tools/loja/gerar.py`) e é CC0. Os **pacotes de ícones de conjuntos abertos** (seção
+"Ícones de terceiros" abaixo) são arte de terceiros, convertida para `.ico`, e mantêm a
+licença e a autoria originais.
 
 | Conteúdo | Autor | Licença |
 | --- | --- | --- |
@@ -14,10 +15,43 @@ Por isso não há créditos externos a repartir.
 
 CC0 1.0: domínio público, sem restrições: <https://creativecommons.org/publicdomain/zero/1.0/>.
 
+## Ícones de terceiros (online)
+
+Todos baixados sob demanda (não vão no executável). Cada card da Loja mostra autor e licença.
+Alteração feita por nós: os SVGs foram pintados de preto (ou mantidos coloridos, nos emojis) e
+rasterizados em `.ico` de 16 a 256 px, escolhendo 6 glifos por conjunto (pasta, PC, Lixeira
+vazia/cheia, usuário, Rede). Gerados por `tools/loja/icones_externos.py` a partir dos pacotes
+npm `@iconify-json/*`, que trazem o SVG original e os metadados de licença.
+
+| Conjunto | Autoria | Licença | Atribuição obrigatória? | Pacotes na Loja |
+| --- | --- | --- | --- | --- |
+| [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons) | Microsoft Corporation | MIT | Manter aviso de licença | Fluent preto (cheio, linha) |
+| [Phosphor Icons](https://github.com/phosphor-icons/core) | Phosphor Icons | MIT | Manter aviso de licença | Phosphor preto (regular, negrito, cheio) |
+| [Tabler Icons](https://github.com/tabler/tabler-icons) | Paweł Kuna | MIT | Manter aviso de licença | Tabler preto (linha, cheio) |
+| [Lucide](https://github.com/lucide-icons/lucide) | Lucide Contributors | ISC | Manter aviso de licença | Lucide preto |
+| [Bootstrap Icons](https://github.com/twbs/icons) | The Bootstrap Authors | MIT | Manter aviso de licença | Bootstrap preto (linha, cheio) |
+| [Material Design Icons](https://github.com/Templarian/MaterialDesign) | Pictogrammers | Apache 2.0 | Manter licença e aviso das alterações | Material preto (cheio, contorno) |
+| [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) | Microsoft Corporation | MIT | Manter aviso de licença | Fluent Emoji (colorido) |
+| [Twemoji](https://github.com/jdecked/twemoji) | Twitter, Inc. e colaboradores | CC BY 4.0 | **Sim** (este arquivo + card da Loja) | Twemoji (colorido) |
+| [Font Awesome Free](https://github.com/FortAwesome/Font-Awesome) | Fonticons, Inc. (Dave Gandy) | CC BY 4.0 (ícones) | **Sim** | Font Awesome preto |
+| [game-icons.net](https://game-icons.net) | Lorc, Delapouite e colaboradores | CC BY 3.0 | **Sim** | Game Icons preto |
+
+Textos completos das licenças: MIT, ISC e Apache 2.0 nos repositórios acima (arquivo `LICENSE`);
+CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>; CC BY 3.0
+<https://creativecommons.org/licenses/by/3.0/>.
+
+**Não incluídos de propósito:** ícones extraídos de DLLs do Windows (`imageres.dll`,
+`shell32.dll`), como os de `HaydenReeve/WindowsIcons` (sem licença, arte da Microsoft); Papirus
+(GPL) e OpenMoji (CC BY-SA), por exigirem a mesma licença nos derivados; logotipos de marcas de
+aplicativos (marca registrada).
+
+Aviso: ícones 100% pretos ficam invisíveis em fundo escuro (barra de tarefas e Explorer no modo
+escuro); foram feitos para o modo claro.
+
 ## Como a Loja funciona
 
 - **Catálogo embutido** (`catalog/loja/loja.zip`): funciona sem internet. Gerado por
-  `python3 tools/loja/gerar.py` (precisa de Pillow). Contém `index.json`, prévias e os pacotes.
+  `python3 tools/loja/gerar.py` (precisa de Pillow, cairosvg e dos pacotes npm @iconify-json/* (ICONIFY_DIR)). Contém `index.json`, prévias e os pacotes.
 - **Catálogo online** (`catalog/loja/remoto.json` + `catalog/loja/remoto/*.zip` na branch
   `main`): itens extras. O app só baixa pacotes `https`, até 8 MB, e confere o SHA-256 do
   catálogo antes de instalar. Botão "Buscar mais itens online".
