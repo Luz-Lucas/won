@@ -16,6 +16,7 @@ pub mod settings;
 pub mod signatures;
 pub mod startup;
 pub mod status;
+pub mod store;
 pub mod terminal;
 pub mod theme;
 pub mod tweaks;

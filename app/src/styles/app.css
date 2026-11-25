@@ -1359,3 +1359,57 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Loja */
+.loja-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: center;
+  margin: var(--sp-3) 0;
+}
+.loja-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.loja-search input {
+  min-width: 220px;
+}
+.loja-grid {
+  list-style: none;
+  padding: 0;
+  margin: var(--sp-4) 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--sp-4);
+}
+.loja-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.loja-card img,
+.loja-nopreview {
+  width: 100%;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  image-rendering: auto;
+}
+.loja-nopreview {
+  aspect-ratio: 16 / 7;
+}
+.loja-meta {
+  font-size: var(--fs-sm);
+}
+.loja-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: auto;
+}

@@ -4,6 +4,7 @@ pub mod desktop;
 pub mod disk;
 pub mod font;
 pub mod games;
+pub mod loja;
 pub mod mods;
 pub mod net;
 pub mod routes;

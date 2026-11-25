@@ -916,6 +916,53 @@ export const themeExport = (name: string, path: string) =>
   invoke<void>("theme_export", { name, path });
 export const themeImport = (path: string) => invoke<ImportedTheme>("theme_import", { path });
 
+export type LojaKind = "cursores" | "icones" | "temas";
+
+export interface LojaItem {
+  id: string;
+  kind: LojaKind;
+  name: string;
+  author: string;
+  license: string;
+  description: string;
+  tags: string[];
+  /** PNG em `data:`. */
+  preview: string;
+  bytes: number;
+  remote: boolean;
+  /** Temas: o theme.toml. */
+  toml: string | null;
+  /** Temas: cursor e ícones que acompanham. */
+  cursor: string | null;
+  icons: string | null;
+  installed: boolean;
+  applied: boolean;
+}
+
+export interface LojaPage {
+  items: LojaItem[];
+  online: boolean;
+  online_error: string | null;
+}
+
+export interface LojaApplied {
+  id: string;
+  restart_explorer: boolean;
+}
+
+export interface LojaReverted extends LojaApplied {
+  failed: string[];
+}
+
+export const lojaList = (online: boolean) => invoke<LojaPage>("loja_list", { online });
+export const lojaInstall = (id: string, online: boolean) =>
+  invoke<void>("loja_install", { id, online });
+export const lojaRemove = (id: string, online: boolean) =>
+  invoke<void>("loja_remove", { id, online });
+export const lojaApply = (id: string, online: boolean) =>
+  invoke<LojaApplied>("loja_apply", { id, online });
+export const lojaRevert = (kind: LojaKind) => invoke<LojaReverted>("loja_revert", { kind });
+
 export interface TerminalProfile {
   shell: string;
   path: string;

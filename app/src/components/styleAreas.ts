@@ -62,6 +62,18 @@ export const AREA_INFO: Record<PreviewArea, AreaInfo> = {
       "Exportar e importar arquivos .sentinela-theme.",
     ],
   },
+  loja: {
+    title: "Loja",
+    summary: "Temas, ponteiros do mouse e pacotes de ícones para baixar.",
+    description:
+      "Um catálogo com prévia: escolha o que baixar, aplique de dentro do app e reverta quando quiser.",
+    reference: [
+      "Ponteiros do mouse (cursores) completos, incluindo os de espera animados.",
+      "Pacotes de ícones para pasta, Este Computador, Lixeira, sua pasta e Rede.",
+      "Temas que juntam cores, ponteiro e ícones; dá para desfazer tudo.",
+      "Itens extras vêm do catálogo online, conferidos por SHA-256.",
+    ],
+  },
   wallpaper: {
     title: "Papel de parede",
     summary: "Galeria do Wallpaper Engine, por monitor.",
