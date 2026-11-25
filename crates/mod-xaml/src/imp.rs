@@ -96,6 +96,48 @@ struct TrackedStart {
 }
 unsafe impl Send for TrackedStart {}
 static START: Mutex<Vec<TrackedStart>> = Mutex::new(Vec::new());
+
+/// Painéis "Todos os aplicativos" do Iniciar, escondidos por `start_hide_all`.
+struct TrackedHide {
+    handle: u64,
+    fe: FrameworkElement,
+    orig: Option<(f64, f64, bool)>, // MaxHeight, Opacity, IsHitTestVisible
+}
+unsafe impl Send for TrackedHide {}
+static HIDE: Mutex<Vec<TrackedHide>> = Mutex::new(Vec::new());
+
+fn apply_hide(t: &mut TrackedHide, on: bool) -> Result<()> {
+    let ui: UIElement = t.fe.cast()?;
+    if on {
+        if t.orig.is_none() {
+            t.orig = Some((t.fe.MaxHeight()?, ui.Opacity()?, ui.IsHitTestVisible()?));
+        }
+        t.fe.SetMaxHeight(0.0)?;
+        ui.SetOpacity(0.0)?;
+        ui.SetIsHitTestVisible(false)?;
+    } else if let Some((h, o, hit)) = t.orig.take() {
+        t.fe.SetMaxHeight(h)?;
+        ui.SetOpacity(o)?;
+        ui.SetIsHitTestVisible(hit)?;
+    }
+    Ok(())
+}
+
+fn apply_all_hide(on: bool) {
+    let items: Vec<(u64, FrameworkElement)> =
+        HIDE.lock().unwrap().iter().map(|t| (t.handle, t.fe.clone())).collect();
+    for (handle, fe) in items {
+        let Ok(ui) = fe.cast::<UIElement>() else { continue };
+        let Ok(disp) = ui.Dispatcher() else { continue };
+        let h = DispatchedHandler::new(move || {
+            if let Some(t) = HIDE.lock().unwrap().iter_mut().find(|t| t.handle == handle) {
+                let _ = apply_hide(t, on);
+            }
+            Ok(())
+        });
+        let _ = disp.RunAsync(CoreDispatcherPriority::Normal, &h);
+    }
+}
 struct Orig {
     fill: Option<Brush>,
     margin: Thickness,
@@ -179,6 +221,16 @@ fn is_search_host() -> bool {
     })
 }
 
+fn is_start_host() -> bool {
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().eq_ignore_ascii_case("startmenuexperiencehost.exe")))
+            .unwrap_or(false)
+    })
+}
+
 fn want_on() -> (bool, Style) {
     let Some(dir) = mods_dir() else { return (false, Style::default()) };
     let st = std::fs::read_to_string(dir.join("xaml-barra.cfg"))
@@ -252,6 +304,7 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
 /// Reaplica (ou restaura) em todos os elementos guardados, cada um na sua thread de UI.
 fn apply_all(on: bool, st: Style) {
     apply_all_start(on, st.clone());
+    apply_all_hide(on && st.start_hide_all);
     let handles: Vec<(u64, Rectangle)> = {
         let g = TRACKED.lock().unwrap();
         g.iter().map(|t| (t.handle, t.rect.clone())).collect()
@@ -303,12 +356,13 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
         // As strings pertencem a nós; `BSTR` libera no drop.
         let name = element.name.to_string();
         let ty = element.type_name.to_string();
-        if (is_search_host() || mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists())) && mutation == 0 {
+        if (is_search_host() || is_start_host() || mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists())) && mutation == 0 {
             dump_log(&format!("{ty} #{name}"));
         }
         if mutation == 1 {
             TRACKED.lock().unwrap().retain(|t| t.handle != element.handle);
             START.lock().unwrap().retain(|t| t.handle != element.handle);
+            HIDE.lock().unwrap().retain(|t| t.handle != element.handle);
             return S_OK;
         }
         if ty == "Windows.UI.Xaml.Controls.Border" && name == "AcrylicBorder" {
@@ -324,6 +378,23 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                 log(&format!("aplicar AcrylicBorder: {:?}", apply_start(&mut t, true, &st)));
             }
             START.lock().unwrap().push(t);
+            return S_OK;
+        }
+        // "Todos os aplicativos" do Iniciar: acha por nome/tipo que contenha "AllApps".
+        if is_start_host() && (ty.to_ascii_lowercase().contains("allapps") || name.to_ascii_lowercase().contains("allapps")) {
+            let mut raw: *mut c_void = std::ptr::null_mut();
+            if unsafe { self.diag.GetIInspectableFromHandle(element.handle, &mut raw) }.is_ok() && !raw.is_null() {
+                let insp: windows::core::IInspectable = unsafe { windows::core::IInspectable::from_raw(raw) };
+                if let Ok(fe) = insp.cast::<FrameworkElement>() {
+                    log(&format!("candidato Todos os aplicativos: {ty} #{name}"));
+                    let mut t = TrackedHide { handle: element.handle, fe, orig: None };
+                    let (on, st) = want_on();
+                    if on && st.start_hide_all {
+                        log(&format!("esconder {ty} #{name}: {:?}", apply_hide(&mut t, true)));
+                    }
+                    HIDE.lock().unwrap().push(t);
+                }
+            }
             return S_OK;
         }
         if name == "TaskbarFrameRepeater" || ty.ends_with("SystemTray.SystemTrayFrame") {

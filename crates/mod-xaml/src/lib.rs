@@ -28,6 +28,8 @@ pub struct Style {
     /// Menu Iniciar (mod 7): cor do painel, ARGB, e raio dos cantos; `None` não mexe.
     pub start_fill: Option<(u8, u8, u8, u8)>,
     pub start_radius: Option<f64>,
+    /// Menu Iniciar: esconde a área "Todos os aplicativos" (fica só o que está fixado).
+    pub start_hide_all: bool,
     /// Duas ilhas na barra nativa: uma atrás dos apps (largura acompanha os ícones) e outra atrás
     /// da bandeja/relógio. Usa `fill` e `radius` para as duas.
     pub islands: bool,
@@ -51,6 +53,7 @@ impl Default for Style {
             hide_border: false,
             start_fill: None,
             start_radius: None,
+            start_hide_all: false,
             islands: false,
             island_pad: 14.0,
             island_tray_pad: 10.0,
@@ -111,6 +114,7 @@ pub fn parse_style(text: &str) -> Style {
             "hide_border" => st.hide_border = v == "true" || v == "1",
             "start_fill" => st.start_fill = parse_color(v),
             "start_radius" => st.start_radius = v.parse::<f64>().ok().map(|r| r.clamp(0.0, 60.0)),
+            "start_hide_all" => st.start_hide_all = v == "true" || v == "1",
             "islands" => st.islands = v == "true" || v == "1",
             "island_pad" => st.island_pad = v.parse::<f64>().map_or(st.island_pad, |x| x.clamp(0.0, 80.0)),
             "island_tray_pad" => {
@@ -167,6 +171,7 @@ start_radius=20");
         assert_eq!(s.start_fill, Some((0xCC, 0x10, 0x10, 0x18)));
         assert_eq!(s.start_radius, Some(20.0));
         assert_eq!(Style::default().start_fill, None);
+        assert!(parse_style("start_hide_all=true").start_hide_all);
         let i = parse_style("islands=true\nisland_pad=20\nisland_v=99");
         assert!(i.islands);
         assert_eq!(i.island_pad, 20.0);

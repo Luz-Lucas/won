@@ -22,13 +22,13 @@ use windows_sys::Win32::System::SystemInformation::{
 use windows_sys::Win32::System::Threading::GetSystemTimes;
 use windows_sys::Win32::UI::Shell::{APPBARDATA, SHAppBarMessage};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowExW, FindWindowW,
-    GW_OWNER, GWL_EXSTYLE, GetForegroundWindow, GetSystemMetrics, GetWindow, GetWindowLongW,
-    GetWindowTextW, IsIconic, IsWindowVisible, LWA_COLORKEY, RegisterClassExW, SM_CXSCREEN,
-    SM_CYSCREEN, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SW_SHOWNOACTIVATE, SetForegroundWindow,
-    SetLayeredWindowAttributes, ShowWindow, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_PAINT, WNDCLASSEXW,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
-    DrawIconEx, GetClassLongPtrW, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_GETICON,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DrawIconEx, EnumWindows, FindWindowExW,
+    FindWindowW, GW_OWNER, GWL_EXSTYLE, GetClassLongPtrW, GetForegroundWindow, GetSystemMetrics,
+    GetWindow, GetWindowLongW, GetWindowTextW, IsIconic, IsWindowVisible, LWA_COLORKEY,
+    RegisterClassExW, SM_CXSCREEN, SM_CYSCREEN, SMTO_ABORTIFHUNG, SW_HIDE, SW_MINIMIZE, SW_RESTORE,
+    SW_SHOW, SW_SHOWNOACTIVATE, SendMessageTimeoutW, SetForegroundWindow,
+    SetLayeredWindowAttributes, ShowWindow, WM_ERASEBKGND, WM_GETICON, WM_LBUTTONDOWN, WM_PAINT,
+    WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 const CLASS: &str = "SentinelaDesktopBar";
@@ -359,7 +359,17 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                 let wt = shown.encode_utf16().collect::<Vec<u16>>();
                 if a.icon != 0 {
                     let iy = cell.top + (cell.bottom - cell.top - icon_px) / 2;
-                    DrawIconEx(hdc, x + item_pad, iy, a.icon as _, icon_px, icon_px, 0, std::ptr::null_mut(), 3);
+                    DrawIconEx(
+                        hdc,
+                        x + item_pad,
+                        iy,
+                        a.icon as _,
+                        icon_px,
+                        icon_px,
+                        0,
+                        std::ptr::null_mut(),
+                        3,
+                    );
                 }
                 TextOutW(hdc, x + item_pad + icon_w, ty, wt.as_ptr(), wt.len() as i32);
                 hits.push((cell, a.hwnd));

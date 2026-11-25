@@ -292,6 +292,45 @@ impl Tiler {
                 (target.bottom - target.top) + dt + db,
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
+            // Janela com tamanho mínimo maior que o espaço (Spotify, por exemplo) não encolhe e
+            // vazaria para fora da tela, deixando o botão de fechar inalcançável: solta a janela
+            // do tiling e a traz toda para dentro da área de trabalho.
+            let mut now_r: RECT = std::mem::zeroed();
+            if GetWindowRect(hwnd, &mut now_r) != 0 {
+                let over_w =
+                    (now_r.right - now_r.left) > (target.right - target.left) + dl + dr + 8;
+                let over_h =
+                    (now_r.bottom - now_r.top) > (target.bottom - target.top) + dt + db + 8;
+                if over_w || over_h {
+                    self.floating.insert(hwnd as isize);
+                    self.saved.remove(&(hwnd as isize));
+                    self.last.clear();
+                    if let Some(area) = work_area(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+                    {
+                        let (w, h) = (now_r.right - now_r.left, now_r.bottom - now_r.top);
+                        let x = (area.right - w)
+                            .max(area.left)
+                            .min(now_r.left.max(area.left));
+                        let y = (area.bottom - h).max(area.top).min(now_r.top.max(area.top));
+                        SetWindowPos(
+                            hwnd,
+                            std::ptr::null_mut(),
+                            x,
+                            y,
+                            0,
+                            0,
+                            windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
+                                | SWP_NOZORDER
+                                | SWP_NOACTIVATE,
+                        );
+                    }
+                    crate::dlog::log(&format!(
+                        "tiling: janela {hwnd:?} não cabe no espaço ({}x{}); solta do tiling",
+                        now_r.right - now_r.left,
+                        now_r.bottom - now_r.top
+                    ));
+                }
+            }
         }
     }
 

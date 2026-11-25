@@ -9,6 +9,8 @@ export interface XamlStyle {
   startFill: string | null; // #RRGGBB ou null = não mexe
   startAlpha: number;
   startRadius: number | null;
+  /** Esconde a área "Todos os aplicativos" do Iniciar (só os fixados). */
+  startHideAll: boolean;
   /** Duas ilhas na barra nativa (apps + bandeja). Usa a cor e o raio acima. */
   islands: boolean;
   islandPad: number;
@@ -26,6 +28,7 @@ export const DEFAULT_XAML: XamlStyle = {
   startFill: null,
   startAlpha: 230,
   startRadius: null,
+  startHideAll: false,
   islands: false,
   islandPad: 14,
   islandTrayPad: 10,
@@ -78,6 +81,8 @@ export function parseXamlCfg(text: string): XamlStyle {
         s.startFill = c.rgb;
         s.startAlpha = c.a;
       }
+    } else if (k === "start_hide_all") {
+      s.startHideAll = v === "true" || v === "1";
     } else if (k === "islands") {
       s.islands = v === "true" || v === "1";
     } else if (k === "island_pad" || k === "island_tray_pad" || k === "island_v" || k === "island_edge") {
@@ -107,6 +112,7 @@ export function buildXamlCfg(s: XamlStyle): string {
     lines.push("islands=true", `island_pad=${s.islandPad}`, `island_tray_pad=${s.islandTrayPad}`);
     lines.push(`island_v=${s.islandV}`, `island_edge=${s.islandEdge}`);
   }
+  if (s.startHideAll) lines.push("start_hide_all=true");
   if (s.startFill) lines.push(`start_fill=${argb(s.startFill, s.startAlpha)}`);
   if (s.startRadius !== null) lines.push(`start_radius=${s.startRadius}`);
   return lines.join("\n") + "\n";

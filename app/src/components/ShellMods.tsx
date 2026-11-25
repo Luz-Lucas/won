@@ -246,6 +246,16 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
             <label>
               <input
                 type="checkbox"
+                checked={style.startHideAll}
+                onChange={(e) => set({ startHideAll: e.target.checked })}
+              />{" "}
+              Iniciar só com os apps fixados (esconder "Todos os aplicativos")
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              <input
+                type="checkbox"
                 checked={style.startFill !== null}
                 onChange={(e) =>
                   set({ startFill: e.target.checked ? "#1C1C24" : null, startRadius: e.target.checked ? 14 : null })

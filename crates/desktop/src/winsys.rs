@@ -7,8 +7,8 @@ use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
 };
 use windows_sys::Win32::NetworkManagement::IpHelper::{
-    GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST,
-    GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
+    GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER, GAA_FLAG_SKIP_MULTICAST, GetAdaptersAddresses,
+    IP_ADAPTER_ADDRESSES_LH,
 };
 
 thread_local! {
@@ -55,13 +55,25 @@ pub fn network_text() -> String {
     let mut buf = vec![0u8; size as usize];
     let flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
     let mut ret = unsafe {
-        GetAdaptersAddresses(0, flags, std::ptr::null(), buf.as_mut_ptr().cast(), &mut size)
+        GetAdaptersAddresses(
+            0,
+            flags,
+            std::ptr::null(),
+            buf.as_mut_ptr().cast(),
+            &mut size,
+        )
     };
     if ret == 111 {
         // ERROR_BUFFER_OVERFLOW
         buf = vec![0u8; size as usize];
         ret = unsafe {
-            GetAdaptersAddresses(0, flags, std::ptr::null(), buf.as_mut_ptr().cast(), &mut size)
+            GetAdaptersAddresses(
+                0,
+                flags,
+                std::ptr::null(),
+                buf.as_mut_ptr().cast(),
+                &mut size,
+            )
         };
     }
     if ret != 0 {
