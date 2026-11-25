@@ -24,7 +24,7 @@ export function effectiveOn(items: TweakItem[], hover: string | null): Set<strin
 
 export type PreviewArea = TweakArea | "temas" | "wallpaper" | "terminal" | "desktop" | "loja";
 
-const ICONS = ["#5b9cf5", "#f5a35b", "#6bd18a", "#c78bf0"];
+const ICONS = ["#2f7bff", "#6ebeff", "#1446c8", "#9fd0ff"];
 
 function Taskbar({ on, light }: { on: On; light: boolean }) {
   const left = on.has("taskbar-align-left");
