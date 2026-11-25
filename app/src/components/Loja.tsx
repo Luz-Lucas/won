@@ -19,7 +19,6 @@ type Tab = "todos" | LojaKind;
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "todos", label: "Tudo" },
-  { id: "temas", label: "Temas" },
   { id: "cursores", label: "Ponteiros do mouse" },
   { id: "icones", label: "Pacotes de ícones" },
 ];
@@ -37,7 +36,7 @@ interface PendingTheme {
   preview: ThemePreview;
 }
 
-/** Loja: temas, ponteiros e ícones para baixar, aplicar e reverter. */
+/** Loja: ponteiros e ícones para baixar, aplicar e reverter. */
 export default function Loja() {
   const [items, setItems] = useState<LojaItem[]>([]);
   const [online, setOnline] = useState(false);
@@ -69,6 +68,7 @@ export default function Loja() {
 
   const shown = items.filter(
     (i) =>
+      i.kind !== "temas" &&
       (tab === "todos" || i.kind === tab) &&
       (query.trim() === "" ||
         `${i.name} ${i.description} ${i.tags.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase())),

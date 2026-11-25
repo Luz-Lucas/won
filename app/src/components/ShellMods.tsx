@@ -251,6 +251,14 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
               />{" "}
               Iniciar só com os apps fixados (esconder "Todos os aplicativos")
             </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={style.startHideList}
+                onChange={(e) => set({ startHideList: e.target.checked })}
+              />{" "}
+              Esconder a lista A-Z inteira (experimental, pode esvaziar o Iniciar)
+            </label>
           </div>
           <div className="row">
             <label>

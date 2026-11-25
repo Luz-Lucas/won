@@ -286,6 +286,14 @@ export default function DesktopVisual({
                 />
                 <span>Fonte em negrito</span>
               </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.hideWhenMaximized}
+                  onChange={(e) => setBar({ hideWhenMaximized: e.target.checked })}
+                />
+                <span>Esconder a barra com janela maximizada</span>
+              </label>
               <Range label="Só ícones a partir de" value={bar.iconsOnlyFrom} min={0} max={12} onChange={(v) => setBar({ iconsOnlyFrom: v })} format={(v) => (v === 0 ? "nunca" : `${v} janelas`)} />
               <div className="dv-colors">
                 <label>

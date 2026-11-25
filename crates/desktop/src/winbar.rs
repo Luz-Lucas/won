@@ -24,11 +24,11 @@ use windows_sys::Win32::UI::Shell::{APPBARDATA, SHAppBarMessage};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DrawIconEx, EnumWindows, FindWindowExW,
     FindWindowW, GW_OWNER, GWL_EXSTYLE, GetClassLongPtrW, GetForegroundWindow, GetSystemMetrics,
-    GetWindow, GetWindowLongW, GetWindowTextW, IsIconic, IsWindowVisible, RegisterClassExW,
-    SM_CXSCREEN, SM_CYSCREEN, SMTO_ABORTIFHUNG, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
-    SW_SHOWNOACTIVATE, SendMessageTimeoutW, SetForegroundWindow, ShowWindow, WM_ERASEBKGND,
-    WM_GETICON, WM_LBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    GetWindow, GetWindowLongW, GetWindowTextW, IsIconic, IsWindowVisible, IsZoomed,
+    RegisterClassExW, SM_CXSCREEN, SM_CYSCREEN, SMTO_ABORTIFHUNG, SW_HIDE, SW_MINIMIZE, SW_RESTORE,
+    SW_SHOW, SW_SHOWNOACTIVATE, SendMessageTimeoutW, SetForegroundWindow, ShowWindow,
+    WM_ERASEBKGND, WM_GETICON, WM_LBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 const CLASS: &str = "SentinelaDesktopBar";
@@ -345,7 +345,7 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
             .iter()
             .map(|a| {
                 if icons_only {
-                    return (String::new(), 2 * item_pad + icon_px);
+                    return (String::new(), 2 * 5 + icon_px);
                 }
                 let t = bar::truncate(&a.title, 28);
                 let w = text_width(hdc, &t) + 2 * item_pad + icon_w;
@@ -354,11 +354,17 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
             .collect();
         let gap = m.max(4);
         let avail = (w - 2 * m - right_w - gap - 2 * 6).max(0);
-        let widths = bar::fit_items(&wants.iter().map(|x| x.1).collect::<Vec<_>>(), avail, 4, 48);
+        let cell_gap = if icons_only { 0 } else { 4 };
+        let widths = bar::fit_items(
+            &wants.iter().map(|x| x.1).collect::<Vec<_>>(),
+            avail,
+            cell_gap,
+            if icons_only { icon_px + 6 } else { 48 },
+        );
         let apps_w = if widths.is_empty() {
             0
         } else {
-            widths.iter().sum::<i32>() + 4 * (widths.len() as i32 - 1) + 2 * 6
+            widths.iter().sum::<i32>() + cell_gap * (widths.len() as i32 - 1) + 2 * 6
         };
         let (apps_x, right_x) =
             bar::island_positions(w, apps_w, right_w, m, gap, b.cfg.island_align);
@@ -375,7 +381,28 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                     right: x + iw,
                     bottom: m + ih - 4,
                 };
-                if a.hwnd == fg {
+                if a.hwnd == fg && icons_only {
+                    // Brilho suave em volta do ícone ativo: três camadas, da mais fraca à mais forte.
+                    for (grow, pct) in [(4, 7u32), (2, 12), (0, 18)] {
+                        let br = CreateSolidBrush(colorref(mix(
+                            b.cfg.background,
+                            b.cfg.foreground,
+                            pct,
+                        )));
+                        SelectObject(hdc, br);
+                        RoundRect(
+                            hdc,
+                            cell.left - grow,
+                            cell.top - grow,
+                            cell.right + grow,
+                            cell.bottom + grow,
+                            r / 2 + 2 + grow,
+                            r / 2 + 2 + grow,
+                        );
+                        SelectObject(hdc, sel);
+                        DeleteObject(br);
+                    }
+                } else if a.hwnd == fg {
                     SelectObject(hdc, sel);
                     RoundRect(
                         hdc,
@@ -422,7 +449,7 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                     TextOutW(hdc, x + item_pad + icon_w, ty, wt.as_ptr(), wt.len() as i32);
                 }
                 hits.push((cell, a.hwnd));
-                x += iw + 4;
+                x += iw + cell_gap;
             }
         }
         SetTextColor(hdc, colorref(b.cfg.foreground));
@@ -831,6 +858,14 @@ pub fn tick(fullscreen_foreground: bool) {
             merge_apps(&mut b.apps, fresh);
         }
         unsafe {
+            let fg = GetForegroundWindow();
+            let maximized = b.cfg.hide_when_maximized
+                && !fg.is_null()
+                && fg != b.hwnd
+                && IsWindowVisible(fg) != 0
+                && IsIconic(fg) == 0
+                && IsZoomed(fg) != 0;
+            let fullscreen_foreground = fullscreen_foreground || maximized;
             ShowWindow(
                 b.hwnd,
                 if fullscreen_foreground {

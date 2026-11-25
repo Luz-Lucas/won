@@ -78,27 +78,4 @@ describe("Loja", () => {
     expect(screen.queryByText("Noite")).toBeNull();
     expect(screen.getByText("Flat")).toBeTruthy();
   });
-
-  it("tema: mostra a prévia e só aplica depois de confirmar", async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.lojaList).mockResolvedValue(
-      page([
-        item({ id: "c1", name: "Neon", installed: true }),
-        item({ id: "i1", kind: "icones", name: "Neon icons", installed: true }),
-        item({ id: "t1", kind: "temas", name: "Noite neon", toml: "version = 1", cursor: "c1", icons: "i1", installed: true }),
-      ]),
-    );
-    vi.mocked(api.themePreview).mockResolvedValue({
-      items: [{ kind: "tweak", label: "Tema escuro", detail: "", change: true }],
-      warnings: [],
-    } as unknown as api.ThemePreview);
-    vi.mocked(api.themeApply).mockResolvedValue({ record: null, results: [], warnings: [] } as unknown as api.ThemeApplied);
-    vi.mocked(api.lojaApply).mockResolvedValue({ id: "c1", restart_explorer: false });
-    render(<Loja />);
-    await user.click(await screen.findByRole("button", { name: "Aplicar tema Noite neon" }));
-    expect(api.themeApply).not.toHaveBeenCalled();
-    await user.click(await screen.findByRole("button", { name: "Aplicar tema" }));
-    await waitFor(() => expect(api.themeApply).toHaveBeenCalledWith("version = 1"));
-    await waitFor(() => expect(api.lojaApply).toHaveBeenCalledTimes(2));
-  });
 });

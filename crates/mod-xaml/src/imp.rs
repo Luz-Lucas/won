@@ -105,9 +105,6 @@ fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
     // Modo lista do Iniciar (árvore real do PC): a lista A-Z é o GridView `AllAppsGrid`.
     // Os apps fixados ficam em outro painel (`PinnedList`).
     // `ZoomedOutListView` fica de fora: é parte do SemanticZoom e esconder esvaziava o Iniciar.
-    if name == "AllAppsGrid" && ty.ends_with("GridView") {
-        return true;
-    }
     let n = name.to_ascii_lowercase();
     if !n.contains("allapps") || n.contains("pinned") || n.contains("recommend") {
         return false;
@@ -121,6 +118,7 @@ fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
 fn hide_wanted(kind: u8, st: &Style) -> bool {
     match kind {
         0 => st.start_hide_all,
+        4 => st.start_hide_list,
         1 => st.hide_start_button,
         2 => st.hide_widgets,
         3 => st.hide_search_gleam,
@@ -495,7 +493,7 @@ fn hidden_ancestors() -> Vec<windows_core::IUnknown> {
         .lock()
         .unwrap()
         .iter()
-        .filter(|t| t.kind != 0 && t.orig.is_some())
+        .filter(|t| (1..=3).contains(&t.kind) && t.orig.is_some())
         .map(|t| t.fe.clone())
         .collect();
     let mut out = Vec::new();
@@ -1069,6 +1067,37 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                 }
             }
             // Não retorna: outros ramos (AcrylicBorder está em outro elemento).
+        }
+        // Experimental: a lista A-Z inteira (só com `start_hide_list`; desligado por padrão).
+        if is_start_host() && name == "AllAppsGrid" && ty.ends_with("GridView") {
+            let mut raw: *mut c_void = std::ptr::null_mut();
+            if unsafe {
+                self.diag
+                    .GetIInspectableFromHandle(element.handle, &mut raw)
+            }
+            .is_ok()
+                && !raw.is_null()
+            {
+                let insp: windows::core::IInspectable =
+                    unsafe { windows::core::IInspectable::from_raw(raw) };
+                if let Ok(fe) = insp.cast::<FrameworkElement>() {
+                    let mut t = TrackedHide {
+                        kind: 4,
+                        handle: element.handle,
+                        fe,
+                        orig: None,
+                    };
+                    let (on, st) = want_on();
+                    if on && st.start_hide_list {
+                        log(&format!(
+                            "esconder lista A-Z: {:?}",
+                            apply_hide(&mut t, true)
+                        ));
+                    }
+                    HIDE.lock().unwrap().push(t);
+                }
+            }
+            return S_OK;
         }
         // "Todos os aplicativos" do Iniciar: acha por nome/tipo que contenha "AllApps".
         if is_start_host() && is_all_apps_leaf(&ty, &name) {

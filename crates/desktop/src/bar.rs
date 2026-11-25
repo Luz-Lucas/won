@@ -47,6 +47,8 @@ pub struct BarConfig {
     pub font_weight: u32,
     /// Com este número de janelas ou mais, a ilha mostra só os ícones (0 = nunca).
     pub icons_only_from: u32,
+    /// Esconde a barra enquanto a janela em primeiro plano estiver maximizada.
+    pub hide_when_maximized: bool,
     pub hide_native_taskbar: bool,
     pub left: Vec<Module>,
     pub center: Vec<Module>,

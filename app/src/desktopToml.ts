@@ -21,6 +21,8 @@ export interface BarModel {
   fontWeight: number;
   /** Com este número de janelas ou mais a ilha mostra só ícones (0 = nunca). */
   iconsOnlyFrom: number;
+  /** Esconde a barra com uma janela maximizada em primeiro plano. */
+  hideWhenMaximized: boolean;
   hideNative: boolean;
   left: Module[];
   center: Module[];
@@ -103,6 +105,7 @@ export const DEFAULT_BAR: BarModel = {
   fontSize: 12,
   fontWeight: 700,
   iconsOnlyFrom: 3,
+  hideWhenMaximized: true,
   hideNative: false,
   left: ["title"],
   center: [],
@@ -154,6 +157,7 @@ export function readSections(text: string): Sections | null {
       fontSize: num(b.font_size, DEFAULT_BAR.fontSize),
       fontWeight: num(b.font_weight, DEFAULT_BAR.fontWeight),
       iconsOnlyFrom: num(b.icons_only_from, DEFAULT_BAR.iconsOnlyFrom),
+      hideWhenMaximized: b.hide_when_maximized !== false,
       hideNative: b.hide_native_taskbar === true,
       left: mods(b.left, DEFAULT_BAR.left),
       center: mods(b.center, DEFAULT_BAR.center),
@@ -235,6 +239,7 @@ function barToml(b: BarModel): string {
     `font_size = ${Math.round(b.fontSize)}`,
     `font_weight = ${Math.round(b.fontWeight)}`,
     `icons_only_from = ${Math.round(b.iconsOnlyFrom)}`,
+    `hide_when_maximized = ${b.hideWhenMaximized}`,
     `hide_native_taskbar = ${b.hideNative}`,
     `left = ${list(b.left)}`,
     `center = ${list(b.center)}`,
