@@ -468,6 +468,27 @@ def tema_toml(nome, desc, acento, ajustes):
             f'[tweaks]\nids = [{ids}]\n\n[colors]\naccent = "{acento}"\n')
 
 
+def itens_externos():
+    """Pacotes de ícones feitos de conjuntos abertos de terceiros (ver icones_externos.py)."""
+    sys.path.insert(0, os.path.dirname(__file__))
+    import icones_externos as ext
+    saida = []
+    os.makedirs(os.path.join(SAIDA, "remoto"), exist_ok=True)
+    for id_, nome, desc, conj, nomes, tags, preto in ext.PACOTES:
+        _, nome_fonte, autor, lic, attr, url = ext.FONTES[conj]
+        conteudo, manifesto = ext.pacote(conj, nomes, preto)
+        conteudo["manifest.json"] = json.dumps(manifesto, indent=1).encode()
+        z = zip_bytes(conteudo)
+        with open(os.path.join(SAIDA, "remoto", f"{id_}.zip"), "wb") as f:
+            f.write(z)
+        prev = png(ext.previa(conj, nomes, preto))
+        saida.append(dict(id=id_, tipo="icones", nome=nome, autor=f"{autor} ({nome_fonte})", licenca=lic,
+                          descricao=f"{desc} Fonte: {url}", tags=tags,
+                          sha256=hashlib.sha256(z).hexdigest(), bytes=len(z), url=RAW + f"{id_}.zip",
+                          previa_b64=base64.b64encode(prev).decode()))
+    return saida
+
+
 def main():
     estilos = {i[0]: i[4] for i in CURSORES + CURSORES_EXTRA + ICONES + ICONES_EXTRA}
     arqs = {}
@@ -493,6 +514,7 @@ def main():
                     f.write(z)
                 item.update(url=RAW + f"{id_}.zip", previa_b64=base64.b64encode(prev).decode())
                 extras.append(item)
+    extras += itens_externos()
     for id_, nome, desc, modo, acento, ajustes, cur_id, ico_id in TEMAS:
         prev = png(previa_tema(modo, acento, cur_id, ico_id, estilos))
         arqs[f"previas/{id_}.png"] = prev
