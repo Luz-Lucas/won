@@ -940,6 +940,20 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             BTNS.lock().unwrap().retain(|b| b.handle != element.handle);
             return S_OK;
         }
+        // Diagnóstico do Iniciar: nomes de Border/Grid criados depois da abertura (ex.: ao trocar
+        // a visão Grade/Lista), para achar o que perde o tema. Limitado e sem repetir.
+        if is_start_host()
+            && !name.is_empty()
+            && (ty.ends_with(".Border") || ty.ends_with(".Grid") || ty.ends_with("Frame"))
+        {
+            static SEEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+            let mut seen = SEEN.lock().unwrap();
+            let k = format!("{ty} #{name}");
+            if seen.len() < 120 && !seen.contains(&k) {
+                log(&format!("iniciar novo elemento: {k}"));
+                seen.push(k);
+            }
+        }
         if ty == "Windows.UI.Xaml.Controls.Border"
             && (name == "AcrylicBorder"
                 || (is_search_host() && (name == "AppBorder" || name == "LayerBorder")))
