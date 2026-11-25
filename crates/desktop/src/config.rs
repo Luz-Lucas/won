@@ -78,6 +78,8 @@ pub struct Config {
     pub launcher: Option<LauncherConfig>,
     /// Presente = copiar e colar inteligente ligado (`[clipboard]`).
     pub clipboard: Option<crate::smartcopy::Options>,
+    /// `[taskbar] middle_click_close = true`: clique do meio na barra fecha o programa.
+    pub middle_click_close: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +94,14 @@ struct RawFile {
     tiling: Option<RawTiling>,
     launcher: Option<RawLauncher>,
     clipboard: Option<RawClipboard>,
+    taskbar: Option<RawTaskbar>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTaskbar {
+    #[serde(default)]
+    middle_click_close: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -120,7 +130,10 @@ struct RawReplace {
     to: String,
 }
 
-fn parse_clipboard(c: &RawClipboard, errors: &mut Vec<String>) -> Option<crate::smartcopy::Options> {
+fn parse_clipboard(
+    c: &RawClipboard,
+    errors: &mut Vec<String>,
+) -> Option<crate::smartcopy::Options> {
     use crate::smartcopy::{Casing, Extract, Options, PathMode};
     let casing = match c.casing.as_deref().unwrap_or("keep") {
         "keep" => Casing::Keep,
@@ -160,7 +173,11 @@ fn parse_clipboard(c: &RawClipboard, errors: &mut Vec<String>) -> Option<crate::
         casing,
         paths,
         extract,
-        replacements: c.replace.iter().map(|r| (r.from.clone(), r.to.clone())).collect(),
+        replacements: c
+            .replace
+            .iter()
+            .map(|r| (r.from.clone(), r.to.clone()))
+            .collect(),
     })
 }
 
@@ -602,6 +619,7 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
             tiling,
             launcher,
             clipboard,
+            middle_click_close: raw.taskbar.as_ref().is_some_and(|t| t.middle_click_close),
         })
     } else {
         Err(errors)
@@ -722,6 +740,9 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # inactive = "#3A3A3C"
 
 # Lançador: caixa de busca de apps, janelas abertas e contas (ex.: 2*(3+4)).
+# [taskbar]
+# middle_click_close = true   # clique do meio no botão da barra fecha o programa (experimental)
+#
 # [clipboard]                 # copiar e colar inteligente (limpa o texto ao copiar)
 # strip_tracking = true       # tira utm_*, fbclid, gclid das URLs
 # trim = true                 # tira espaços do começo e do fim

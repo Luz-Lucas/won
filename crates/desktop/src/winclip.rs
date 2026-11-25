@@ -29,7 +29,9 @@ fn wide(s: &str) -> Vec<u16> {
 
 fn read_text() -> Option<String> {
     unsafe {
-        if IsClipboardFormatAvailable(CF_UNICODETEXT) == 0 || OpenClipboard(std::ptr::null_mut()) == 0 {
+        if IsClipboardFormatAvailable(CF_UNICODETEXT) == 0
+            || OpenClipboard(std::ptr::null_mut()) == 0
+        {
             return None;
         }
         let mut out = None;

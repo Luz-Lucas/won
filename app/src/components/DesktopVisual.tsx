@@ -609,6 +609,26 @@ export default function DesktopVisual({
           </div>
         )}
       </article>
+
+      <article className="card dv-card" aria-labelledby="dv-mid-title">
+        <header className="dv-head">
+          <h2 id="dv-mid-title">Clique do meio na barra</h2>
+          <label className="clean-check">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Fechar com o clique do meio"
+              checked={s.middleClose === true}
+              onChange={(e) => update({ middleClose: e.target.checked })}
+            />
+            <span>{s.middleClose ? "Ligado" : "Desligado"}</span>
+          </label>
+        </header>
+        <p className="muted">
+          Clicar com o botão do meio num programa da barra fecha a janela, em vez de abrir outra. Experimental: só fecha
+          quando tem certeza de qual janela é.
+        </p>
+      </article>
     </div>
   );
 }

@@ -106,6 +106,12 @@ pub fn media_text() -> String {
         GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
     };
     let get = || -> windows::core::Result<String> {
+        let _ = unsafe {
+            windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_APARTMENTTHREADED,
+            )
+        };
         let mgr = Manager::RequestAsync()?.join()?;
         let session = mgr.GetCurrentSession()?;
         if session.GetPlaybackInfo()?.PlaybackStatus()? != Status::Playing {

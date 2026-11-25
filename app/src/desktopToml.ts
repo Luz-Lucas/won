@@ -73,6 +73,8 @@ export interface Sections {
   tiling: TilingModel | null;
   launcher: LauncherModel | null;
   clipboard?: ClipboardModel | null;
+  /** `[taskbar] middle_click_close`. */
+  middleClose?: boolean;
 }
 
 export const DEFAULT_CLIPBOARD: ClipboardModel = {
@@ -134,7 +136,9 @@ export function readSections(text: string): Sections | null {
   const t = rec(doc.tiling);
   const l = rec(doc.launcher);
   const c = rec(doc.clipboard);
+  const tb = rec(doc.taskbar);
   return {
+    middleClose: tb?.middle_click_close === true,
     bar: b && {
       edge: b.edge === "bottom" ? "bottom" : "top",
       height: num(b.height, DEFAULT_BAR.height),
@@ -274,7 +278,7 @@ const clipboardToml = (c: ClipboardModel) =>
     ...c.replace.map((r) => `\n[[clipboard.replace]]\nfrom = ${q(r.from)}\nto = ${q(r.to)}`),
   ].join("\n");
 
-const MANAGED = new Set(["bar", "tiling", "tiling.monitor", "launcher", "launcher.app", "clipboard", "clipboard.replace"]);
+const MANAGED = new Set(["bar", "tiling", "tiling.monitor", "launcher", "launcher.app", "clipboard", "clipboard.replace", "taskbar"]);
 const HEADER = /^\s*\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$/;
 
 /** Troca as seções gerenciadas pelas do modelo; o resto do texto fica como está. */
@@ -291,6 +295,7 @@ export function applySections(text: string, s: Sections): string {
     s.tiling && tilingToml(s.tiling),
     s.launcher && launcherToml(s.launcher),
     s.clipboard && clipboardToml(s.clipboard),
+    s.middleClose ? "[taskbar]\nmiddle_click_close = true" : null,
   ].filter((b): b is string => !!b);
   const base = kept.join("\n").replace(/\s+$/, "");
   return `${base}${base ? "\n\n" : ""}${blocks.join("\n\n")}${blocks.length ? "\n" : base ? "\n" : ""}`;

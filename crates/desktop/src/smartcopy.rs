@@ -47,7 +47,9 @@ impl Options {
     }
 }
 
-const TRACKING: [&str; 7] = ["fbclid", "gclid", "igshid", "mc_cid", "mc_eid", "msclkid", "yclid"];
+const TRACKING: [&str; 7] = [
+    "fbclid", "gclid", "igshid", "mc_cid", "mc_eid", "msclkid", "yclid",
+];
 
 fn is_tracking(key: &str) -> bool {
     let k = key.to_ascii_lowercase();
@@ -249,13 +251,19 @@ mod tests {
             strip_tracking_url("https://a.com/p?id=3&utm_source=x&fbclid=abc#top"),
             "https://a.com/p?id=3#top"
         );
-        assert_eq!(strip_tracking_url("https://a.com/p?utm_medium=x"), "https://a.com/p");
+        assert_eq!(
+            strip_tracking_url("https://a.com/p?utm_medium=x"),
+            "https://a.com/p"
+        );
         assert_eq!(strip_tracking_url("https://a.com/p"), "https://a.com/p");
     }
 
     #[test]
     fn tracking_only_touches_urls() {
-        let o = Options { strip_tracking: true, ..Options::default() };
+        let o = Options {
+            strip_tracking: true,
+            ..Options::default()
+        };
         assert_eq!(
             transform("veja https://a.com/?utm_x=1&q=2 agora", &o),
             "veja https://a.com/?q=2 agora"
@@ -264,31 +272,61 @@ mod tests {
 
     #[test]
     fn unwrap_keeps_paragraphs() {
-        assert_eq!(unwrap_lines("uma\nlinha\n\noutra\r\nlinha"), "uma linha\n\noutra linha");
+        assert_eq!(
+            unwrap_lines("uma\nlinha\n\noutra\r\nlinha"),
+            "uma linha\n\noutra linha"
+        );
     }
 
     #[test]
     fn casing_spares_urls() {
-        let o = Options { casing: Casing::Upper, ..Options::default() };
-        assert_eq!(transform("ver https://a.com/x ok", &o), "VER https://a.com/x OK");
-        let t = Options { casing: Casing::Title, ..Options::default() };
+        let o = Options {
+            casing: Casing::Upper,
+            ..Options::default()
+        };
+        assert_eq!(
+            transform("ver https://a.com/x ok", &o),
+            "VER https://a.com/x OK"
+        );
+        let t = Options {
+            casing: Casing::Title,
+            ..Options::default()
+        };
         assert_eq!(transform("olá mundo-bom", &t), "Olá Mundo-Bom");
     }
 
     #[test]
     fn paths_modes() {
-        let d = Options { paths: PathMode::DoubleBackslash, ..Options::default() };
+        let d = Options {
+            paths: PathMode::DoubleBackslash,
+            ..Options::default()
+        };
         assert_eq!(transform(r"C:\a\b", &d), r"C:\\a\\b");
-        let f = Options { paths: PathMode::Forward, ..Options::default() };
+        let f = Options {
+            paths: PathMode::Forward,
+            ..Options::default()
+        };
         assert_eq!(transform(r"C:\a\b", &f), "C:/a/b");
     }
 
     #[test]
     fn extracts_urls_and_emails() {
-        let u = Options { extract: Extract::Urls, ..Options::default() };
-        assert_eq!(transform("a http://x.com b https://y.com/z c", &u), "http://x.com\r\nhttps://y.com/z");
-        let e = Options { extract: Extract::Emails, ..Options::default() };
-        assert_eq!(transform("fale com ana@x.com.br, ou bob@y.org.", &e), "ana@x.com.br\r\nbob@y.org");
+        let u = Options {
+            extract: Extract::Urls,
+            ..Options::default()
+        };
+        assert_eq!(
+            transform("a http://x.com b https://y.com/z c", &u),
+            "http://x.com\r\nhttps://y.com/z"
+        );
+        let e = Options {
+            extract: Extract::Emails,
+            ..Options::default()
+        };
+        assert_eq!(
+            transform("fale com ana@x.com.br, ou bob@y.org.", &e),
+            "ana@x.com.br\r\nbob@y.org"
+        );
         assert_eq!(transform("sem nada", &e), "sem nada");
     }
 

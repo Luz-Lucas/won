@@ -160,6 +160,14 @@ fn mix(a: Rgb, b: Rgb, t: u32) -> Rgb {
 }
 
 /// Janelas que um usuário esperaria numa barra de tarefas.
+/// Janelas abertas (id, título), como as da barra própria.
+pub fn open_windows() -> Vec<(isize, String)> {
+    visible_windows(std::ptr::null_mut())
+        .into_iter()
+        .map(|a| (a.hwnd, a.title))
+        .collect()
+}
+
 fn visible_windows(own: HWND) -> Vec<AppItem> {
     struct Out {
         own: HWND,
@@ -674,7 +682,13 @@ pub fn tick(fullscreen_foreground: bool) {
         b.vol = crate::winsys::volume_text();
         if b.ticks % 5 == 0 {
             b.net = crate::winsys::network_text();
-            if b.cfg.left.iter().chain(&b.cfg.center).chain(&b.cfg.right).any(|m| *m == Module::Media) {
+            if b.cfg
+                .left
+                .iter()
+                .chain(&b.cfg.center)
+                .chain(&b.cfg.right)
+                .any(|m| *m == Module::Media)
+            {
                 b.media = crate::winsys::media_text();
             }
         }

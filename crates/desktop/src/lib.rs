@@ -8,6 +8,7 @@ pub mod dlog;
 pub mod keys;
 pub mod launcher;
 pub mod launcher_theme;
+pub mod midclick;
 pub mod rules;
 pub mod smartcopy;
 pub mod tiling;
@@ -29,3 +30,6 @@ pub mod winlauncher;
 
 #[cfg(windows)]
 pub mod winclip;
+
+#[cfg(windows)]
+pub mod winmid;
