@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { WonMark } from "./WonMark";
 import { relaunchElevated } from "../api";
 
 export type Page =
@@ -73,7 +74,7 @@ export default function Sidebar({ current, onNavigate, elevated }: SidebarProps)
   return (
     <nav className="sidebar" aria-label="Principal">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true" />
+        <WonMark size={20} />
         <span className="brand-name">WON</span>
       </div>
       <div className="nav-groups">

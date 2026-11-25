@@ -41,11 +41,8 @@ body {
 }
 
 .brand-mark {
-  width: 10px;
-  height: 10px;
-  background: var(--accent);
-  border-radius: 50%;
-  box-shadow: 0 0 10px var(--accent);
+  flex: none;
+  filter: drop-shadow(0 0 6px var(--accent-soft));
 }
 
 .brand-name {

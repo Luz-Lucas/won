@@ -92,7 +92,23 @@ CONCEITOS = {"A-pico": conceito_a, "B-ninho": conceito_b, "C-no": conceito_c}
 def ico(img, path):
     img.resize((256, 256), Image.LANCZOS).save(path, sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 
-if __name__ == "__main__":
+def aplicar(repo):
+    """Escreve os ícones do app (conceito C) em app/src-tauri/icons e o logo SVG da UI."""
+    im = compose(conceito_c)
+    d = f"{repo}/app/src-tauri/icons"
+    im.resize((512, 512), Image.LANCZOS).save(f"{d}/icon.png")
+    ico(im, f"{d}/icon.ico")
+    im.resize((256, 256), Image.LANCZOS).save(f"{d}/icon.icns", format="ICNS")
+    for nome, n in {"32x32.png": 32, "128x128.png": 128, "128x128@2x.png": 256, "StoreLogo.png": 50}.items():
+        im.resize((n, n), Image.LANCZOS).save(f"{d}/{nome}")
+    for n in (30, 44, 71, 89, 107, 142, 150, 284, 310):
+        im.resize((n, n), Image.LANCZOS).save(f"{d}/Square{n}x{n}Logo.png")
+    im.resize((256, 256), Image.LANCZOS).save(f"{repo}/app/public/won-logo.png") if os.path.isdir(f"{repo}/app/public") else None
+
+
+if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "--aplicar":
+    aplicar(sys.argv[1])
+elif __name__ == "__main__":
     out = sys.argv[1]; os.makedirs(out, exist_ok=True)
     imgs = {}
     for nome, fn in CONCEITOS.items():
@@ -106,3 +122,4 @@ if __name__ == "__main__":
         small = im.resize((48, 48), Image.LANCZOS); sheet.paste(small, (20 + i * 520, 570), small)
         small = im.resize((24, 24), Image.LANCZOS); sheet.paste(small, (80 + i * 520, 582), small)
     sheet.save(f"{out}/won-conceitos.png")
+
