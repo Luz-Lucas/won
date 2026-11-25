@@ -41,7 +41,7 @@ const EFFECT_NOTICE: Partial<Record<TweakEffect, string>> = {
 };
 
 const EXPLORER_NOTICE = "Reinicie o Explorer para ver a mudança.";
-const EXTERNAL = "Configurado fora do Sentinela.";
+const EXTERNAL = "Configurado fora do WON.";
 const ADMIN = "requer administrador";
 
 const OTHER_ACCOUNT =
@@ -282,7 +282,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
           onConfirm={confirm}
           onCancel={() => setPending(null)}
         >
-          <p>Volta ao valor que estava antes do Sentinela.</p>
+          <p>Volta ao valor que estava antes do WON.</p>
         </ConfirmDialog>
       );
     return (
@@ -400,7 +400,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
             </ul>
           </div>
           <p className="muted tweak-footnote">
-            Tudo o que o Sentinela muda aqui pode ser desfeito pelo Histórico.
+            Tudo o que o WON muda aqui pode ser desfeito pelo Histórico.
           </p>
         </>
       )}

@@ -502,7 +502,7 @@ export default function Jogos() {
         </div>
       )}
       <p className="muted tweak-footnote">
-        O Sentinela não desativa Defender, Windows Update, firewall nem outras
+        O WON não desativa Defender, Windows Update, firewall nem outras
         proteções para ganhar FPS.
       </p>
       <GpuPerGame />

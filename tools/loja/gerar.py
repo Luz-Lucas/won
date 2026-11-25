@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gera o conteúdo da Loja do Sentinela (cursores, pacotes de ícones, temas).
+"""Gera o conteúdo da Loja do WON (cursores, pacotes de ícones, temas).
 
 Tudo é desenho ORIGINAL feito por este script (CC0 1.0): nada foi copiado de
 terceiros, então não há créditos a repartir. Saída:
@@ -16,7 +16,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 RAIZ = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SAIDA = os.path.join(RAIZ, "catalog", "loja")
 RAW = "https://raw.githubusercontent.com/Luz-Lucas/sentinela/main/catalog/loja/remoto/"
-AUTOR = "Sentinela"
+AUTOR = "WON"
 LICENCA = "CC0 1.0"
 FONTE = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 DATA = (2026, 11, 24, 0, 0, 0)

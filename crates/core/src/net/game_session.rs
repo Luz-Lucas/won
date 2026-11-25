@@ -1,6 +1,6 @@
 //! Rota por jogo e Wi‑Fi durante jogos (§6.6): ao abrir um jogo, liga a rota
 //! escolhida para ele e segura a varredura do Wi‑Fi; ao fechar, desfaz. Só
-//! desliga o que o próprio Sentinela ligou, e só quando o último jogo que
+//! desliga o que o próprio WON ligou, e só quando o último jogo que
 //! precisava daquela rota fecha.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -87,7 +87,7 @@ pub enum Event {
     RouteOff {
         route: String,
     },
-    /// A rota já estava ligada pelo usuário: o Sentinela não mexe.
+    /// A rota já estava ligada pelo usuário: o WON não mexe.
     RouteAlreadyOn {
         route: String,
         game: String,
@@ -107,7 +107,7 @@ pub enum Event {
 #[derive(Debug, Default)]
 pub struct GameSession {
     open: BTreeSet<String>,
-    /// Rotas que o Sentinela ligou → jogos abertos que precisam delas.
+    /// Rotas que o WON ligou → jogos abertos que precisam delas.
     turned_on: BTreeMap<String, BTreeSet<String>>,
     wifi_held: bool,
 }
@@ -219,7 +219,7 @@ pub fn event_text(e: &Event, name_of: impl Fn(&str) -> String) -> String {
         }
         Event::RouteOff { route } => format!("{} desligado (jogo fechado)", name_of(route)),
         Event::RouteAlreadyOn { route, game } => format!(
-            "{} já estava ligado ao abrir {}; o Sentinela não vai desligar",
+            "{} já estava ligado ao abrir {}; o WON não vai desligar",
             name_of(route),
             name_of(game)
         ),

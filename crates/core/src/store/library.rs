@@ -325,7 +325,7 @@ impl Library {
             out.push((
                 CURSORS_KEY.to_string(),
                 String::new(),
-                s(format!("Sentinela - {name}")),
+                s(format!("WON - {name}")),
             ));
             for r in CURSOR_ROLES {
                 if let Some(f) = file(r) {
@@ -390,7 +390,7 @@ impl Library {
         }
         if !backend.hkcu_allowed() {
             return Err(
-                "Esta janela está em outra conta do Windows; abra o Sentinela na sua conta.".into(),
+                "Esta janela está em outra conta do Windows; abra o WON na sua conta.".into(),
             );
         }
         let (dir, roles) = self.roles(item.kind, &item.id)?;
@@ -467,7 +467,7 @@ impl Library {
         };
         if !backend.hkcu_allowed() {
             return Err(
-                "Esta janela está em outra conta do Windows; abra o Sentinela na sua conta.".into(),
+                "Esta janela está em outra conta do Windows; abra o WON na sua conta.".into(),
             );
         }
         let mut failed = Vec::new();

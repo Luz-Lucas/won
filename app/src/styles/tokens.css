@@ -1,20 +1,22 @@
 :root {
   color-scheme: dark;
 
-  /* Superfícies: grafite com leve tom frio */
-  --bg: #0e1013;
-  --surface: #14171b;
-  --surface-2: #1b1f24;
-  --border: #262b32;
+  /* Superfícies: preto-noite com leve tom azul (identidade WON) */
+  --bg: #05070b;
+  --surface: #0a0f18;
+  --surface-2: #101828;
+  --border: #1a2438;
 
   /* Texto */
   --text: #e6e8eb;
   --text-dim: #8b93a0;
 
-  /* Cor de destaque única: âmbar de sinalização */
-  --accent: #ffb020;
-  --accent-ink: #1a1203;
-  --accent-soft: rgba(255, 176, 32, 0.12);
+  /* Cor de destaque única: azul elétrico do WON */
+  --accent: #2f7bff;
+  --accent-light: #6ebeff;
+  --accent-dark: #1446c8;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(47, 123, 255, 0.14);
   --danger: #ff6b6b;
 
   /* Tipografia (fontes locais; sem conteúdo remoto) */

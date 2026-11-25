@@ -86,7 +86,7 @@ pub fn allow_local_tweak() -> Tweak {
     Tweak {
         id: ALLOW_LOCAL_ID.into(),
         title: "QoS local fora de domínio".into(),
-        description: "Faz o Windows aplicar as políticas de QoS do Sentinela também em redes de casa (sem domínio). Sozinho não muda nada.".into(),
+        description: "Faz o Windows aplicar as políticas de QoS do WON também em redes de casa (sem domínio). Sozinho não muda nada.".into(),
         group: Group::Avancado,
         evidence: Evidence::Controverso,
         effect: Effect::Reboot,

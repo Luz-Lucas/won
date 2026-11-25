@@ -183,7 +183,7 @@ pub fn ensure_replaceable(db_dir: &Path) -> anyhow::Result<()> {
         .any(|m| db_dir.join(m).exists());
     if non_empty && !is_db {
         anyhow::bail!(
-            "a pasta {} não parece um banco de assinaturas do Sentinela (sem manifest.json, hashes.txt ou rules/); \
+            "a pasta {} não parece um banco de assinaturas do WON (sem manifest.json, hashes.txt ou rules/); \
              recusando substituí-la. Aponte SENTINELA_DB_DIR para uma pasta vazia ou inexistente.",
             db_dir.display()
         );

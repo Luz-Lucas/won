@@ -259,7 +259,7 @@ describe("Aplicativos", () => {
     expect(await screen.findByText("winget não encontrado")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "O Sentinela usa o winget, o instalador oficial da Microsoft, para baixar cada aplicativo do fabricante e conferir o arquivo.",
+        "O WON usa o winget, o instalador oficial da Microsoft, para baixar cada aplicativo do fabricante e conferir o arquivo.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("A")).not.toBeInTheDocument();

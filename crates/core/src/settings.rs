@@ -20,7 +20,7 @@ pub struct Settings {
     pub auto_quarantine_hash: bool,
     /// A oferta de agendar a verificação semanal já foi mostrada.
     pub scan_schedule_offered: bool,
-    /// "Verificar com o Sentinela" no clique direito do Explorador (§15.4).
+    /// "Verificar com o WON" no clique direito do Explorador (§15.4).
     pub explorer_menu: bool,
 }
 

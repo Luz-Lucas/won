@@ -47,7 +47,7 @@ mod job {
     };
 
     /// Job Object que agrupa a árvore de processos. SEM kill-on-close: fechar o
-    /// handle (inclusive quando o Sentinela sai) nunca mata nada; só
+    /// handle (inclusive quando o WON sai) nunca mata nada; só
     /// `terminate`, chamado no tempo limite, encerra a árvore.
     pub struct Job(HANDLE);
 

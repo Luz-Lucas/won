@@ -11,7 +11,7 @@ const SOURCE: Record<StartupSource, string> = {
   startup_folder_common: "Pasta Inicializar (todos os usuários)",
 };
 
-const SENTINELA_NOTE = "Este é o Sentinela. Para desligar, use Ajustes → Inicialização.";
+const SENTINELA_NOTE = "Este é o WON. Para desligar, use Ajustes → Inicialização.";
 
 const MAX_COMMAND = 60;
 

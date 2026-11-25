@@ -20,7 +20,7 @@ pub struct JournalAction {
     pub action: Action,
     /// Estado anterior à primeira aplicação (o mais antigo que o diário conhece).
     pub before: Snapshot,
-    /// O que o Sentinela escreveu.
+    /// O que o WON escreveu.
     pub written: Snapshot,
     /// `false` = intenção gravada, escrita ainda não confirmada.
     pub done: bool,

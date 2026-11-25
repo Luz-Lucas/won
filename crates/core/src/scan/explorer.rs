@@ -1,4 +1,4 @@
-//! "Verificar com o Sentinela" no clique direito do Explorador (§15.4).
+//! "Verificar com o WON" no clique direito do Explorador (§15.4).
 //! Verbos em `HKCU\Software\Classes` (só do usuário, sem administrador):
 //! arquivos (`*`), pastas (`Directory`) e discos (`Drive`), chamando
 //! `sentinela-gui.exe --scan "%1"`. No Windows 11 aparecem em "Mostrar mais
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 pub const SCAN_ARG: &str = "--scan";
 pub const VERB: &str = "SentinelaScan";
-pub const LABEL: &str = "Verificar com o Sentinela";
+pub const LABEL: &str = "Verificar com o WON";
 
 /// Chaves de cada alvo, dentro de `HKCU`.
 pub const TARGETS: [&str; 3] = ["*", "Directory", "Drive"];
@@ -262,7 +262,7 @@ mod tests {
                 r"Software\Classes\Drive\shell\SentinelaScan\command",
             ]
         );
-        assert_eq!(keys[0].default, "Verificar com o Sentinela");
+        assert_eq!(keys[0].default, "Verificar com o WON");
         assert!(
             keys[0]
                 .icon

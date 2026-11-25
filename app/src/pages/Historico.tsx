@@ -140,7 +140,7 @@ export default function Historico() {
         </div>
       )}
       {entries && list.length === 0 && (
-        <p className="muted">Nenhuma otimização aplicada pelo Sentinela.</p>
+        <p className="muted">Nenhuma otimização aplicada pelo WON.</p>
       )}
       {list.length > 0 && (
         <>

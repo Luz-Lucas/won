@@ -255,7 +255,7 @@ pub fn apply(cfg: Option<&BarConfig>) {
         let hwnd = CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
             class.as_ptr(),
-            wide("Sentinela").as_ptr(),
+            wide("WON").as_ptr(),
             WS_POPUP,
             strip.left,
             strip.top,

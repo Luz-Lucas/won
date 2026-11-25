@@ -197,7 +197,7 @@ describe("Personalizar", () => {
     const sw = await screen.findByRole("switch", { name: "Título a" });
     expect(sw).toBeChecked();
     expect(sw).toBeDisabled();
-    expect(screen.getByText("Configurado fora do Sentinela.")).toBeInTheDocument();
+    expect(screen.getByText("Configurado fora do WON.")).toBeInTheDocument();
   });
 
   it("explorer_notice_and_restart_confirmation", async () => {

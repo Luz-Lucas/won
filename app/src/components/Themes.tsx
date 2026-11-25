@@ -101,7 +101,7 @@ export default function Themes({ engine }: { engine: boolean }) {
     const path = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: "Tema do Sentinela", extensions: ["sentinela-theme"] }],
+      filters: [{ name: "Tema do WON", extensions: ["sentinela-theme"] }],
     });
     if (typeof path !== "string") return;
     try {
@@ -121,7 +121,7 @@ export default function Themes({ engine }: { engine: boolean }) {
     setExported(null);
     const path = await save({
       defaultPath: `${exportName.trim()}.sentinela-theme`,
-      filters: [{ name: "Tema do Sentinela", extensions: ["sentinela-theme"] }],
+      filters: [{ name: "Tema do WON", extensions: ["sentinela-theme"] }],
     });
     if (typeof path !== "string") return;
     try {

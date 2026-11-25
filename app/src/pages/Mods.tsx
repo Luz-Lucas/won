@@ -59,14 +59,14 @@ export default function Mods() {
     <section>
       <h1>Mods</h1>
       <p className="muted">
-        Mods são DLLs suas, carregadas só nos programas que você listar. O Sentinela nunca carrega
+        Mods são DLLs suas, carregadas só nos programas que você listar. O WON nunca carrega
         nada no Explorer, em processos do sistema nem com um anticheat aberto, e tudo é desfeito
         pelo script de recuperação, mesmo sem o app abrir.
       </p>
 
       {status && !status.installed && (
         <p role="alert" className="form-error">
-          O motor de mods (sentinela-mods.exe) não foi encontrado ao lado do Sentinela.
+          O motor de mods (sentinela-mods.exe) não foi encontrado ao lado do WON.
         </p>
       )}
       {status?.anticheat_running && (

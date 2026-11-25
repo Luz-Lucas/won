@@ -51,7 +51,7 @@ pub struct Change {
 pub struct Plan {
     pub changes: Vec<Change>,
     pub warnings: Vec<String>,
-    /// Segmentos do tema do prompt que o Sentinela desligou por segurança.
+    /// Segmentos do tema do prompt que o WON desligou por segurança.
     pub disabled: Vec<String>,
 }
 

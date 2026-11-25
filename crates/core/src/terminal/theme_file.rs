@@ -285,7 +285,7 @@ mod tests {
         let t = generate(&[Path, Git, Time, ExecutionTime, Status, Battery]);
         let v: Value = serde_json::from_str(&t).unwrap();
         assert_eq!(v["blocks"][0]["segments"].as_array().unwrap().len(), 6);
-        // O que o Sentinela gera passa pela revisão sem perder nada.
+        // O que o WON gera passa pela revisão sem perder nada.
         let r = review(&t, "json").unwrap();
         assert!(r.disabled.is_empty(), "{:?}", r.disabled);
         assert_eq!(serde_json::from_str::<Value>(&r.json).unwrap(), v);

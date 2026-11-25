@@ -39,7 +39,7 @@ describe("Inicio", () => {
 
   it("version_moves_to_footer", () => {
     render(<Inicio status={status()} error={null} onNavigate={() => {}} />);
-    expect(screen.getByText("Sentinela 0.3.0")).toBeVisible();
+    expect(screen.getByText("WON 0.3.0")).toBeVisible();
     expect(screen.queryByText("Versão 0.3.0")).toBeNull();
   });
 

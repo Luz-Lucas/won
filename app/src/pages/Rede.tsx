@@ -35,7 +35,7 @@ import { humanDate } from "../format";
 import { useJob } from "../jobs";
 
 const HONESTY =
-  "A rota até o servidor do jogo é decidida pelo seu provedor e pelas redes no caminho. O Sentinela mede, ajusta o que é do seu computador e mostra o antes e depois.";
+  "A rota até o servidor do jogo é decidida pelo seu provedor e pelas redes no caminho. O WON mede, ajusta o que é do seu computador e mostra o antes e depois.";
 
 const DNS_NOTE =
   "O DNS só traduz nomes em endereços: acelera a abertura de sites e a conexão com servidores, não o ping dentro do jogo.";
@@ -274,7 +274,7 @@ export default function Rede() {
           onConfirm={() => void confirm()}
           onCancel={() => setPending(null)}
         >
-          <p>Volta ao valor que estava antes do Sentinela. Vale depois de reiniciar.</p>
+          <p>Volta ao valor que estava antes do WON. Vale depois de reiniciar.</p>
         </ConfirmDialog>
       );
     return (
@@ -419,7 +419,7 @@ export default function Rede() {
             </button>
           </div>
           <p className="muted">
-            Os destinos são os servidores de jogos e serviços conhecidos; o Sentinela escolhe e
+            Os destinos são os servidores de jogos e serviços conhecidos; o WON escolhe e
             mede sozinho. Destinos com porta são medidos pelo tempo de conexão.
           </p>
 
@@ -606,7 +606,7 @@ export default function Rede() {
                       <span className="tweak-badge">Exige reinício</span>
                     </div>
                     {external && (
-                      <p className="muted clean-warning">Configurado fora do Sentinela.</p>
+                      <p className="muted clean-warning">Configurado fora do WON.</p>
                     )}
                     {i.view.blocked && i.view.blocked !== ADMIN && (
                       <p className="muted clean-warning">{i.view.blocked}</p>

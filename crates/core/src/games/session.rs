@@ -1,7 +1,7 @@
 //! Modo Jogo sob demanda (§6.4): troca o plano de energia para o de alto
 //! desempenho enquanto a sessão dura e **volta ao anterior ao encerrar**.
 //! Nada persistente além de um arquivo com o plano anterior, que é o que
-//! permite desfazer mesmo depois de o Sentinela fechar ou o PC reiniciar.
+//! permite desfazer mesmo depois de o WON fechar ou o PC reiniciar.
 
 use crate::apps::runner::{CommandRunner, TIMEOUT_QUICK};
 use serde::{Deserialize, Serialize};

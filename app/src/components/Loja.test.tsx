@@ -20,7 +20,7 @@ const item = (o: Partial<api.LojaItem>): api.LojaItem => ({
   id: "x",
   kind: "cursores",
   name: "X",
-  author: "Sentinela",
+  author: "WON",
   license: "CC0 1.0",
   description: "d",
   tags: [],

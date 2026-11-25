@@ -298,7 +298,7 @@ pub fn dns_lines(r: &DnsReport) -> Vec<String> {
     }
     out.push(r.advice.clone());
     if !r.keep_current && r.best.is_some() {
-        out.push("Para trocar, use a página Rede do Sentinela (exige administrador).".into());
+        out.push("Para trocar, use a página Rede do WON (exige administrador).".into());
     }
     out
 }
@@ -388,7 +388,7 @@ fn cmd_compare(spec: &str, ids: &[String], rounds: u32, json: bool) -> Result<i3
         .collect();
     for id in ids {
         if !available.contains(id) {
-            bail!("rota desconhecida ou que o Sentinela não pode ligar: {id}");
+            bail!("rota desconhecida ou que o WON não pode ligar: {id}");
         }
     }
     let chosen = if ids.is_empty() {
@@ -397,7 +397,7 @@ fn cmd_compare(spec: &str, ids: &[String], rounds: u32, json: bool) -> Result<i3
         ids.to_vec()
     };
     if chosen.is_empty() {
-        println!("Nenhuma rota que o Sentinela possa ligar para comparar.");
+        println!("Nenhuma rota que o WON possa ligar para comparar.");
         return Ok(0);
     }
     let opts = sentinela_core::net::routes::CompareOptions {
@@ -462,7 +462,7 @@ fn cmd_route(id: &str, on: bool) -> Result<i32> {
         .iter()
         .any(|r| r.id == id && r.controllable)
     {
-        bail!("rota desconhecida ou que o Sentinela não pode ligar: {id}");
+        bail!("rota desconhecida ou que o WON não pode ligar: {id}");
     }
     backend.set(id, on).map_err(anyhow::Error::msg)?;
     println!("{id}: {}", if on { "ligado" } else { "desligado" });

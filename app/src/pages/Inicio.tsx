@@ -54,7 +54,7 @@ export default function Inicio({ status, error, onNavigate, onChanged }: InicioP
     <section className="page">
       <h1>Início</h1>
       <p className="warning">
-        O Sentinela não substitui um antivírus completo. Mantenha o Microsoft
+        O WON não substitui um antivírus completo. Mantenha o Microsoft
         Defender ativo.
       </p>
       {error && (
@@ -102,7 +102,7 @@ export default function Inicio({ status, error, onNavigate, onChanged }: InicioP
           onCancel={() => setAskUpdate(false)}
         >
           <p>
-            {`O Sentinela volta as atualizações ao padrão do Windows e abre o Windows Update. Quando a instalação terminar, volte ao modo ${MODE_LABEL[status.updates_mode]} em Ajustes.`}
+            {`O WON volta as atualizações ao padrão do Windows e abre o Windows Update. Quando a instalação terminar, volte ao modo ${MODE_LABEL[status.updates_mode]} em Ajustes.`}
           </p>
         </ConfirmDialog>
       )}
@@ -161,7 +161,7 @@ export default function Inicio({ status, error, onNavigate, onChanged }: InicioP
               ))}
             </ul>
           )}
-          <p className="muted page-footer">{`Sentinela ${status.version}`}</p>
+          <p className="muted page-footer">{`WON ${status.version}`}</p>
         </>
       )}
     </section>

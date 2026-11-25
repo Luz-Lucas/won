@@ -174,7 +174,7 @@ export default function Ajustes() {
         </p>
       )}
 
-      <h2 className="section-title">Versão do Sentinela</h2>
+      <h2 className="section-title">Versão do WON</h2>
       <p>
         <button type="button" className="btn" disabled={appUpdBusy} onClick={() => void checkApp()}>
           Procurar atualização

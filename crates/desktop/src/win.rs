@@ -68,7 +68,7 @@ fn wide(s: &str) -> Vec<u16> {
         .collect()
 }
 
-/// O que era antes de o Sentinela mexer na janela.
+/// O que era antes de o WON mexer na janela.
 #[derive(Default)]
 struct Saved {
     style: Option<i32>,
