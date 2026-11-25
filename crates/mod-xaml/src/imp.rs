@@ -628,12 +628,21 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         lo = lo.min(cx);
         hi = hi.max(cx + cw);
     }
-    static LAST_DIAG: Mutex<String> = Mutex::new(String::new());
+    // Uma entrada por barra (largura total): sem isso duas barras se alternam e enchem o log.
+    static LAST_DIAG: Mutex<Vec<(i32, String)>> = Mutex::new(Vec::new());
     {
         let mut l = LAST_DIAG.lock().unwrap();
-        if *l != diag {
-            log(&format!("filhos do repetidor:{diag}"));
-            *l = diag.clone();
+        let key = total as i32;
+        match l.iter_mut().find(|(k, _)| *k == key) {
+            Some((_, d)) if *d == diag => {}
+            Some((_, d)) => {
+                log(&format!("filhos do repetidor ({key}):{diag}"));
+                *d = diag.clone();
+            }
+            None => {
+                log(&format!("filhos do repetidor ({key}):{diag}"));
+                l.push((key, diag.clone()));
+            }
         }
     }
     if hi <= lo {
