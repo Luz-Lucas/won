@@ -1,4 +1,8 @@
 use super::{Style, parse_style};
+use crate::xaml_bindings::{
+    Border, Brush, Color, CoreDispatcherPriority, CornerRadius, DispatchedHandler,
+    FrameworkElement, Rectangle, Shape, SolidColorBrush, Thickness, UIElement, VisualTreeHelper,
+};
 use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
 use windows::Win32::Foundation::{E_NOINTERFACE, E_POINTER, HMODULE, S_OK};
@@ -9,10 +13,6 @@ use windows::Win32::System::LibraryLoader::{
 };
 use windows::Win32::System::Ole::{IObjectWithSite, IObjectWithSite_Impl};
 use windows::Win32::System::Threading::GetCurrentProcessId;
-use crate::xaml_bindings::{
-    Border, Brush, Color, CornerRadius, CoreDispatcherPriority, DispatchedHandler, FrameworkElement, Rectangle, Shape,
-    SolidColorBrush, Thickness, UIElement, VisualTreeHelper,
-};
 use windows::core::{
     BSTR, GUID, HRESULT, IUnknown, IUnknown_Vtbl, Interface, PCWSTR, Ref, Result, implement,
     interface, w,
@@ -98,6 +98,18 @@ unsafe impl Send for TrackedStart {}
 static START: Mutex<Vec<TrackedStart>> = Mutex::new(Vec::new());
 
 /// Painéis "Todos os aplicativos" do Iniciar, escondidos por `start_hide_all`.
+/// Só o botão/rótulo "Todos os aplicativos" (controles-folha com esse nome). Nunca contêineres,
+/// páginas ou painéis: esconder um pai esvaziaria também os apps fixados.
+fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    if !n.contains("allapps") || n.contains("pinned") || n.contains("recommend") {
+        return false;
+    }
+    let t = ty.to_ascii_lowercase();
+    let leaf = ["button", "textblock", "hyperlink", "fontIcon"];
+    leaf.iter().any(|k| t.ends_with(&k.to_ascii_lowercase()))
+}
+
 struct TrackedHide {
     handle: u64,
     fe: FrameworkElement,
@@ -124,10 +136,16 @@ fn apply_hide(t: &mut TrackedHide, on: bool) -> Result<()> {
 }
 
 fn apply_all_hide(on: bool) {
-    let items: Vec<(u64, FrameworkElement)> =
-        HIDE.lock().unwrap().iter().map(|t| (t.handle, t.fe.clone())).collect();
+    let items: Vec<(u64, FrameworkElement)> = HIDE
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|t| (t.handle, t.fe.clone()))
+        .collect();
     for (handle, fe) in items {
-        let Ok(ui) = fe.cast::<UIElement>() else { continue };
+        let Ok(ui) = fe.cast::<UIElement>() else {
+            continue;
+        };
         let Ok(disp) = ui.Dispatcher() else { continue };
         let h = DispatchedHandler::new(move || {
             if let Some(t) = HIDE.lock().unwrap().iter_mut().find(|t| t.handle == handle) {
@@ -165,8 +183,12 @@ fn width_of(fe: &FrameworkElement) -> f64 {
 fn bar_width(fe: &FrameworkElement) -> f64 {
     let mut cur = fe.clone();
     for _ in 0..6 {
-        let Ok(p) = VisualTreeHelper::GetParent(&cur) else { break };
-        let Ok(pf) = p.cast::<FrameworkElement>() else { break };
+        let Ok(p) = VisualTreeHelper::GetParent(&cur) else {
+            break;
+        };
+        let Ok(pf) = p.cast::<FrameworkElement>() else {
+            break;
+        };
         let w = width_of(&pf);
         if w > 0.0 {
             return w;
@@ -189,7 +211,12 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
             return None;
         }
         let left = (total - st.island_edge - w - 2.0 * st.island_tray_pad).max(0.0);
-        return Some(Thickness { Left: left, Top: st.island_v, Right: st.island_edge, Bottom: st.island_v });
+        return Some(Thickness {
+            Left: left,
+            Top: st.island_v,
+            Right: st.island_edge,
+            Bottom: st.island_v,
+        });
     }
     let rep = REPEATER.lock().unwrap();
     let rep = &rep.as_ref()?.0;
@@ -200,7 +227,12 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
     let x = rep.cast::<UIElement>().ok()?.ActualOffset().ok()?.X as f64;
     let left = (x - st.island_pad).max(0.0);
     let right = (total - x - w - st.island_pad).max(0.0);
-    Some(Thickness { Left: left, Top: st.island_v, Right: right, Bottom: st.island_v })
+    Some(Thickness {
+        Left: left,
+        Top: st.island_v,
+        Right: right,
+        Bottom: st.island_v,
+    })
 }
 
 fn mods_dir() -> Option<std::path::PathBuf> {
@@ -216,7 +248,10 @@ fn is_search_host() -> bool {
     *V.get_or_init(|| {
         std::env::current_exe()
             .ok()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().eq_ignore_ascii_case("searchhost.exe")))
+            .and_then(|p| {
+                p.file_name()
+                    .map(|n| n.to_string_lossy().eq_ignore_ascii_case("searchhost.exe"))
+            })
             .unwrap_or(false)
     })
 }
@@ -226,13 +261,20 @@ fn is_start_host() -> bool {
     *V.get_or_init(|| {
         std::env::current_exe()
             .ok()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().eq_ignore_ascii_case("startmenuexperiencehost.exe")))
+            .and_then(|p| {
+                p.file_name().map(|n| {
+                    n.to_string_lossy()
+                        .eq_ignore_ascii_case("startmenuexperiencehost.exe")
+                })
+            })
             .unwrap_or(false)
     })
 }
 
 fn want_on() -> (bool, Style) {
-    let Some(dir) = mods_dir() else { return (false, Style::default()) };
+    let Some(dir) = mods_dir() else {
+        return (false, Style::default());
+    };
     let st = std::fs::read_to_string(dir.join("xaml-barra.cfg"))
         .map(|t| parse_style(&t))
         .unwrap_or_default();
@@ -256,7 +298,12 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
         }
         if st.islands {
             let (a, r, g, b) = st.fill;
-            let brush = SolidColorBrush::CreateInstanceWithColor(Color { A: a, R: r, G: g, B: b })?;
+            let brush = SolidColorBrush::CreateInstanceWithColor(Color {
+                A: a,
+                R: r,
+                G: g,
+                B: b,
+            })?;
             shape.SetFill(&brush.cast::<Brush>()?)?;
             t.rect.SetRadiusX(st.radius)?;
             t.rect.SetRadiusY(st.radius)?;
@@ -265,7 +312,11 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
                 fe.SetMargin(m)?;
             }
         } else if t.is_border {
-            ui.SetOpacity(if st.hide_border { 0.0 } else { t.orig.as_ref().unwrap().opacity })?;
+            ui.SetOpacity(if st.hide_border {
+                0.0
+            } else {
+                t.orig.as_ref().unwrap().opacity
+            })?;
         } else {
             let (a, r, g, b) = st.fill;
             let brush = SolidColorBrush::CreateInstanceWithColor(Color {
@@ -310,7 +361,9 @@ fn apply_all(on: bool, st: Style) {
         g.iter().map(|t| (t.handle, t.rect.clone())).collect()
     };
     for (handle, rect) in handles {
-        let Ok(ui) = rect.cast::<UIElement>() else { continue };
+        let Ok(ui) = rect.cast::<UIElement>() else {
+            continue;
+        };
         let Ok(disp) = ui.Dispatcher() else { continue };
         let st = st.clone();
         struct S(Style);
@@ -329,8 +382,12 @@ fn apply_all(on: bool, st: Style) {
 
 fn find_parent_named(mut el: FrameworkElement, name: &str) -> bool {
     for _ in 0..16 {
-        let Ok(p) = VisualTreeHelper::GetParent(&el) else { return false };
-        let Ok(pf) = p.cast::<FrameworkElement>() else { return false };
+        let Ok(p) = VisualTreeHelper::GetParent(&el) else {
+            return false;
+        };
+        let Ok(pf) = p.cast::<FrameworkElement>() else {
+            return false;
+        };
         if pf.Name().map(|n| n == name).unwrap_or(false) {
             return true;
         }
@@ -356,41 +413,78 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
         // As strings pertencem a nós; `BSTR` libera no drop.
         let name = element.name.to_string();
         let ty = element.type_name.to_string();
-        if (is_search_host() || is_start_host() || mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists())) && mutation == 0 {
+        if (is_search_host()
+            || is_start_host()
+            || mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists()))
+            && mutation == 0
+        {
             dump_log(&format!("{ty} #{name}"));
         }
         if mutation == 1 {
-            TRACKED.lock().unwrap().retain(|t| t.handle != element.handle);
+            TRACKED
+                .lock()
+                .unwrap()
+                .retain(|t| t.handle != element.handle);
             START.lock().unwrap().retain(|t| t.handle != element.handle);
             HIDE.lock().unwrap().retain(|t| t.handle != element.handle);
             return S_OK;
         }
         if ty == "Windows.UI.Xaml.Controls.Border" && name == "AcrylicBorder" {
             let mut raw: *mut c_void = std::ptr::null_mut();
-            if unsafe { self.diag.GetIInspectableFromHandle(element.handle, &mut raw) }.is_err() || raw.is_null() {
+            if unsafe {
+                self.diag
+                    .GetIInspectableFromHandle(element.handle, &mut raw)
+            }
+            .is_err()
+                || raw.is_null()
+            {
                 return S_OK;
             }
-            let insp: windows::core::IInspectable = unsafe { windows::core::IInspectable::from_raw(raw) };
-            let Ok(border) = insp.cast::<Border>() else { return S_OK };
+            let insp: windows::core::IInspectable =
+                unsafe { windows::core::IInspectable::from_raw(raw) };
+            let Ok(border) = insp.cast::<Border>() else {
+                return S_OK;
+            };
             let (on, st) = want_on();
-            let mut t = TrackedStart { handle: element.handle, border, orig: None };
+            let mut t = TrackedStart {
+                handle: element.handle,
+                border,
+                orig: None,
+            };
             if on {
-                log(&format!("aplicar AcrylicBorder: {:?}", apply_start(&mut t, true, &st)));
+                log(&format!(
+                    "aplicar AcrylicBorder: {:?}",
+                    apply_start(&mut t, true, &st)
+                ));
             }
             START.lock().unwrap().push(t);
             return S_OK;
         }
         // "Todos os aplicativos" do Iniciar: acha por nome/tipo que contenha "AllApps".
-        if is_start_host() && (ty.to_ascii_lowercase().contains("allapps") || name.to_ascii_lowercase().contains("allapps")) {
+        if is_start_host() && is_all_apps_leaf(&ty, &name) {
             let mut raw: *mut c_void = std::ptr::null_mut();
-            if unsafe { self.diag.GetIInspectableFromHandle(element.handle, &mut raw) }.is_ok() && !raw.is_null() {
-                let insp: windows::core::IInspectable = unsafe { windows::core::IInspectable::from_raw(raw) };
+            if unsafe {
+                self.diag
+                    .GetIInspectableFromHandle(element.handle, &mut raw)
+            }
+            .is_ok()
+                && !raw.is_null()
+            {
+                let insp: windows::core::IInspectable =
+                    unsafe { windows::core::IInspectable::from_raw(raw) };
                 if let Ok(fe) = insp.cast::<FrameworkElement>() {
                     log(&format!("candidato Todos os aplicativos: {ty} #{name}"));
-                    let mut t = TrackedHide { handle: element.handle, fe, orig: None };
+                    let mut t = TrackedHide {
+                        handle: element.handle,
+                        fe,
+                        orig: None,
+                    };
                     let (on, st) = want_on();
                     if on && st.start_hide_all {
-                        log(&format!("esconder {ty} #{name}: {:?}", apply_hide(&mut t, true)));
+                        log(&format!(
+                            "esconder {ty} #{name}: {:?}",
+                            apply_hide(&mut t, true)
+                        ));
                     }
                     HIDE.lock().unwrap().push(t);
                 }
@@ -399,36 +493,68 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
         }
         if name == "TaskbarFrameRepeater" || ty.ends_with("SystemTray.SystemTrayFrame") {
             let mut raw: *mut c_void = std::ptr::null_mut();
-            if unsafe { self.diag.GetIInspectableFromHandle(element.handle, &mut raw) }.is_ok() && !raw.is_null() {
-                let insp: windows::core::IInspectable = unsafe { windows::core::IInspectable::from_raw(raw) };
+            if unsafe {
+                self.diag
+                    .GetIInspectableFromHandle(element.handle, &mut raw)
+            }
+            .is_ok()
+                && !raw.is_null()
+            {
+                let insp: windows::core::IInspectable =
+                    unsafe { windows::core::IInspectable::from_raw(raw) };
                 if let Ok(fe) = insp.cast::<FrameworkElement>() {
-                    let slot = if name == "TaskbarFrameRepeater" { &REPEATER } else { &TRAY };
+                    let slot = if name == "TaskbarFrameRepeater" {
+                        &REPEATER
+                    } else {
+                        &TRAY
+                    };
                     log(&format!("medindo {ty} #{name}"));
                     *slot.lock().unwrap() = Some(Measured(fe));
                 }
             }
             return S_OK;
         }
-        if ty != "Windows.UI.Xaml.Shapes.Rectangle" || !(name == "BackgroundFill" || name == "BackgroundStroke") {
+        if ty != "Windows.UI.Xaml.Shapes.Rectangle"
+            || !(name == "BackgroundFill" || name == "BackgroundStroke")
+        {
             return S_OK;
         }
         let _ = relation;
         log(&format!("achou {name} handle={}", element.handle));
         let mut raw: *mut c_void = std::ptr::null_mut();
-        if unsafe { self.diag.GetIInspectableFromHandle(element.handle, &mut raw) }.is_err() || raw.is_null() {
+        if unsafe {
+            self.diag
+                .GetIInspectableFromHandle(element.handle, &mut raw)
+        }
+        .is_err()
+            || raw.is_null()
+        {
             return S_OK;
         }
-        let insp: windows::core::IInspectable = unsafe { windows::core::IInspectable::from_raw(raw) };
-        let Ok(rect) = insp.cast::<Rectangle>() else { return S_OK };
-        let Ok(fe) = rect.cast::<FrameworkElement>() else { return S_OK };
+        let insp: windows::core::IInspectable =
+            unsafe { windows::core::IInspectable::from_raw(raw) };
+        let Ok(rect) = insp.cast::<Rectangle>() else {
+            return S_OK;
+        };
+        let Ok(fe) = rect.cast::<FrameworkElement>() else {
+            return S_OK;
+        };
         if !find_parent_named(fe.clone(), "TaskbarFrame") {
             log("sem TaskbarFrame acima");
             return S_OK;
         }
         let (on, st) = want_on();
-        let mut t = Tracked { handle: element.handle, is_border: name == "BackgroundStroke", rect, orig: None };
+        let mut t = Tracked {
+            handle: element.handle,
+            is_border: name == "BackgroundStroke",
+            rect,
+            orig: None,
+        };
         if on {
-            log(&format!("aplicar {name}: {:?}", apply_one(&mut t, true, &st)));
+            log(&format!(
+                "aplicar {name}: {:?}",
+                apply_one(&mut t, true, &st)
+            ));
         }
         TRACKED.lock().unwrap().push(t);
         S_OK
@@ -495,11 +621,19 @@ impl IObjectWithSite_Impl for TapSite_Impl {
 struct Factory;
 
 impl IClassFactory_Impl for Factory_Impl {
-    fn CreateInstance(&self, outer: Ref<'_, IUnknown>, riid: *const GUID, ppv: *mut *mut c_void) -> Result<()> {
+    fn CreateInstance(
+        &self,
+        outer: Ref<'_, IUnknown>,
+        riid: *const GUID,
+        ppv: *mut *mut c_void,
+    ) -> Result<()> {
         if !outer.is_null() {
             return Err(windows::Win32::Foundation::CLASS_E_NOAGGREGATION.into());
         }
-        let site: IObjectWithSite = TapSite { site: Mutex::new(None) }.into();
+        let site: IObjectWithSite = TapSite {
+            site: Mutex::new(None),
+        }
+        .into();
         unsafe { site.query(riid, ppv).ok() }
     }
     fn LockServer(&self, _lock: windows::core::BOOL) -> Result<()> {
@@ -508,7 +642,11 @@ impl IClassFactory_Impl for Factory_Impl {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "system" fn DllGetClassObject(rclsid: *const GUID, riid: *const GUID, ppv: *mut *mut c_void) -> HRESULT {
+pub unsafe extern "system" fn DllGetClassObject(
+    rclsid: *const GUID,
+    riid: *const GUID,
+    ppv: *mut *mut c_void,
+) -> HRESULT {
     if ppv.is_null() || rclsid.is_null() || riid.is_null() {
         return E_POINTER;
     }
@@ -537,10 +675,18 @@ fn install() {
     }
     let mut path: Vec<u16> = buf[..n].to_vec();
     path.push(0);
-    let Ok(wux) = (unsafe { LoadLibraryExW(w!("Windows.UI.Xaml.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32) }) else {
+    let Ok(wux) = (unsafe {
+        LoadLibraryExW(
+            w!("Windows.UI.Xaml.dll"),
+            None,
+            LOAD_LIBRARY_SEARCH_SYSTEM32,
+        )
+    }) else {
         return;
     };
-    let Some(f) = (unsafe { GetProcAddress(wux, windows::core::s!("InitializeXamlDiagnosticsEx")) }) else {
+    let Some(f) =
+        (unsafe { GetProcAddress(wux, windows::core::s!("InitializeXamlDiagnosticsEx")) })
+    else {
         return;
     };
     let init: InitFn = unsafe { std::mem::transmute(f) };
@@ -548,14 +694,26 @@ fn install() {
     let path = SendPtr(path);
     // Só uma vez por thread; tenta nomes de conexão diferentes, como o TranslucentTB.
     for attempt in 1..=60 {
-        let conn: Vec<u16> = format!("VisualDiagConnection{attempt}\0").encode_utf16().collect();
+        let conn: Vec<u16> = format!("VisualDiagConnection{attempt}\0")
+            .encode_utf16()
+            .collect();
         let p = path.0.clone();
         let hr = std::thread::spawn(move || unsafe {
-            init(PCWSTR(conn.as_ptr()), pid, PCWSTR::null(), PCWSTR(p.as_ptr()), CLSID_TAP, PCWSTR::null())
+            init(
+                PCWSTR(conn.as_ptr()),
+                pid,
+                PCWSTR::null(),
+                PCWSTR(p.as_ptr()),
+                CLSID_TAP,
+                PCWSTR::null(),
+            )
         })
         .join()
         .unwrap_or(HRESULT(-1));
-        log(&format!("InitializeXamlDiagnosticsEx tentativa {attempt}: {:#x}", hr.0));
+        log(&format!(
+            "InitializeXamlDiagnosticsEx tentativa {attempt}: {:#x}",
+            hr.0
+        ));
         if hr.is_ok() {
             return;
         }
@@ -570,12 +728,22 @@ pub extern "system" fn DllMain(module: HMODULE, reason: u32, _r: *mut c_void) ->
         // Fixa a DLL: o XAML guarda ponteiros para ela, então nunca pode ser descarregada.
         let mut pinned = HMODULE::default();
         let _ = unsafe {
-            GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN, PCWSTR(module.0 as *const u16), &mut pinned)
+            GetModuleHandleExW(
+                GET_MODULE_HANDLE_EX_FLAG_PIN,
+                PCWSTR(module.0 as *const u16),
+                &mut pinned,
+            )
         };
         let _ = MODULE.set(module.0 as usize);
         // Só dentro do Explorer ou do menu Iniciar: qualquer outro processo ignora.
-        let exe = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()));
-        if matches!(exe.as_deref(), Some("explorer.exe") | Some("startmenuexperiencehost.exe") | Some("searchhost.exe")) {
+        let exe = std::env::current_exe().ok().and_then(|p| {
+            p.file_name()
+                .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        });
+        if matches!(
+            exe.as_deref(),
+            Some("explorer.exe") | Some("startmenuexperiencehost.exe") | Some("searchhost.exe")
+        ) {
             std::thread::spawn(install);
         }
     }
@@ -593,7 +761,11 @@ pub fn log(msg: &str) {
         return;
     }
     if let Some(d) = mods_dir() {
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(d.join("xaml-barra.log")) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(d.join("xaml-barra.log"))
+        {
             let _ = writeln!(f, "{msg}");
         }
     }
@@ -608,7 +780,11 @@ fn dump_log(msg: &str) {
         return;
     }
     if let Some(d) = mods_dir() {
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(d.join("xaml-barra.tree.log")) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(d.join("xaml-barra.tree.log"))
+        {
             let _ = writeln!(f, "{}\t{msg}", std::process::id());
         }
     }
@@ -620,11 +796,21 @@ fn apply_start(t: &mut TrackedStart, on: bool, st: &Style) -> Result<()> {
             t.orig = Some((t.border.Background().ok(), t.border.CornerRadius()?));
         }
         if let Some((a, r, g, b)) = st.start_fill {
-            let brush = SolidColorBrush::CreateInstanceWithColor(Color { A: a, R: r, G: g, B: b })?;
+            let brush = SolidColorBrush::CreateInstanceWithColor(Color {
+                A: a,
+                R: r,
+                G: g,
+                B: b,
+            })?;
             t.border.SetBackground(&brush.cast::<Brush>()?)?;
         }
         if let Some(rad) = st.start_radius {
-            t.border.SetCornerRadius(CornerRadius { TopLeft: rad, TopRight: rad, BottomRight: rad, BottomLeft: rad })?;
+            t.border.SetCornerRadius(CornerRadius {
+                TopLeft: rad,
+                TopRight: rad,
+                BottomRight: rad,
+                BottomLeft: rad,
+            })?;
         }
     } else if let Some((bg, cr)) = t.orig.take() {
         if let Some(bg) = bg {
@@ -636,15 +822,27 @@ fn apply_start(t: &mut TrackedStart, on: bool, st: &Style) -> Result<()> {
 }
 
 fn apply_all_start(on: bool, st: Style) {
-    let list: Vec<(u64, Border)> = START.lock().unwrap().iter().map(|t| (t.handle, t.border.clone())).collect();
+    let list: Vec<(u64, Border)> = START
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|t| (t.handle, t.border.clone()))
+        .collect();
     for (handle, border) in list {
-        let Ok(ui) = border.cast::<UIElement>() else { continue };
+        let Ok(ui) = border.cast::<UIElement>() else {
+            continue;
+        };
         let Ok(disp) = ui.Dispatcher() else { continue };
         struct S(Style);
         unsafe impl Send for S {}
         let st = S(st.clone());
         let h = DispatchedHandler::new(move || {
-            if let Some(t) = START.lock().unwrap().iter_mut().find(|t| t.handle == handle) {
+            if let Some(t) = START
+                .lock()
+                .unwrap()
+                .iter_mut()
+                .find(|t| t.handle == handle)
+            {
                 let _ = apply_start(t, on, &st.0);
             }
             Ok(())

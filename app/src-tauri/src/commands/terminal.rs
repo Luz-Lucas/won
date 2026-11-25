@@ -211,18 +211,12 @@ pub struct Request {
 }
 
 fn wallpaper_accent() -> Result<Rgb, String> {
-    let install = sentinela_core::wallpaper::system_install()
-        .ok_or("O Wallpaper Engine não foi encontrado: não dá para tirar as cores dele.")?;
-    let file = sentinela_core::wallpaper::current_file(&install)
-        .ok_or("Não achei o papel de parede em uso.")?;
-    let item = PathBuf::from(file)
-        .parent()
-        .and_then(gallery::read_item)
-        .ok_or("Não achei a miniatura do papel de parede.")?;
-    let bytes = item
-        .preview
-        .and_then(|p| std::fs::read(p).ok())
-        .ok_or("O papel de parede não tem miniatura.")?;
+    // Sem depender do Wallpaper Engine nem da miniatura: cai para outras imagens do item e
+    // para o papel de parede do próprio Windows.
+    let current = sentinela_core::wallpaper::system_install()
+        .and_then(|i| sentinela_core::wallpaper::current_file(&i));
+    let bytes = sentinela_core::wallpaper::palette::wallpaper_image_bytes(current.as_deref())
+        .ok_or("Não achei nenhuma imagem do papel de parede para tirar a cor.")?;
     accent_from_image(&bytes).ok_or_else(|| "Não consegui tirar a cor do papel de parede.".into())
 }
 

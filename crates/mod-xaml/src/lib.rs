@@ -74,7 +74,10 @@ pub fn parse_color(s: &str) -> Option<(u8, u8, u8, u8)> {
 }
 
 fn parse_margin(s: &str) -> Option<(f64, f64, f64, f64)> {
-    let p: Vec<f64> = s.split(',').map(|x| x.trim().parse().ok()).collect::<Option<_>>()?;
+    let p: Vec<f64> = s
+        .split(',')
+        .map(|x| x.trim().parse().ok())
+        .collect::<Option<_>>()?;
     match p.as_slice() {
         [a] => Some((*a, *a, *a, *a)),
         [h, v] => Some((*h, *v, *h, *v)),
@@ -91,7 +94,9 @@ pub fn parse_style(text: &str) -> Style {
         if raw.is_empty() || raw.starts_with("//") || raw.starts_with(';') {
             continue;
         }
-        let Some((k, v)) = raw.split_once('=') else { continue };
+        let Some((k, v)) = raw.split_once('=') else {
+            continue;
+        };
         let (k, v) = (k.trim(), v.trim());
         match k {
             "enabled" => st.enabled = v != "false" && v != "0",
@@ -116,12 +121,24 @@ pub fn parse_style(text: &str) -> Style {
             "start_radius" => st.start_radius = v.parse::<f64>().ok().map(|r| r.clamp(0.0, 60.0)),
             "start_hide_all" => st.start_hide_all = v == "true" || v == "1",
             "islands" => st.islands = v == "true" || v == "1",
-            "island_pad" => st.island_pad = v.parse::<f64>().map_or(st.island_pad, |x| x.clamp(0.0, 80.0)),
-            "island_tray_pad" => {
-                st.island_tray_pad = v.parse::<f64>().map_or(st.island_tray_pad, |x| x.clamp(0.0, 80.0))
+            "island_pad" => {
+                st.island_pad = v
+                    .parse::<f64>()
+                    .map_or(st.island_pad, |x| x.clamp(0.0, 80.0))
             }
-            "island_v" => st.island_v = v.parse::<f64>().map_or(st.island_v, |x| x.clamp(0.0, 30.0)),
-            "island_edge" => st.island_edge = v.parse::<f64>().map_or(st.island_edge, |x| x.clamp(0.0, 200.0)),
+            "island_tray_pad" => {
+                st.island_tray_pad = v
+                    .parse::<f64>()
+                    .map_or(st.island_tray_pad, |x| x.clamp(0.0, 80.0))
+            }
+            "island_v" => {
+                st.island_v = v.parse::<f64>().map_or(st.island_v, |x| x.clamp(0.0, 30.0))
+            }
+            "island_edge" => {
+                st.island_edge = v
+                    .parse::<f64>()
+                    .map_or(st.island_edge, |x| x.clamp(0.0, 200.0))
+            }
             _ => {}
         }
     }
@@ -129,10 +146,10 @@ pub fn parse_style(text: &str) -> Style {
 }
 
 #[cfg(windows)]
+mod imp;
+#[cfg(windows)]
 #[allow(warnings, clippy::all)]
 mod xaml_bindings;
-#[cfg(windows)]
-mod imp;
 
 #[cfg(windows)]
 pub use imp::*;
@@ -166,8 +183,10 @@ mod tests {
 
     #[test]
     fn config_do_menu_iniciar() {
-        let s = parse_style("start_fill=#CC101018
-start_radius=20");
+        let s = parse_style(
+            "start_fill=#CC101018
+start_radius=20",
+        );
         assert_eq!(s.start_fill, Some((0xCC, 0x10, 0x10, 0x18)));
         assert_eq!(s.start_radius, Some(20.0));
         assert_eq!(Style::default().start_fill, None);

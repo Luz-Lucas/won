@@ -259,6 +259,10 @@ pub fn enable_shell_xaml(
              enabled=true\nfill=#C81C1C24\nradius=14\nmargin=0,0,0,0\nhide_border=false\n",
         )?;
     }
+    // Processos em AppContainer (pesquisa) só carregam DLL de pastas legíveis por
+    // "TODOS OS PACOTES DE APLICATIVOS"; a pasta de dados também precisa ser gravável (cfg/logs).
+    grant_app_packages(dll.parent().unwrap_or(dll), "RX");
+    grant_app_packages(dir, "M");
     let mut state = registry::load_state(dir);
     let mut done = Vec::new();
     let mut failures: Vec<String> = Vec::new();
@@ -294,6 +298,24 @@ pub fn enable_shell_xaml(
         bail!("nenhum processo aceitou a DLL: {}", failures.join(" | "));
     }
     Ok(done)
+}
+
+/// Concede `perm` (RX/M) à pasta para ALL APPLICATION PACKAGES (S-1-15-2-1) e ALL RESTRICTED
+/// APP PACKAGES (S-1-15-2-2), herdado. Falha silenciosa: só ajuda processos em AppContainer.
+fn grant_app_packages(folder: &Path, perm: &str) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        for sid in ["*S-1-15-2-1", "*S-1-15-2-2"] {
+            let _ = std::process::Command::new("icacls")
+                .arg(folder)
+                .args(["/grant", &format!("{sid}:(OI)(CI){perm}"), "/C", "/Q"])
+                .creation_flags(0x0800_0000)
+                .output();
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (folder, perm);
 }
 
 pub const XAML_MOD_NAME: &str = "xaml-barra";

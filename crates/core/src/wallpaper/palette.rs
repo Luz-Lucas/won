@@ -56,6 +56,49 @@ impl Rgb {
     }
 }
 
+/// Bytes de uma imagem do papel de parede, sem depender da miniatura da Oficina: tenta a
+/// miniatura do item, qualquer imagem da pasta do item, o próprio arquivo (se for imagem)
+/// e por fim o papel de parede do Windows (`TranscodedWallpaper`).
+pub fn wallpaper_image_bytes(current: Option<&str>) -> Option<Vec<u8>> {
+    use std::path::{Path, PathBuf};
+    let is_img = |p: &Path| {
+        p.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+            matches!(
+                e.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "bmp" | "webp"
+            )
+        })
+    };
+    let mut cands: Vec<PathBuf> = Vec::new();
+    if let Some(cur) = current {
+        let file = PathBuf::from(cur);
+        if let Some(item) = file.parent().and_then(super::gallery::read_item) {
+            cands.extend(item.preview);
+        }
+        if let Some(dir) = file.parent() {
+            if let Ok(rd) = std::fs::read_dir(dir) {
+                let mut imgs: Vec<PathBuf> = rd
+                    .flatten()
+                    .map(|e| e.path())
+                    .filter(|p| is_img(p))
+                    .collect();
+                imgs.sort();
+                cands.extend(imgs);
+            }
+        }
+        if is_img(&file) {
+            cands.push(file);
+        }
+    }
+    if let Some(d) = dirs::config_dir() {
+        cands.push(d.join("Microsoft/Windows/Themes/TranscodedWallpaper"));
+    }
+    cands
+        .into_iter()
+        .filter_map(|p| std::fs::read(p).ok())
+        .find(|b| accent_from_image(b).is_some())
+}
+
 /// A cor dominante e viva da imagem (PNG ou JPEG): agrupa os pixels em
 /// caixas de 4 bits por canal e pontua pela quantidade, favorecendo cor
 /// saturada e nem escura nem estourada. `None` para imagem ilegível ou
