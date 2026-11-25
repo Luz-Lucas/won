@@ -75,6 +75,8 @@ struct Bar {
     media: String,
     ticks: u32,
     hidden_taskbar: bool,
+    /// A área da borda está reservada (some quando a barra se esconde).
+    reserved: bool,
 }
 
 thread_local! {
@@ -707,6 +709,58 @@ pub fn show_native_taskbar() {
     set_native_taskbar(true);
 }
 
+/// Reserva a borda: o Windows encolhe a área útil das outras janelas.
+unsafe fn reserve(hwnd: HWND, cfg: &BarConfig) {
+    unsafe {
+        let bar_h = if cfg.islands {
+            cfg.height + 2 * cfg.island_margin
+        } else {
+            cfg.height
+        };
+        let strip = bar::bar_rect(primary_monitor(), cfg.edge, bar_h);
+        let mut abd: APPBARDATA = std::mem::zeroed();
+        abd.cbSize = std::mem::size_of::<APPBARDATA>() as u32;
+        abd.hWnd = hwnd;
+        SHAppBarMessage(ABM_NEW, &mut abd);
+        abd.uEdge = if cfg.edge == Edge::Top {
+            ABE_TOP
+        } else {
+            ABE_BOTTOM
+        };
+        abd.rc = RECT {
+            left: strip.left,
+            top: strip.top,
+            right: strip.right,
+            bottom: strip.bottom,
+        };
+        SHAppBarMessage(ABM_QUERYPOS, &mut abd);
+        match cfg.edge {
+            Edge::Top => abd.rc.bottom = abd.rc.top + bar_h as i32,
+            Edge::Bottom => abd.rc.top = abd.rc.bottom - bar_h as i32,
+        }
+        SHAppBarMessage(ABM_SETPOS, &mut abd);
+        windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPos(
+            hwnd,
+            windows_sys::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
+            abd.rc.left,
+            abd.rc.top,
+            abd.rc.right - abd.rc.left,
+            abd.rc.bottom - abd.rc.top,
+            windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
+        );
+    }
+}
+
+/// Devolve a área reservada (com a barra escondida, as janelas usam a tela toda).
+unsafe fn release(hwnd: HWND) {
+    unsafe {
+        let mut abd: APPBARDATA = std::mem::zeroed();
+        abd.cbSize = std::mem::size_of::<APPBARDATA>() as u32;
+        abd.hWnd = hwnd;
+        SHAppBarMessage(ABM_REMOVE, &mut abd);
+    }
+}
+
 /// Cria (ou recria) a barra conforme a configuração; `None` remove.
 pub fn apply(cfg: Option<&BarConfig>) {
     destroy();
@@ -752,38 +806,7 @@ pub fn apply(cfg: Option<&BarConfig>) {
             return;
         }
 
-        // Reserva a borda: o Windows encolhe a área útil das outras janelas.
-        let mut abd: APPBARDATA = std::mem::zeroed();
-        abd.cbSize = std::mem::size_of::<APPBARDATA>() as u32;
-        abd.hWnd = hwnd;
-        SHAppBarMessage(ABM_NEW, &mut abd);
-        abd.uEdge = if cfg.edge == Edge::Top {
-            ABE_TOP
-        } else {
-            ABE_BOTTOM
-        };
-        abd.rc = RECT {
-            left: strip.left,
-            top: strip.top,
-            right: strip.right,
-            bottom: strip.bottom,
-        };
-        SHAppBarMessage(ABM_QUERYPOS, &mut abd);
-        match cfg.edge {
-            Edge::Top => abd.rc.bottom = abd.rc.top + bar_h as i32,
-            Edge::Bottom => abd.rc.top = abd.rc.bottom - bar_h as i32,
-        }
-        SHAppBarMessage(ABM_SETPOS, &mut abd);
-
-        windows_sys::Win32::UI::WindowsAndMessaging::SetWindowPos(
-            hwnd,
-            windows_sys::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
-            abd.rc.left,
-            abd.rc.top,
-            abd.rc.right - abd.rc.left,
-            abd.rc.bottom - abd.rc.top,
-            windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
-        );
+        reserve(hwnd, cfg);
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 
         if cfg.hide_native_taskbar {
@@ -806,6 +829,7 @@ pub fn apply(cfg: Option<&BarConfig>) {
                 media: String::new(),
                 ticks: 0,
                 hidden_taskbar: cfg.hide_native_taskbar,
+                reserved: true,
             });
         });
         InvalidateRect(hwnd, std::ptr::null(), 0);
@@ -866,6 +890,13 @@ pub fn tick(fullscreen_foreground: bool) {
                 && IsIconic(fg) == 0
                 && IsZoomed(fg) != 0;
             let fullscreen_foreground = fullscreen_foreground || maximized;
+            if fullscreen_foreground && b.reserved {
+                release(b.hwnd);
+                b.reserved = false;
+            } else if !fullscreen_foreground && !b.reserved {
+                reserve(b.hwnd, &b.cfg);
+                b.reserved = true;
+            }
             ShowWindow(
                 b.hwnd,
                 if fullscreen_foreground {
