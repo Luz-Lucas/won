@@ -1178,7 +1178,7 @@ body {
 .sp-wallpaper {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 30% 30%, #ffb020, transparent 40%),
+  background: radial-gradient(circle at 30% 30%, #6ebeff, transparent 40%),
     radial-gradient(circle at 70% 60%, #4a7bff, transparent 45%);
   opacity: 0.55;
 }
