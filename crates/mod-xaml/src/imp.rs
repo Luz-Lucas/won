@@ -110,7 +110,19 @@ fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
     leaf.iter().any(|k| t.ends_with(&k.to_ascii_lowercase()))
 }
 
+/// 0 = "Todos os aplicativos" do Iniciar; 1 = botão Iniciar; 2 = widgets; 3 = brilho da pesquisa.
+fn hide_wanted(kind: u8, st: &Style) -> bool {
+    match kind {
+        0 => st.start_hide_all,
+        1 => st.hide_start_button,
+        2 => st.hide_widgets,
+        3 => st.hide_search_gleam,
+        _ => false,
+    }
+}
+
 struct TrackedHide {
+    kind: u8,
     handle: u64,
     fe: FrameworkElement,
     orig: Option<(f64, f64, bool)>, // MaxHeight, Opacity, IsHitTestVisible
@@ -135,14 +147,14 @@ fn apply_hide(t: &mut TrackedHide, on: bool) -> Result<()> {
     Ok(())
 }
 
-fn apply_all_hide(on: bool) {
-    let items: Vec<(u64, FrameworkElement)> = HIDE
+fn apply_all_hide(on: bool, st: Style) {
+    let items: Vec<(u64, FrameworkElement, bool)> = HIDE
         .lock()
         .unwrap()
         .iter()
-        .map(|t| (t.handle, t.fe.clone()))
+        .map(|t| (t.handle, t.fe.clone(), on && hide_wanted(t.kind, &st)))
         .collect();
-    for (handle, fe) in items {
+    for (handle, fe, on) in items {
         let Ok(ui) = fe.cast::<UIElement>() else {
             continue;
         };
@@ -156,6 +168,84 @@ fn apply_all_hide(on: bool) {
         let _ = disp.RunAsync(CoreDispatcherPriority::Normal, &h);
     }
 }
+/// Tamanho do menu Iniciar (`MainMenu` = largura, `FrameRoot` = altura).
+struct TrackedSize {
+    handle: u64,
+    width: bool,
+    fe: FrameworkElement,
+    orig: Option<(f64, f64, f64)>, // valor, mínimo, máximo
+}
+unsafe impl Send for TrackedSize {}
+static SIZED: Mutex<Vec<TrackedSize>> = Mutex::new(Vec::new());
+
+fn apply_size(t: &mut TrackedSize, on: bool, st: &Style) -> Result<()> {
+    let want = if t.width { st.start_w } else { st.start_h };
+    match (on, want) {
+        (true, Some(v)) => {
+            if t.orig.is_none() {
+                t.orig = Some(if t.width {
+                    (t.fe.Width()?, t.fe.MinWidth()?, t.fe.MaxWidth()?)
+                } else {
+                    (t.fe.Height()?, t.fe.MinHeight()?, t.fe.MaxHeight()?)
+                });
+            }
+            if t.width {
+                t.fe.SetMinWidth(v)?;
+                t.fe.SetMaxWidth(v)?;
+                t.fe.SetWidth(v)?;
+            } else {
+                t.fe.SetMinHeight(v)?;
+                t.fe.SetMaxHeight(v)?;
+                t.fe.SetHeight(v)?;
+            }
+        }
+        _ => {
+            if let Some((v, lo, hi)) = t.orig.take() {
+                if t.width {
+                    t.fe.SetWidth(v)?;
+                    t.fe.SetMinWidth(lo)?;
+                    t.fe.SetMaxWidth(hi)?;
+                } else {
+                    t.fe.SetHeight(v)?;
+                    t.fe.SetMinHeight(lo)?;
+                    t.fe.SetMaxHeight(hi)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn apply_all_size(on: bool, st: Style) {
+    let items: Vec<(u64, FrameworkElement)> = SIZED
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|t| (t.handle, t.fe.clone()))
+        .collect();
+    for (handle, fe) in items {
+        let Ok(ui) = fe.cast::<UIElement>() else {
+            continue;
+        };
+        let Ok(disp) = ui.Dispatcher() else { continue };
+        struct S(Style);
+        unsafe impl Send for S {}
+        let st = S(st.clone());
+        let h = DispatchedHandler::new(move || {
+            if let Some(t) = SIZED
+                .lock()
+                .unwrap()
+                .iter_mut()
+                .find(|t| t.handle == handle)
+            {
+                let _ = apply_size(t, on, &st.0);
+            }
+            Ok(())
+        });
+        let _ = disp.RunAsync(CoreDispatcherPriority::Normal, &h);
+    }
+}
+
 struct Orig {
     fill: Option<Brush>,
     margin: Thickness,
@@ -458,7 +548,8 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
 /// Reaplica (ou restaura) em todos os elementos guardados, cada um na sua thread de UI.
 fn apply_all(on: bool, st: Style) {
     apply_all_start(on, st.clone());
-    apply_all_hide(on && st.start_hide_all);
+    apply_all_hide(on, st.clone());
+    apply_all_size(on, st.clone());
     let handles: Vec<(u64, Rectangle)> = {
         let g = TRACKED.lock().unwrap();
         g.iter().map(|t| (t.handle, t.rect.clone())).collect()
@@ -530,6 +621,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                 .retain(|t| t.handle != element.handle);
             START.lock().unwrap().retain(|t| t.handle != element.handle);
             HIDE.lock().unwrap().retain(|t| t.handle != element.handle);
+            SIZED.lock().unwrap().retain(|t| t.handle != element.handle);
             return S_OK;
         }
         if ty == "Windows.UI.Xaml.Controls.Border" && name == "AcrylicBorder" {
@@ -563,6 +655,81 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             START.lock().unwrap().push(t);
             return S_OK;
         }
+        // Itens da barra que o guia do Taskbar Styler esconde com Visibility=Collapsed.
+        let taskbar_kind = if !is_start_host() && !is_search_host() {
+            if ty == "Taskbar.ExperienceToggleButton" && name == "LaunchListButton" {
+                Some(1u8)
+            } else if ty == "Taskbar.AugmentedEntryPointButton" {
+                Some(2)
+            } else if name == "DynamicSearchBoxGleamContainer" {
+                Some(3)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some(kind) = taskbar_kind {
+            let mut raw: *mut c_void = std::ptr::null_mut();
+            if unsafe {
+                self.diag
+                    .GetIInspectableFromHandle(element.handle, &mut raw)
+            }
+            .is_ok()
+                && !raw.is_null()
+            {
+                let insp: windows::core::IInspectable =
+                    unsafe { windows::core::IInspectable::from_raw(raw) };
+                if let Ok(fe) = insp.cast::<FrameworkElement>() {
+                    let mut t = TrackedHide {
+                        kind,
+                        handle: element.handle,
+                        fe,
+                        orig: None,
+                    };
+                    let (on, st) = want_on();
+                    if on && hide_wanted(kind, &st) {
+                        log(&format!(
+                            "esconder {ty} #{name}: {:?}",
+                            apply_hide(&mut t, true)
+                        ));
+                    }
+                    HIDE.lock().unwrap().push(t);
+                }
+            }
+            return S_OK;
+        }
+        // Tamanho do menu Iniciar: largura no MainMenu, altura no FrameRoot.
+        if is_start_host() && (name == "MainMenu" || name == "FrameRoot") {
+            let mut raw: *mut c_void = std::ptr::null_mut();
+            if unsafe {
+                self.diag
+                    .GetIInspectableFromHandle(element.handle, &mut raw)
+            }
+            .is_ok()
+                && !raw.is_null()
+            {
+                let insp: windows::core::IInspectable =
+                    unsafe { windows::core::IInspectable::from_raw(raw) };
+                if let Ok(fe) = insp.cast::<FrameworkElement>() {
+                    let mut t = TrackedSize {
+                        handle: element.handle,
+                        width: name == "MainMenu",
+                        fe,
+                        orig: None,
+                    };
+                    let (on, st) = want_on();
+                    if on {
+                        log(&format!(
+                            "tamanho {name}: {:?}",
+                            apply_size(&mut t, true, &st)
+                        ));
+                    }
+                    SIZED.lock().unwrap().push(t);
+                }
+            }
+            // Não retorna: outros ramos (AcrylicBorder está em outro elemento).
+        }
         // "Todos os aplicativos" do Iniciar: acha por nome/tipo que contenha "AllApps".
         if is_start_host() && is_all_apps_leaf(&ty, &name) {
             let mut raw: *mut c_void = std::ptr::null_mut();
@@ -578,6 +745,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                 if let Ok(fe) = insp.cast::<FrameworkElement>() {
                     log(&format!("candidato Todos os aplicativos: {ty} #{name}"));
                     let mut t = TrackedHide {
+                        kind: 0,
                         handle: element.handle,
                         fe,
                         orig: None,

@@ -41,6 +41,13 @@ pub struct Style {
     pub island_v: f64,
     /// Distância da ilha da bandeja até a borda direita da tela.
     pub island_edge: f64,
+    /// Esconde o botão Iniciar, o botão de widgets e o brilho da caixa de pesquisa da barra.
+    pub hide_start_button: bool,
+    pub hide_widgets: bool,
+    pub hide_search_gleam: bool,
+    /// Tamanho do menu Iniciar em DIPs; `None` não mexe.
+    pub start_w: Option<f64>,
+    pub start_h: Option<f64>,
 }
 
 impl Default for Style {
@@ -59,6 +66,11 @@ impl Default for Style {
             island_tray_pad: 10.0,
             island_v: 4.0,
             island_edge: 8.0,
+            hide_start_button: false,
+            hide_widgets: false,
+            hide_search_gleam: false,
+            start_w: None,
+            start_h: None,
         }
     }
 }
@@ -139,6 +151,11 @@ pub fn parse_style(text: &str) -> Style {
                     .parse::<f64>()
                     .map_or(st.island_edge, |x| x.clamp(0.0, 200.0))
             }
+            "hide_start_button" => st.hide_start_button = v == "true" || v == "1",
+            "hide_widgets" => st.hide_widgets = v == "true" || v == "1",
+            "hide_search_gleam" => st.hide_search_gleam = v == "true" || v == "1",
+            "start_w" => st.start_w = v.parse::<f64>().ok().map(|x| x.clamp(300.0, 2400.0)),
+            "start_h" => st.start_h = v.parse::<f64>().ok().map(|x| x.clamp(300.0, 1600.0)),
             _ => {}
         }
     }

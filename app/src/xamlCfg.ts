@@ -17,6 +17,13 @@ export interface XamlStyle {
   islandTrayPad: number;
   islandV: number;
   islandEdge: number;
+  /** Esconde itens da barra nativa. */
+  hideStartButton: boolean;
+  hideWidgets: boolean;
+  hideSearchGleam: boolean;
+  /** Tamanho do menu Iniciar em px; null = não mexe. */
+  startW: number | null;
+  startH: number | null;
 }
 
 export const DEFAULT_XAML: XamlStyle = {
@@ -34,6 +41,11 @@ export const DEFAULT_XAML: XamlStyle = {
   islandTrayPad: 10,
   islandV: 4,
   islandEdge: 8,
+  hideStartButton: false,
+  hideWidgets: false,
+  hideSearchGleam: false,
+  startW: null,
+  startH: null,
 };
 
 const hex2 = (n: number) =>
@@ -90,6 +102,15 @@ export function parseXamlCfg(text: string): XamlStyle {
       const key = { island_pad: "islandPad", island_tray_pad: "islandTrayPad", island_v: "islandV", island_edge: "islandEdge" }[k] as
         | "islandPad" | "islandTrayPad" | "islandV" | "islandEdge";
       if (Number.isFinite(n)) s[key] = Math.max(0, Math.min(200, n));
+    } else if (k === "hide_start_button") {
+      s.hideStartButton = v === "true" || v === "1";
+    } else if (k === "hide_widgets") {
+      s.hideWidgets = v === "true" || v === "1";
+    } else if (k === "hide_search_gleam") {
+      s.hideSearchGleam = v === "true" || v === "1";
+    } else if (k === "start_w" || k === "start_h") {
+      const n = Number(v);
+      if (Number.isFinite(n)) s[k === "start_w" ? "startW" : "startH"] = Math.max(300, Math.min(2400, n));
     } else if (k === "start_radius") {
       const n = Number(v);
       if (Number.isFinite(n)) s.startRadius = Math.max(0, Math.min(60, n));
@@ -113,6 +134,11 @@ export function buildXamlCfg(s: XamlStyle): string {
     lines.push(`island_v=${s.islandV}`, `island_edge=${s.islandEdge}`);
   }
   if (s.startHideAll) lines.push("start_hide_all=true");
+  if (s.hideStartButton) lines.push("hide_start_button=true");
+  if (s.hideWidgets) lines.push("hide_widgets=true");
+  if (s.hideSearchGleam) lines.push("hide_search_gleam=true");
+  if (s.startW !== null) lines.push(`start_w=${s.startW}`);
+  if (s.startH !== null) lines.push(`start_h=${s.startH}`);
   if (s.startFill) lines.push(`start_fill=${argb(s.startFill, s.startAlpha)}`);
   if (s.startRadius !== null) lines.push(`start_radius=${s.startRadius}`);
   return lines.join("\n") + "\n";

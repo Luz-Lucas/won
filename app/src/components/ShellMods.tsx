@@ -256,6 +256,68 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
             <label>
               <input
                 type="checkbox"
+                checked={style.startW !== null || style.startH !== null}
+                onChange={(e) =>
+                  set({ startW: e.target.checked ? 700 : null, startH: e.target.checked ? 800 : null })
+                }
+              />{" "}
+              Tamanho do menu Iniciar <em>(experimental)</em>
+            </label>
+            {style.startW !== null && (
+              <>
+                <label>
+                  Largura{" "}
+                  <input
+                    type="number"
+                    min={300}
+                    max={2400}
+                    value={style.startW}
+                    onChange={(e) => set({ startW: Number(e.target.value) })}
+                  />
+                </label>
+                <label>
+                  Altura{" "}
+                  <input
+                    type="number"
+                    min={300}
+                    max={1600}
+                    value={style.startH ?? 800}
+                    onChange={(e) => set({ startH: Number(e.target.value) })}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+          <div className="row">
+            <label>
+              <input
+                type="checkbox"
+                checked={style.hideStartButton}
+                onChange={(e) => set({ hideStartButton: e.target.checked })}
+              />{" "}
+              Esconder o botão Iniciar da barra
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={style.hideWidgets}
+                onChange={(e) => set({ hideWidgets: e.target.checked })}
+              />{" "}
+              Esconder o botão de widgets
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={style.hideSearchGleam}
+                onChange={(e) => set({ hideSearchGleam: e.target.checked })}
+              />{" "}
+              Esconder o brilho da caixa de pesquisa
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              <input
+                type="checkbox"
                 checked={style.startFill !== null}
                 onChange={(e) =>
                   set({ startFill: e.target.checked ? "#1C1C24" : null, startRadius: e.target.checked ? 14 : null })
