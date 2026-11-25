@@ -231,14 +231,20 @@ export default function StylePreview({
     case "loja":
       return (
         <Frame label="Prévia da Loja">
-          <div className="sp-shop">
-            {ICONS.map((c) => (
-              <span key={c}>
-                <i style={{ background: c }} />
-              </span>
-            ))}
+          <div className="sp-store">
+            <div className="sp-store-head">
+              <span className="sp-store-bag" />
+              <span className="sp-store-search" />
+            </div>
+            <div className="sp-shop">
+              {ICONS.map((c, i) => (
+                <span key={c}>
+                  <i style={{ background: c }} className={i === 1 ? "sp-pointer" : undefined} />
+                  <b className="sp-get" />
+                </span>
+              ))}
+            </div>
           </div>
-          <Taskbar on={new Set()} light={false} />
         </Frame>
       );
     case "wallpaper":
