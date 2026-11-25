@@ -491,7 +491,9 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             }
             return S_OK;
         }
-        if name == "TaskbarFrameRepeater" || ty.ends_with("SystemTray.SystemTrayFrame") {
+        // A bandeja (SystemTray.dll) não é mais medida: tocar nela fora da thread da interface
+        // derrubava o Explorer (0xc0000005 em SystemTray.dll).
+        if name == "TaskbarFrameRepeater" {
             let mut raw: *mut c_void = std::ptr::null_mut();
             if unsafe {
                 self.diag
