@@ -153,7 +153,7 @@ export default function Terminal({
   const disable = () =>
     run(async () => {
       const n = await terminalDisablePrompt();
-      setNote(n > 0 ? "Bloco do Sentinela removido do perfil." : "Não havia bloco para remover.");
+      setNote(n > 0 ? "Bloco do WON removido do perfil." : "Não havia bloco para remover.");
       loadHistory();
       onChanged();
     });
@@ -362,7 +362,7 @@ export default function Terminal({
               </pre>
             </div>
           ))}
-          <p>Antes de gravar, o Sentinela guarda uma cópia de cada arquivo para desfazer.</p>
+          <p>Antes de gravar, o WON guarda uma cópia de cada arquivo para desfazer.</p>
         </ConfirmDialog>
       )}
 
@@ -389,7 +389,7 @@ export default function Terminal({
 
       {forceFor && (
         <ConfirmDialog
-          title="O arquivo mudou depois do Sentinela"
+          title="O arquivo mudou depois do WON"
           confirmLabel="Desfazer mesmo assim"
           onConfirm={() => void undo(true)}
           onCancel={() => setForceFor(null)}

@@ -29,7 +29,7 @@ pub struct Imported {
     pub name: String,
     pub description: String,
     pub warnings: Vec<String>,
-    /// Itens do arquivo que o Sentinela NÃO vai aplicar (desconhecidos,
+    /// Itens do arquivo que o WON NÃO vai aplicar (desconhecidos,
     /// que exigem administrador ou que rodariam comandos).
     pub disabled: Vec<String>,
 }

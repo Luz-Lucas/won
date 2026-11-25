@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 const TRAY_NOTICE: &str =
-    "O Sentinela continua rodando na área de notificação. Para sair, use o ícone perto do relógio.";
+    "O WON continua rodando na área de notificação. Para sair, use o ícone perto do relógio.";
 
 /// Mostra a janela inicial uma única vez: quando o frontend avisa que carregou
 /// (`window_ready`) ou, se o aviso não vier, após um tempo limite.
@@ -86,18 +86,18 @@ pub fn hide_main(app: &AppHandle) {
         let _ = app
             .notification()
             .builder()
-            .title("Sentinela")
+            .title("WON")
             .body(TRAY_NOTICE)
             .show();
     }
 }
 
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Abrir Sentinela", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Abrir WON", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
     let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("Sentinela")
+        .tooltip("WON")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {

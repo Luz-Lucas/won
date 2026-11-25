@@ -183,7 +183,7 @@ pub fn paused_tweak(now_secs: u64, until: &str) -> Result<Tweak, String> {
     Ok(mode_tweak(
         PAUSED_ID,
         &format!("Atualizações: pausadas até {until}"),
-        "Pausa todas as atualizações do Windows até a data escolhida; depois disso o Windows volta a atualizar sozinho. As definições do Defender continuam sendo atualizadas pelo Sentinela.",
+        "Pausa todas as atualizações do Windows até a data escolhida; depois disso o Windows volta a atualizar sozinho. As definições do Defender continuam sendo atualizadas pelo WON.",
         Effect::Immediate,
         "https://learn.microsoft.com/en-us/windows/deployment/update/waas-configure-wufb",
         vec![
@@ -216,7 +216,7 @@ pub fn blocked_tweak(tasks: &[String]) -> Tweak {
     mode_tweak(
         BLOCKED_ID,
         "Atualizações: bloqueadas",
-        "Desliga as atualizações automáticas por política, desativa os serviços de atualização (wuauserv, UsoSvc e BITS) e as tarefas agendadas do orquestrador. O Windows fica sem correções de segurança enquanto durar; as definições do Defender continuam sendo atualizadas pelo Sentinela. A Microsoft Store e alguns instaladores (pacotes da Store no winget, .NET, drivers) falham nesse modo.",
+        "Desliga as atualizações automáticas por política, desativa os serviços de atualização (wuauserv, UsoSvc e BITS) e as tarefas agendadas do orquestrador. O Windows fica sem correções de segurança enquanto durar; as definições do Defender continuam sendo atualizadas pelo WON. A Microsoft Store e alguns instaladores (pacotes da Store no winget, .NET, drivers) falham nesse modo.",
         Effect::Reboot,
         SOURCE_WINUTIL,
         actions,

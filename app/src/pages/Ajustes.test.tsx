@@ -152,12 +152,12 @@ describe("Ajustes", () => {
     vi.mocked(api.settingsGet).mockResolvedValue(
       prefsView({
         elevated: true,
-        note: "Abra o Sentinela sem administrador para mudar a inicialização com o Windows.",
+        note: "Abra o WON sem administrador para mudar a inicialização com o Windows.",
       }),
     );
     render(<Ajustes />);
     expect(
-      await screen.findByText(/Abra o Sentinela sem administrador/),
+      await screen.findByText(/Abra o WON sem administrador/),
     ).toBeInTheDocument();
   });
 
@@ -281,7 +281,7 @@ describe("Ajustes", () => {
     expect(openUrl).toHaveBeenCalledWith("https://auth.abuse.ch/");
   });
 
-  it("procura atualização do Sentinela e abre a página da versão", async () => {
+  it("procura atualização do WON e abre a página da versão", async () => {
     vi.mocked(api.appUpdateCheck)
       .mockReset()
       .mockResolvedValueOnce({ current: "0.1.0", latest: "0.2.0", available: false, url: "" })

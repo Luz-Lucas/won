@@ -11,7 +11,7 @@ const SOURCE: Record<GameSource, string> = {
   manual: "Adicionado por você",
 };
 
-const EXTERNAL = "Configurado fora do Sentinela.";
+const EXTERNAL = "Configurado fora do WON.";
 const ONE_GPU = "Esta máquina tem uma GPU; a preferência não muda nada.";
 const QOS_NOTE =
   "Prioridade de rede (QoS) marca o tráfego do jogo como prioritário (DSCP 46). É controverso: só ajuda se o roteador respeitar a marcação, e não muda a rota nem o ping até o servidor. Exige administrador e vale depois de reiniciar.";
@@ -124,7 +124,7 @@ export default function GpuPerGame() {
         onConfirm={confirm}
         onCancel={() => setPending(null)}
       >
-        <p>A preferência volta ao que era antes do Sentinela.</p>
+        <p>A preferência volta ao que era antes do WON.</p>
       </ConfirmDialog>
     );
   };
@@ -209,7 +209,7 @@ export default function GpuPerGame() {
         </ul>
       )}
       {data && data.games.length > 0 && !elevated && (
-        <p className="muted">A prioridade de rede exige abrir o Sentinela como administrador.</p>
+        <p className="muted">A prioridade de rede exige abrir o WON como administrador.</p>
       )}
       {data && data.missing.length > 0 && (
         <ul className="clean-list">

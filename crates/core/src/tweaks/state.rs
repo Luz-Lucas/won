@@ -63,7 +63,7 @@ fn reg_value_text(v: &Option<RegValue>) -> String {
         None => "não existe".to_string(),
         Some(RegValue::Dword(n)) => format!("DWORD {n}"),
         Some(RegValue::Qword(n)) => format!("QWORD {n}"),
-        Some(RegValue::String(s)) => format!("\"{s}\""),
+        Some(RegValue::String(s)) | Some(RegValue::ExpandString(s)) => format!("\"{s}\""),
     }
 }
 

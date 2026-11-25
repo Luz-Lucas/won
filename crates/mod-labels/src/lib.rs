@@ -2,8 +2,8 @@
 //!
 //! Troca o início de `GetTaskbarGlomLevelFlags` (Taskbar.dll) por `xor eax,eax; ret`, o que devolve
 //! "nunca combinar" (0). Falha fechada: só aplica se os bytes originais forem exatamente os
-//! esperados no endereço informado pelo Sentinela; ao descarregar, restaura os bytes originais.
-//! O endereço (RVA) vem de `<dados>/labels.rva`, escrito pelo Sentinela a partir do PDB oficial.
+//! esperados no endereço informado pelo WON; ao descarregar, restaura os bytes originais.
+//! O endereço (RVA) vem de `<dados>/labels.rva`, escrito pelo WON a partir do PDB oficial.
 #![allow(non_snake_case)]
 
 use std::ffi::c_void;

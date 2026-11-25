@@ -528,7 +528,7 @@ fn undo_ids(
 
     for id in ids {
         let Some(pos) = journal.entries.iter().position(|e| e.tweak_id == *id) else {
-            results.push(item(id, false, "não foi aplicada pelo Sentinela"));
+            results.push(item(id, false, "não foi aplicada pelo WON"));
             continue;
         };
         let entry = journal.entries[pos].clone();
@@ -1181,7 +1181,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let r = undo(&ids(&["x"]), &MemoryBackend::new(), &jpath(&d));
         assert!(!r.results[0].ok);
-        assert_eq!(r.results[0].message, "não foi aplicada pelo Sentinela");
+        assert_eq!(r.results[0].message, "não foi aplicada pelo WON");
     }
 
     #[test]

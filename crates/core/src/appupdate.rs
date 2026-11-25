@@ -1,4 +1,4 @@
-//! Aviso de versão nova do próprio Sentinela. Só consulta a última versão
+//! Aviso de versão nova do próprio WON. Só consulta a última versão
 //! publicada no GitHub e devolve o link da página; nada é baixado nem
 //! instalado sozinho (a instalação automática exige assinatura de código).
 
@@ -13,7 +13,7 @@ pub struct AppUpdate {
     pub current: String,
     pub latest: String,
     pub available: bool,
-    /// Página da versão (sempre no repositório do Sentinela).
+    /// Página da versão (sempre no repositório do WON).
     pub url: String,
 }
 
@@ -58,7 +58,7 @@ pub fn check(current: &str, fetcher: &dyn Fetcher) -> Result<AppUpdate, String> 
     }
     let latest = parse_version(&rel.tag_name).ok_or("versão publicada ilegível")?;
     if !rel.html_url.starts_with(PAGE_PREFIX) {
-        return Err("o link da versão não é do repositório do Sentinela".into());
+        return Err("o link da versão não é do repositório do WON".into());
     }
     Ok(AppUpdate {
         current: current.into(),

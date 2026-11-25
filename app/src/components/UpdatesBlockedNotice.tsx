@@ -57,7 +57,7 @@ export default function UpdatesBlockedNotice() {
           onCancel={() => setAsk(false)}
         >
           <p>
-            O Sentinela volta as atualizações ao padrão do Windows e abre o Windows Update. Depois,
+            O WON volta as atualizações ao padrão do Windows e abre o Windows Update. Depois,
             volte ao modo Bloqueado em Ajustes.
           </p>
         </ConfirmDialog>

@@ -129,7 +129,7 @@ export default function Quarentena({ onRestored }: { onRestored?: () => void }) 
           onCancel={() => setConfirming(null)}
         >
           <p>
-            {`${confirming.entry.original_path} será apagado de vez. Não tem volta: nem o Sentinela nem a Lixeira conseguem recuperá-lo.`}
+            {`${confirming.entry.original_path} será apagado de vez. Não tem volta: nem o WON nem a Lixeira conseguem recuperá-lo.`}
           </p>
         </ConfirmDialog>
       )}

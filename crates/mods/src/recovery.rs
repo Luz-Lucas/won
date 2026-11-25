@@ -1,4 +1,4 @@
-//! Script de recuperação: desfaz tudo mesmo que o Sentinela não abra (inclusive no modo seguro).
+//! Script de recuperação: desfaz tudo mesmo que o WON não abra (inclusive no modo seguro).
 
 use std::path::Path;
 
@@ -8,9 +8,9 @@ pub fn script(exe: &Path, dir: &Path) -> String {
     let dir = dir.display();
     format!(
         "@echo off\r\n\
-rem Gerado pelo Sentinela. Desfaz todos os mods carregados e impede que voltem.\r\n\
+rem Gerado pelo WON. Desfaz todos os mods carregados e impede que voltem.\r\n\
 rem Pode ser executado a qualquer momento, inclusive no modo seguro.\r\n\
-echo Desfazendo os mods do Sentinela...\r\n\
+echo Desfazendo os mods do WON...\r\n\
 if exist \"{exe}\" \"{exe}\" eject-all\r\n\
 taskkill /f /im sentinela-mods.exe >nul 2>&1\r\n\
 reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /v SentinelaMods /f >nul 2>&1\r\n\

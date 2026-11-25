@@ -60,7 +60,7 @@ interface Pending {
   step: "archive" | "system" | "in_use";
 }
 
-/** Pedido do menu "Verificar com o Sentinela" do Explorador. */
+/** Pedido do menu "Verificar com o WON" do Explorador. */
 export interface ExplorerRequest {
   id: number;
   paths: string[];
@@ -338,7 +338,7 @@ export default function Seguranca({
         demorar bastante. Sem administrador, algumas pastas do sistema ficam de fora.
       </p>
       <p className="muted">
-        O Sentinela verifica sob demanda: não há proteção em tempo real, e malware novo pode passar.
+        O WON verifica sob demanda: não há proteção em tempo real, e malware novo pode passar.
         Mantenha o Microsoft Defender ligado.
       </p>
 
@@ -404,7 +404,7 @@ export default function Seguranca({
           {offerElevate && (
             <div className="notice" role="status">
               <p>
-                {`${deniedCount} ${deniedCount === 1 ? "pasta ou arquivo ficou" : "pastas ou arquivos ficaram"} de fora por acesso negado. Como administrador, o Sentinela consegue ler mais do sistema.`}
+                {`${deniedCount} ${deniedCount === 1 ? "pasta ou arquivo ficou" : "pastas ou arquivos ficaram"} de fora por acesso negado. Como administrador, o WON consegue ler mais do sistema.`}
               </p>
               <div className="scan-actions">
                 <button type="button" className="btn" onClick={() => void elevate()}>
@@ -615,7 +615,7 @@ export default function Seguranca({
           onCancel={() => setPending(null)}
         >
           <p>
-            Estes arquivos são de programas abertos. O Sentinela encerra os programas antes de
+            Estes arquivos são de programas abertos. O WON encerra os programas antes de
             mover; o que não fechar continua no lugar e aparece como "em uso".
           </p>
           <ul>

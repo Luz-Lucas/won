@@ -1,6 +1,6 @@
 //! Wallpaper Engine na janela: estado, galeria da Oficina, trocar de wallpaper
 //! e a pausa durante jogos. A lógica vive em `sentinela_core::wallpaper`; o
-//! Sentinela só lê a Oficina e chama o `-control` do programa.
+//! WON só lê a Oficina e chama o `-control` do programa.
 
 use base64::Engine as _;
 use rayon::prelude::*;

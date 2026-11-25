@@ -9,7 +9,7 @@ pub enum Target {
     Command { command: String, args: Vec<String> },
     /// Janela aberta (`HWND` como número).
     Window(isize),
-    /// Ação do próprio Sentinela.
+    /// Ação do próprio WON.
     Builtin(Builtin),
 }
 

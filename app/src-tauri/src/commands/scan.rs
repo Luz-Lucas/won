@@ -41,7 +41,7 @@ fn system_root() -> PathBuf {
     PathBuf::from(var("SystemRoot").unwrap_or_else(|| r"C:\Windows".into()))
 }
 
-/// Pastas do próprio Sentinela (banco e quarentena): nunca verificadas, porque
+/// Pastas do próprio WON (banco e quarentena): nunca verificadas, porque
 /// as regras casariam com elas mesmas e a quarentena já está isolada.
 pub fn own_dirs() -> Vec<PathBuf> {
     vec![
@@ -135,7 +135,7 @@ fn scan_body(
     if let Some(c) = &opts.cache {
         let c = c.lock().unwrap_or_else(|p| p.into_inner());
         if let Err(e) = cache::save(&cache::default_path(), &c) {
-            eprintln!("Sentinela: cache de verificados não gravado: {e}");
+            eprintln!("WON: cache de verificados não gravado: {e}");
         }
     }
     report.errors.splice(0..0, resolved.unreadable);
@@ -409,7 +409,7 @@ pub async fn scan_schedule_set(on: bool, app: AppHandle) -> Result<ScheduleView,
         {
             if on {
                 let exe = std::env::current_exe()
-                    .map_err(|_| "Não foi possível localizar o Sentinela.".to_string())?;
+                    .map_err(|_| "Não foi possível localizar o WON.".to_string())?;
                 schedule::create(&exe)?;
             } else {
                 schedule::delete()?;

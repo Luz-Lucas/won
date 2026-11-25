@@ -151,7 +151,7 @@ pub fn describe_exit(code: i32) -> (bool, String) {
         // COMMAND_REQUIRES_ADMIN
         0x8A15_0019 => (
             false,
-            "Requer administrador: abra o Sentinela como administrador e tente de novo.",
+            "Requer administrador: abra o WON como administrador e tente de novo.",
         ),
         // NO_APPLICATIONS_FOUND, NOT_ALL_PACKAGES_FOUND, NO_MANIFEST_FOUND
         0x8A15_0014 | 0x8A15_0035 | 0x8A15_0017 => (false, "Pacote não encontrado no winget."),
@@ -330,7 +330,7 @@ mod tests {
             describe_exit(0x8A150019u32 as i32),
             (
                 false,
-                "Requer administrador: abra o Sentinela como administrador e tente de novo.".into()
+                "Requer administrador: abra o WON como administrador e tente de novo.".into()
             )
         );
         assert_eq!(

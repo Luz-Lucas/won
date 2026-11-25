@@ -1,5 +1,5 @@
 //! `settings.json` do Windows Terminal. O arquivo é JSON com comentários e
-//! vírgulas sobrando, então ele **nunca é reescrito**: o Sentinela localiza
+//! vírgulas sobrando, então ele **nunca é reescrito**: o WON localiza
 //! o trecho no texto e troca só o valor (ou acrescenta a chave que gerencia).
 //! Se algo não puder ser localizado com certeza, ou o resultado mudar qualquer
 //! coisa fora das chaves gerenciadas, a gravação é recusada.

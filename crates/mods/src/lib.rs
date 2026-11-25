@@ -1,4 +1,4 @@
-//! Motor de mods do Sentinela: carrega DLLs do usuário em processos escolhidos por ele,
+//! Motor de mods do WON: carrega DLLs do usuário em processos escolhidos por ele,
 //! com recusas fixas (sistema, anticheat) e um script de recuperação independente do app.
 
 pub mod inject;

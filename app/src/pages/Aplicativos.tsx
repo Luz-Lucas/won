@@ -18,7 +18,7 @@ type Action = "install" | "upgrade";
 
 const LICENSE = "Ao continuar, você aceita os termos de licença de cada aplicativo.";
 const NO_WINGET =
-  "O Sentinela usa o winget, o instalador oficial da Microsoft, para baixar cada aplicativo do fabricante e conferir o arquivo.";
+  "O WON usa o winget, o instalador oficial da Microsoft, para baixar cada aplicativo do fabricante e conferir o arquivo.";
 const UNKNOWN = "Não foi possível verificar o que já está instalado.";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));

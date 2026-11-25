@@ -1,5 +1,5 @@
 //! Bloco marcado no `$PROFILE` do PowerShell. Tudo entre `# >>> sentinela >>>`
-//! e `# <<< sentinela <<<` é do Sentinela; o resto do arquivo nunca muda
+//! e `# <<< sentinela <<<` é do WON; o resto do arquivo nunca muda
 //! (nem a codificação das quebras de linha nem o BOM). Marcadores quebrados
 //! (sem par, repetidos, fora de ordem) são recusados, não consertados.
 
@@ -72,7 +72,7 @@ pub fn block_for(config: &Path, extras: &[Extra]) -> Result<String, String> {
     }
     let mut lines = vec![
         BEGIN.to_string(),
-        "# Gerenciado pelo Sentinela: edite pela janela. Desligar remove só este bloco.".into(),
+        "# Gerenciado pelo WON: edite pela janela. Desligar remove só este bloco.".into(),
         "if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {".into(),
         format!(
             "  oh-my-posh init pwsh --config {} | Invoke-Expression",
@@ -114,7 +114,7 @@ fn find_block(lines: &[&str]) -> Result<Option<(usize, usize)>, String> {
         ([], []) => Ok(None),
         ([b], [e]) if b < e => Ok(Some((*b, *e))),
         _ => Err(
-            "os marcadores do Sentinela no perfil estão incompletos, repetidos ou fora de ordem; arrumei nada: confira o arquivo"
+            "os marcadores do WON no perfil estão incompletos, repetidos ou fora de ordem; arrumei nada: confira o arquivo"
                 .into(),
         ),
     }
@@ -169,7 +169,7 @@ pub fn remove(text: &str) -> Result<String, String> {
     Ok([lines[..start].concat(), lines[e + 1..].concat()].concat())
 }
 
-/// O perfil tem o bloco do Sentinela?
+/// O perfil tem o bloco do WON?
 pub fn has_block(text: &str) -> bool {
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
     matches!(find_block(&lines), Ok(Some(_)))

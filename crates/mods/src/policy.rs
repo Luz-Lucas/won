@@ -50,7 +50,7 @@ pub enum Refusal {
 impl std::fmt::Display for Refusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Refusal::Protected => "processo protegido do sistema ou do Sentinela",
+            Refusal::Protected => "processo protegido do sistema ou do WON",
             Refusal::AntiCheat => "processo de anticheat",
             Refusal::NotInTargets => "processo fora da lista `targets` do mod",
         })

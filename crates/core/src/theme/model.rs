@@ -112,7 +112,7 @@ pub fn parse(text: &str) -> Result<Parsed, String> {
         Some(toml::Value::Integer(v)) if *v == VERSION => {}
         Some(toml::Value::Integer(v)) if *v > VERSION => {
             return Err(format!(
-                "este tema é da versão {v}; atualize o Sentinela para usá-lo"
+                "este tema é da versão {v}; atualize o WON para usá-lo"
             ));
         }
         _ => return Err("theme.toml sem `version = 1`".into()),

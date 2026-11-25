@@ -1,4 +1,4 @@
-//! Reinício do Explorer, só por pedido explícito do usuário (o Sentinela nunca
+//! Reinício do Explorer, só por pedido explícito do usuário (o WON nunca
 //! reinicia o Explorer sozinho).
 
 #[cfg(windows)]

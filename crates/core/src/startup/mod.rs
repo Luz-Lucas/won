@@ -106,9 +106,9 @@ pub trait StartupStore {
     fn env_var(&self, name: &str) -> Option<String>;
 }
 
-pub const SENTINELA_NOTE: &str = "Este é o Sentinela. Para desligar, use Ajustes → Inicialização.";
+pub const SENTINELA_NOTE: &str = "Este é o WON. Para desligar, use Ajustes → Inicialização.";
 
-/// A entrada que o próprio Sentinela registra (ligada em Ajustes).
+/// A entrada que o próprio WON registra (ligada em Ajustes).
 pub fn is_sentinela(e: &StartupEntry) -> bool {
     e.source == StartupSource::RunHkcu
         && (e.name.eq_ignore_ascii_case("Sentinela")

@@ -58,7 +58,7 @@ pub fn run() {
             app.manage(tweaks_state);
             app.manage(SettingsState::load(default_settings_path()));
             if let Err(e) = tray::setup(app.handle()) {
-                eprintln!("Sentinela: sem ícone na bandeja: {e}");
+                eprintln!("WON: sem ícone na bandeja: {e}");
             }
             sync_autostart(app.handle());
             commands::settings::sync_explorer_menu(app.handle());
@@ -238,7 +238,7 @@ pub fn run() {
             commands::routes::net_compare,
         ])
         .build(tauri::generate_context!())
-        .expect("erro ao iniciar o Sentinela")
+        .expect("erro ao iniciar o WON")
         .run(|app, event| {
             // Ao sair, a vigia desliga a rota e solta o Wi‑Fi que ligou.
             if let tauri::RunEvent::Exit = event

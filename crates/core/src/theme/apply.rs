@@ -46,7 +46,7 @@ pub struct TerminalCtx<'a> {
     /// Perfis do PowerShell que existem nesta máquina.
     pub profiles: Vec<(Shell, PathBuf)>,
     pub wt_settings: Vec<PathBuf>,
-    /// Pasta dos temas do prompt que o Sentinela gerencia.
+    /// Pasta dos temas do prompt que o WON gerencia.
     pub prompts_dir: PathBuf,
     pub omp_installed: bool,
 }
@@ -199,7 +199,7 @@ fn terminal_preview(
             kind: "terminal",
             label: "Tema do prompt (Oh My Posh)".into(),
             change: true,
-            detail: "entra no perfil do PowerShell, entre os marcadores do Sentinela".into(),
+            detail: "entra no perfil do PowerShell, entre os marcadores do WON".into(),
         });
         if ctx.is_some_and(|c| !c.omp_installed) {
             warnings.push("o Oh My Posh não está instalado; instale-o em Personalizar → Terminal para o prompt aparecer".into());

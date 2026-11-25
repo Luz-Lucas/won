@@ -68,12 +68,12 @@ describe("ScanSettings", () => {
   it("explorer_menu_setting", async () => {
     vi.mocked(api.explorerMenuSet).mockResolvedValue({ enabled: false, note: null });
     render(<ScanSettings />);
-    const box = await screen.findByLabelText('"Verificar com o Sentinela" no clique direito');
+    const box = await screen.findByLabelText('"Verificar com o WON" no clique direito');
     expect(box).toBeChecked();
     await userEvent.click(box);
     expect(api.explorerMenuSet).toHaveBeenCalledWith(false);
     expect(
-      await screen.findByLabelText('"Verificar com o Sentinela" no clique direito'),
+      await screen.findByLabelText('"Verificar com o WON" no clique direito'),
     ).not.toBeChecked();
   });
 
@@ -84,7 +84,7 @@ describe("ScanSettings", () => {
     });
     render(<ScanSettings />);
     expect(
-      await screen.findByLabelText('"Verificar com o Sentinela" no clique direito'),
+      await screen.findByLabelText('"Verificar com o WON" no clique direito'),
     ).toBeDisabled();
     expect(screen.getByText(/só é registrado pela versão instalada/)).toBeInTheDocument();
   });

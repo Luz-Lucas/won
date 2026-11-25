@@ -195,7 +195,7 @@ export interface PauseState {
 
 export const scanPause = (paused: boolean) => invoke<PauseState>("scan_pause", { paused });
 export const scanPauseState = () => invoke<PauseState>("scan_pause_state");
-/** Pedidos do menu "Verificar com o Sentinela" do Explorador (esvazia a fila). */
+/** Pedidos do menu "Verificar com o WON" do Explorador (esvazia a fila). */
 export const scanRequestTake = () => invoke<string[]>("scan_request_take");
 
 export interface ExplorerMenuView {
@@ -437,7 +437,7 @@ export interface StartupItem {
   enabled: boolean;
   file_exists: boolean;
   needs_admin: boolean;
-  /** A entrada do próprio Sentinela (sem interruptor). */
+  /** A entrada do próprio WON (sem interruptor). */
   sentinela: boolean;
   /** Por que o interruptor está travado nesta janela. */
   locked: string | null;
@@ -466,7 +466,7 @@ export interface GameItem {
   /** "Alto desempenho" gravado agora. */
   enabled: boolean;
   in_journal: boolean;
-  /** Ligado fora do Sentinela (Configurações → Gráficos). */
+  /** Ligado fora do WON (Configurações → Gráficos). */
   external: boolean;
   blocked: string | null;
   /** Prioridade de rede (QoS, DSCP 46). */
@@ -751,7 +751,7 @@ export interface NetRoute {
   kind: RouteKind;
   /** Ligada agora (null: não deu para saber). */
   on: boolean | null;
-  /** O Sentinela liga e desliga (serviços pagos: não). */
+  /** O WON liga e desliga (serviços pagos: não). */
   controllable: boolean;
   note: string | null;
 }

@@ -92,7 +92,7 @@ pub struct Status {
     pub profiles: Vec<ProfileInfo>,
     pub windows_terminal: bool,
     pub fonts: Vec<FontInfo>,
-    /// Há tema do Sentinela aplicado que dá para desfazer.
+    /// Há tema do WON aplicado que dá para desfazer.
     pub can_undo: bool,
 }
 
@@ -294,7 +294,7 @@ pub async fn terminal_apply(req: Request) -> Result<Applied, String> {
     .await
 }
 
-/// Tira só o bloco do Sentinela dos perfis do PowerShell.
+/// Tira só o bloco do WON dos perfis do PowerShell.
 #[tauri::command]
 pub async fn terminal_disable_prompt() -> Result<usize, String> {
     blocking(|| {
@@ -347,7 +347,7 @@ pub async fn terminal_history() -> Result<Vec<HistoryItem>, String> {
 #[derive(Debug, Serialize)]
 pub struct UndoOutcome {
     pub undone: Option<HistoryItem>,
-    /// O arquivo mudou depois do Sentinela: a tela pergunta antes de forçar.
+    /// O arquivo mudou depois do WON: a tela pergunta antes de forçar.
     pub changed_after: Option<String>,
 }
 

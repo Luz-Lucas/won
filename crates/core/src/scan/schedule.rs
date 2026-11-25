@@ -11,7 +11,7 @@ use crate::games::running::Process;
 
 /// Nome da tarefa, na raiz do Agendador (criar pastas exige administrador).
 pub const TASK_NAME: &str = "Sentinela - verificacao rapida semanal";
-/// Argumento com que a tarefa abre o Sentinela.
+/// Argumento com que a tarefa abre o WON.
 pub const SCHEDULED_ARG: &str = "--scheduled-scan";
 
 fn xml_escape(s: &str) -> String {
@@ -29,7 +29,7 @@ pub fn task_xml(exe: &Path) -> String {
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Verificação rápida semanal do Sentinela. Para desligar, use Ajustes no Sentinela.</Description>
+    <Description>Verificação rápida semanal do WON. Para desligar, use Ajustes no WON.</Description>
   </RegistrationInfo>
   <Triggers>
     <CalendarTrigger>
@@ -120,7 +120,7 @@ pub fn notification(summary: &ScanSummary, quarantined: usize) -> (String, Strin
         )
     } else {
         format!(
-            "{} maliciosos, {} suspeitos. Abra o Sentinela para decidir o que fazer.",
+            "{} maliciosos, {} suspeitos. Abra o WON para decidir o que fazer.",
             summary.malicious, summary.suspicious
         )
     };

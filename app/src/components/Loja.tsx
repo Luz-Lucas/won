@@ -284,7 +284,7 @@ export default function Loja() {
       </ul>
       <p className="muted">
         Ponteiros e ícones mudam só a sua conta e guardam o valor anterior: "Reverter" devolve
-        exatamente o que havia. Os itens do programa são originais do Sentinela (CC0); créditos em
+        exatamente o que havia. Os itens do programa são originais do WON (CC0); créditos em
         docs/loja-creditos.md.
       </p>
       {pending && (

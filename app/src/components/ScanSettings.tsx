@@ -93,7 +93,7 @@ export default function ScanSettings() {
                 disabled={busy || explorer.note !== null}
                 onChange={(e) => void run(() => explorerMenuSet(e.target.checked), setExplorer)}
               />{" "}
-              "Verificar com o Sentinela" no clique direito
+              "Verificar com o WON" no clique direito
             </label>
           </p>
           <p className="muted">

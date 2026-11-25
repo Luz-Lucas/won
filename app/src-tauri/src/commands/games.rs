@@ -26,7 +26,7 @@ pub struct Switch {
     /// Gravado agora.
     pub enabled: bool,
     pub in_journal: bool,
-    /// Ligado fora do Sentinela: o interruptor trava.
+    /// Ligado fora do WON: o interruptor trava.
     pub external: bool,
     pub blocked: Option<String>,
 }
@@ -42,7 +42,7 @@ pub struct GameItem {
     /// A preferência "Alto desempenho" está gravada agora.
     pub enabled: bool,
     pub in_journal: bool,
-    /// Ligado fora do Sentinela (Configurações → Gráficos): o interruptor trava.
+    /// Ligado fora do WON (Configurações → Gráficos): o interruptor trava.
     pub external: bool,
     pub blocked: Option<String>,
     /// Prioridade de rede (QoS, DSCP 46).
