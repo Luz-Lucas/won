@@ -1276,6 +1276,22 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                         }
                     }
                 });
+                // Iniciar: o Windows devolve o pincel dele a cada estado visual (foco, abrir);
+                // confere várias vezes por segundo para o tema não piscar.
+                std::thread::spawn(|| {
+                    let mut cfg = (false, Style::default());
+                    let mut n = 0u32;
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_millis(40));
+                        if n % 12 == 0 {
+                            cfg = want_on();
+                        }
+                        n = n.wrapping_add(1);
+                        if cfg.0 && (cfg.1.start_fill.is_some() || cfg.1.start_radius.is_some()) {
+                            apply_all_start(true, cfg.1.clone());
+                        }
+                    }
+                });
                 // Vigia: arquivo de eject / cfg mudando reaplica ou restaura.
                 let mut last: Option<(bool, Style)> = None;
                 loop {
@@ -1495,13 +1511,23 @@ fn apply_start(t: &mut TrackedStart, on: bool, st: &Style) -> Result<()> {
             t.orig = Some((t.border.Background().ok(), t.border.CornerRadius()?));
         }
         if let Some((a, r, g, b)) = st.start_fill {
-            let brush = SolidColorBrush::CreateInstanceWithColor(Color {
-                A: a,
-                R: r,
-                G: g,
-                B: b,
-            })?;
-            t.border.SetBackground(&brush.cast::<Brush>()?)?;
+            // Idempotente: só troca se o Windows tiver devolvido o pincel dele (evita piscar).
+            let same = t
+                .border
+                .Background()
+                .ok()
+                .and_then(|bg| bg.cast::<SolidColorBrush>().ok())
+                .and_then(|sb| sb.Color().ok())
+                .is_some_and(|c| c.A == a && c.R == r && c.G == g && c.B == b);
+            if !same {
+                let brush = SolidColorBrush::CreateInstanceWithColor(Color {
+                    A: a,
+                    R: r,
+                    G: g,
+                    B: b,
+                })?;
+                t.border.SetBackground(&brush.cast::<Brush>()?)?;
+            }
         }
         if let Some(rad) = st.start_radius {
             t.border.SetCornerRadius(CornerRadius {
