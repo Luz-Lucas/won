@@ -172,8 +172,8 @@ static MODULE: OnceLock<usize> = OnceLock::new();
 /// Elementos medidos para as ilhas (só lidos na thread de UI).
 struct Measured(FrameworkElement);
 unsafe impl Send for Measured {}
-static LAST_ISLAND: Mutex<Option<(bool, i32, i32)>> = Mutex::new(None);
-static REPEATER: Mutex<Option<Measured>> = Mutex::new(None);
+static LAST_ISLAND: Mutex<Vec<(bool, i32, i32)>> = Mutex::new(Vec::new());
+static REPEATER: Mutex<Vec<Measured>> = Mutex::new(Vec::new());
 
 #[repr(C)]
 struct WinRect {
@@ -273,22 +273,26 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
             Bottom: st.island_v,
         });
     }
-    let rep = REPEATER.lock().unwrap();
-    let rep = &rep.as_ref()?.0;
-    let w = width_of(rep);
+    // Cada barra (monitor principal e secundários) tem o seu ItemsRepeater: usa o que está dentro
+    // do mesmo pai do retângulo e ignora os das outras barras.
+    let anchor = VisualTreeHelper::GetParent(fe)
+        .ok()
+        .and_then(|p| p.cast::<windows_core::IUnknown>().ok())?;
+    let reps = REPEATER.lock().unwrap();
+    let (rep, rep_x) = reps.iter().find_map(|m| {
+        let u = m.0.cast::<UIElement>().ok()?;
+        Some((m.0.clone(), x_in(&anchor, &u)?))
+    })?;
+    drop(reps);
+    let w = width_of(&rep);
     if w <= 0.0 {
         return None;
     }
-    let rep_x = f64::from(rep.cast::<UIElement>().ok()?.ActualOffset().ok()?.X);
     // O ItemsRepeater costuma ocupar a barra inteira: a ilha acompanha só os botões dentro dele.
-    // As posições são somadas subindo até o pai do retângulo, que é onde a margem vale.
-    let anchor = VisualTreeHelper::GetParent(fe)
-        .ok()
-        .and_then(|p| p.cast::<windows_core::IUnknown>().ok());
     let (mut lo, mut hi) = (f64::MAX, f64::MIN);
-    let n = VisualTreeHelper::GetChildrenCount(rep).unwrap_or(0);
+    let n = VisualTreeHelper::GetChildrenCount(&rep).unwrap_or(0);
     for i in 0..n {
-        let Ok(c) = VisualTreeHelper::GetChild(rep, i) else {
+        let Ok(c) = VisualTreeHelper::GetChild(&rep, i) else {
             continue;
         };
         let (Ok(cf), Ok(cu)) = (c.cast::<FrameworkElement>(), c.cast::<UIElement>()) else {
@@ -298,9 +302,7 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         if cw <= 0.0 {
             continue;
         }
-        let Some(cx) = anchor.as_ref().and_then(|a| x_in(a, &cu)) else {
-            continue;
-        };
+        let cx = rep_x + f64::from(cu.ActualOffset().ok()?.X);
         lo = lo.min(cx);
         hi = hi.max(cx + cw);
     }
@@ -389,8 +391,12 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
             t.rect.SetRadiusY(st.radius)?;
             ui.SetOpacity(1.0)?;
             if let Some(m) = island_margins(&fe, t.is_border, st) {
-                let key = (t.is_border, m.Left as i32, m.Right as i32);
-                if LAST_ISLAND.lock().unwrap().as_ref() != Some(&key) {
+                let key = (
+                    t.is_border,
+                    m.Left as i32,
+                    m.Right as i32 + bar_width(&fe) as i32 * 10000,
+                );
+                if !LAST_ISLAND.lock().unwrap().contains(&key) {
                     log(&format!(
                         "ilha {} esquerda={:.0} direita={:.0} (barra={:.0})",
                         if t.is_border { "bandeja" } else { "apps" },
@@ -398,7 +404,13 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
                         m.Right,
                         bar_width(&fe)
                     ));
-                    *LAST_ISLAND.lock().unwrap() = Some(key);
+                    {
+                        let mut seen = LAST_ISLAND.lock().unwrap();
+                        if seen.len() > 64 {
+                            seen.clear();
+                        }
+                        seen.push(key);
+                    }
                 }
                 fe.SetMargin(m)?;
             }
@@ -597,7 +609,13 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                     unsafe { windows::core::IInspectable::from_raw(raw) };
                 if let Ok(fe) = insp.cast::<FrameworkElement>() {
                     log(&format!("medindo {ty} #{name}"));
-                    *REPEATER.lock().unwrap() = Some(Measured(fe));
+                    let mut reps = REPEATER.lock().unwrap();
+                    if !reps.iter().any(|m| m.0 == fe) {
+                        reps.push(Measured(fe));
+                        if reps.len() > 8 {
+                            reps.remove(0);
+                        }
+                    }
                 }
             }
             return S_OK;
