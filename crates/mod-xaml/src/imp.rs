@@ -172,6 +172,7 @@ static MODULE: OnceLock<usize> = OnceLock::new();
 /// Elementos medidos para as ilhas (só lidos na thread de UI).
 struct Measured(FrameworkElement);
 unsafe impl Send for Measured {}
+static LAST_ISLAND: Mutex<Option<(bool, i32, i32)>> = Mutex::new(None);
 static REPEATER: Mutex<Option<Measured>> = Mutex::new(None);
 
 #[repr(C)]
@@ -240,6 +241,21 @@ fn bar_width(fe: &FrameworkElement) -> f64 {
 }
 
 /// Margens das duas ilhas a partir do que está na tela agora. `None` = ainda sem medidas.
+/// Posição X de `el` no sistema de coordenadas de `ancestor` (soma dos deslocamentos).
+fn x_in(ancestor: &windows_core::IUnknown, el: &UIElement) -> Option<f64> {
+    let mut sum = 0.0;
+    let mut cur = el.clone();
+    for _ in 0..16 {
+        sum += f64::from(cur.ActualOffset().ok()?.X);
+        let p = VisualTreeHelper::GetParent(&cur).ok()?;
+        if p.cast::<windows_core::IUnknown>().ok()? == *ancestor {
+            return Some(sum);
+        }
+        cur = p.cast::<UIElement>().ok()?;
+    }
+    None
+}
+
 fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Thickness> {
     let total = bar_width(fe);
     if total <= 0.0 {
@@ -265,6 +281,10 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
     }
     let rep_x = f64::from(rep.cast::<UIElement>().ok()?.ActualOffset().ok()?.X);
     // O ItemsRepeater costuma ocupar a barra inteira: a ilha acompanha só os botões dentro dele.
+    // As posições são somadas subindo até o pai do retângulo, que é onde a margem vale.
+    let anchor = VisualTreeHelper::GetParent(fe)
+        .ok()
+        .and_then(|p| p.cast::<windows_core::IUnknown>().ok());
     let (mut lo, mut hi) = (f64::MAX, f64::MIN);
     let n = VisualTreeHelper::GetChildrenCount(rep).unwrap_or(0);
     for i in 0..n {
@@ -278,15 +298,13 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         if cw <= 0.0 {
             continue;
         }
-        let cx = f64::from(cu.ActualOffset().ok()?.X);
+        let Some(cx) = anchor.as_ref().and_then(|a| x_in(a, &cu)) else {
+            continue;
+        };
         lo = lo.min(cx);
         hi = hi.max(cx + cw);
     }
-    let (x, w) = if hi > lo {
-        (rep_x + lo, hi - lo)
-    } else {
-        (rep_x, w)
-    };
+    let (x, w) = if hi > lo { (lo, hi - lo) } else { (rep_x, w) };
     let left = (x - st.island_pad).max(0.0);
     let right = (total - x - w - st.island_pad).max(0.0);
     Some(Thickness {
@@ -371,6 +389,17 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
             t.rect.SetRadiusY(st.radius)?;
             ui.SetOpacity(1.0)?;
             if let Some(m) = island_margins(&fe, t.is_border, st) {
+                let key = (t.is_border, m.Left as i32, m.Right as i32);
+                if LAST_ISLAND.lock().unwrap().as_ref() != Some(&key) {
+                    log(&format!(
+                        "ilha {} esquerda={:.0} direita={:.0} (barra={:.0})",
+                        if t.is_border { "bandeja" } else { "apps" },
+                        m.Left,
+                        m.Right,
+                        bar_width(&fe)
+                    ));
+                    *LAST_ISLAND.lock().unwrap() = Some(key);
+                }
                 fe.SetMargin(m)?;
             }
         } else if t.is_border {
