@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use super::atalhos::{
+    APP_ROLES, AppliedShortcuts, Backup, RevertedShortcuts, ShortcutsActive, classify,
+};
 use super::catalog::{Fetch, Item, Kind, MAX_PACK, Source, bundled_pack};
 use super::sys::Sys;
 use crate::tweaks::model::{Action, Hive, RegValue};
@@ -38,6 +41,29 @@ const ICON_ROLES: &[&str] = &[
     "recycle_full",
     "user",
     "network",
+    // unidades e tipos de arquivo (registro do usuário)
+    "drive",
+    "file_text",
+    "file_zip",
+    "file_script",
+    // categorias de aplicativo (atalhos .lnk; ver `atalhos.rs`)
+    "app_browser",
+    "app_terminal",
+    "app_code",
+    "app_chat",
+    "app_music",
+    "app_video",
+    "app_game",
+    "app_tools",
+    "app_office",
+    "app_generic",
+];
+
+/// Papel -> programas (ProgIDs) cujo `DefaultIcon` o papel troca.
+const FILE_ROLES: &[(&str, &[&str])] = &[
+    ("file_text", &["txtfile"]),
+    ("file_zip", &["CompressedFolder"]),
+    ("file_script", &["batfile", "cmdfile"]),
 ];
 
 const CLSID_PC: &str = "{20D04FE0-3AEA-1069-A2D8-08002B30309D}";
@@ -63,11 +89,18 @@ struct Active {
 pub struct LibraryState {
     cursores: Option<Active>,
     icones: Option<Active>,
+    /// Atalhos (.lnk) com ícone trocado e a cópia dos originais.
+    #[serde(default)]
+    atalhos: Option<ShortcutsActive>,
 }
 
 impl LibraryState {
     pub fn active(&self, kind: Kind) -> Option<&str> {
         self.slot(kind).as_ref().map(|a| a.id.as_str())
+    }
+    /// Pacote cujos ícones estão nos atalhos agora.
+    pub fn active_shortcuts(&self) -> Option<&str> {
+        self.atalhos.as_ref().map(|a| a.id.as_str())
     }
     fn slot(&self, kind: Kind) -> &Option<Active> {
         match kind {
@@ -356,6 +389,24 @@ impl Library {
                 out.push((key(clsid), String::new(), s(f)));
             }
         }
+        if let Some(f) = file("drive") {
+            out.push((
+                "Software\\Classes\\Drive\\DefaultIcon".into(),
+                String::new(),
+                s(f),
+            ));
+        }
+        for (role, progs) in FILE_ROLES {
+            if let Some(f) = file(role) {
+                for prog in *progs {
+                    out.push((
+                        format!("Software\\Classes\\{prog}\\DefaultIcon"),
+                        String::new(),
+                        s(f.clone()),
+                    ));
+                }
+            }
+        }
         let empty = file("recycle_empty");
         let full = file("recycle_full");
         if let Some(e) = &empty {
@@ -396,31 +447,37 @@ impl Library {
         let (dir, roles) = self.roles(item.kind, &item.id)?;
         let writes = Self::writes(item.kind, &item.name, &dir, &roles);
         let mut state = self.state();
-        let previous = match state.slot(item.kind) {
-            Some(a) => a.previous.clone(),
-            None => {
-                let mut prev = Vec::new();
-                for (path, name, _) in &writes {
-                    let a = reg(path, name);
-                    let value = match backend.read(&a)? {
-                        Snapshot::Registry { value } => value,
-                        _ => None,
-                    };
-                    prev.push(Prev {
-                        path: path.clone(),
-                        name: name.clone(),
-                        value,
-                        key_existed: backend.key_exists(&a)?,
-                    });
-                }
-                prev
+        // Guarda o valor original de tudo o que este pacote grava e ainda não está guardado
+        // (pacotes diferentes trazem papéis diferentes: trocar de um pacote de 6 ícones para
+        // um de 19 não pode perder o original dos 13 novos).
+        let mut previous = state
+            .slot(item.kind)
+            .as_ref()
+            .map(|a| a.previous.clone())
+            .unwrap_or_default();
+        for (path, name, _) in &writes {
+            if previous.iter().any(|p| &p.path == path && &p.name == name) {
+                continue;
             }
-        };
+            let a = reg(path, name);
+            let value = match backend.read(&a)? {
+                Snapshot::Registry { value } => value,
+                _ => None,
+            };
+            previous.push(Prev {
+                path: path.clone(),
+                name: name.clone(),
+                value,
+                key_existed: backend.key_exists(&a)?,
+            });
+        }
         for (done, (path, name, value)) in writes.iter().enumerate() {
             if let Err(e) = Self::write_value(backend, path, name, Some(value.clone())) {
                 // Desfaz o que já foi escrito para não deixar meio aplicado.
-                for p in previous.iter().take(done) {
-                    let _ = Self::write_value(backend, &p.path, &p.name, p.value.clone());
+                for (path, name, _) in writes.iter().take(done) {
+                    if let Some(p) = previous.iter().find(|p| &p.path == path && &p.name == name) {
+                        let _ = Self::write_value(backend, &p.path, &p.name, p.value.clone());
+                    }
                 }
                 return Err(format!("não foi possível aplicar: {e}"));
             }
@@ -490,6 +547,109 @@ impl Library {
             failed,
         })
     }
+
+    fn shortcuts_backup_dir(&self) -> PathBuf {
+        self.dir.join("originais").join("atalhos")
+    }
+
+    /// Troca o ícone dos atalhos (Área de Trabalho e Menu Iniciar do usuário) pelos glifos de
+    /// aplicativo do pacote `id`. Guarda uma cópia de cada `.lnk` antes de mexer.
+    pub fn apply_shortcuts(&self, id: &str, sys: &dyn Sys) -> Result<AppliedShortcuts, String> {
+        let (dir, roles) = self.roles(Kind::Icones, id)?;
+        if !roles.keys().any(|r| APP_ROLES.contains(&r.as_str())) {
+            return Err("Este pacote não tem ícones de aplicativos.".into());
+        }
+        let mut state = self.state();
+        let mut items = state.atalhos.take().map(|a| a.items).unwrap_or_default();
+        let bdir = self.shortcuts_backup_dir();
+        std::fs::create_dir_all(&bdir).map_err(|e| format!("pasta dos originais: {e}"))?;
+        let (mut changed, mut skipped, mut failed) = (0usize, 0usize, Vec::new());
+        for sc in sys.list_shortcuts() {
+            let name = sc
+                .path
+                .file_stem()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let Some(role) = classify(&name, &sc.target) else {
+                skipped += 1;
+                continue;
+            };
+            let Some(file) = roles.get(role).or_else(|| roles.get("app_generic")) else {
+                skipped += 1;
+                continue;
+            };
+            let key = sc.path.to_string_lossy().into_owned();
+            if !items.iter().any(|b| b.path == key) {
+                let tag = hex::encode(&Sha256::digest(key.as_bytes())[..8]);
+                let copy = bdir.join(format!("{tag}.lnk"));
+                if let Err(e) = std::fs::copy(&sc.path, &copy) {
+                    failed.push(format!("{name}: sem cópia do original ({e})"));
+                    continue;
+                }
+                items.push(Backup {
+                    path: key.clone(),
+                    backup: copy.to_string_lossy().into_owned(),
+                });
+            }
+            match sys.set_shortcut_icon(&sc.path, &dir.join(file)) {
+                Ok(()) => changed += 1,
+                Err(e) => failed.push(format!("{name}: {e}")),
+            }
+        }
+        state.atalhos = Some(ShortcutsActive {
+            id: id.to_string(),
+            items,
+        });
+        self.save(&state)?;
+        sys.refresh_icons();
+        Ok(AppliedShortcuts {
+            id: id.to_string(),
+            changed,
+            skipped,
+            failed,
+            restart_explorer: true,
+        })
+    }
+
+    /// Devolve os `.lnk` originais (cópia byte a byte).
+    pub fn revert_shortcuts(&self, sys: &dyn Sys) -> Result<RevertedShortcuts, String> {
+        let mut state = self.state();
+        let Some(active) = state.atalhos.take() else {
+            return Err("A Loja não mexeu em nenhum atalho.".into());
+        };
+        let (mut restored, mut failed, mut left) = (0usize, Vec::new(), Vec::new());
+        for b in active.items {
+            let target = PathBuf::from(&b.path);
+            if !target.parent().is_some_and(|p| p.is_dir()) {
+                let _ = std::fs::remove_file(&b.backup); // a pasta sumiu: nada a devolver
+                continue;
+            }
+            match std::fs::copy(&b.backup, &target) {
+                Ok(_) => {
+                    restored += 1;
+                    let _ = std::fs::remove_file(&b.backup);
+                }
+                Err(e) => {
+                    failed.push(format!("{}: {e}", b.path));
+                    left.push(b);
+                }
+            }
+        }
+        if !left.is_empty() {
+            state.atalhos = Some(ShortcutsActive {
+                id: active.id.clone(),
+                items: left,
+            });
+        }
+        self.save(&state)?;
+        sys.refresh_icons();
+        Ok(RevertedShortcuts {
+            id: active.id,
+            restored,
+            failed,
+            restart_explorer: true,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -552,6 +712,12 @@ mod tests {
     #[derive(Default)]
     struct FakeSys(Mutex<Vec<String>>);
     impl Sys for FakeSys {
+        fn list_shortcuts(&self) -> Vec<crate::store::atalhos::Shortcut> {
+            Vec::new()
+        }
+        fn set_shortcut_icon(&self, _: &Path, _: &Path) -> Result<(), String> {
+            Ok(())
+        }
         fn refresh_cursors(&self) {
             self.0.lock().unwrap().push("cursores".into());
         }
@@ -684,5 +850,207 @@ mod tests {
             .clone();
         item.source = Source::Remote("https://x".into());
         assert!(l.install(&item, &Bad).unwrap_err().contains("SHA-256"));
+    }
+
+    /// Pacote com todos os 20 papéis (ícones de 6 bytes só com o cabeçalho certo).
+    fn full_pack(l: &Library, id: &str) {
+        use std::io::Write;
+        let mut buf = Vec::new();
+        {
+            let mut z = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+            let o = zip::write::SimpleFileOptions::default();
+            let mut papeis = BTreeMap::new();
+            for r in ICON_ROLES {
+                z.start_file(format!("{r}.ico"), o).unwrap();
+                z.write_all(&[0, 0, 1, 0, 0, 0]).unwrap();
+                papeis.insert((*r).to_string(), format!("{r}.ico"));
+            }
+            z.start_file("manifest.json", o).unwrap();
+            z.write_all(
+                serde_json::json!({"tipo": "icones", "papeis": papeis})
+                    .to_string()
+                    .as_bytes(),
+            )
+            .unwrap();
+            z.finish().unwrap();
+        }
+        l.extract(Kind::Icones, id, &buf).unwrap();
+    }
+
+    #[test]
+    fn full_pack_sets_drive_and_file_type_keys_and_revert_restores_everything() {
+        let (_d, l) = lib();
+        let b = Fake::default();
+        let sys = FakeSys::default();
+        let item = Catalog::bundled()
+            .unwrap()
+            .get("icones-flat")
+            .unwrap()
+            .clone();
+        let txt = "Software\\Classes\\txtfile\\DefaultIcon".to_string();
+        let drive = "Software\\Classes\\Drive\\DefaultIcon".to_string();
+        // O usuário já tinha um ícone de .txt próprio.
+        b.vals.lock().unwrap().insert(
+            (txt.clone(), String::new()),
+            RegValue::String("C:\\meu.ico".into()),
+        );
+        b.keys.lock().unwrap().push(txt.clone());
+
+        // 1º um pacote antigo (6 papéis), depois um completo: o original dos papéis novos
+        // tem que ser guardado mesmo assim.
+        l.install(&item, &HttpFetch).unwrap();
+        l.apply(&item, &b, &sys).unwrap();
+        full_pack(&l, "completo");
+        let full = Item {
+            id: "completo".into(),
+            name: "Completo".into(),
+            ..item.clone()
+        };
+        l.apply(&full, &b, &sys).unwrap();
+        {
+            let v = b.vals.lock().unwrap();
+            assert!(
+                matches!(&v[&(txt.clone(), String::new())], RegValue::String(x) if x.ends_with("file_text.ico"))
+            );
+            assert!(v.contains_key(&(drive.clone(), String::new())));
+            assert!(v.contains_key(&(
+                "Software\\Classes\\batfile\\DefaultIcon".to_string(),
+                String::new()
+            )));
+        }
+        b.keys.lock().unwrap().retain(|k| k == &txt);
+        l.revert(Kind::Icones, &b, &sys).unwrap();
+        let v = b.vals.lock().unwrap();
+        assert_eq!(
+            v[&(txt, String::new())],
+            RegValue::String("C:\\meu.ico".into())
+        );
+        assert!(!v.contains_key(&(drive, String::new())));
+    }
+
+    #[derive(Default)]
+    struct LnkSys {
+        lnks: Vec<crate::store::atalhos::Shortcut>,
+        set: Mutex<Vec<(PathBuf, PathBuf)>>,
+    }
+    impl Sys for LnkSys {
+        fn refresh_cursors(&self) {}
+        fn refresh_icons(&self) {}
+        fn delete_key(&self, _: &str) {}
+        fn list_shortcuts(&self) -> Vec<crate::store::atalhos::Shortcut> {
+            self.lnks.clone()
+        }
+        fn set_shortcut_icon(&self, lnk: &Path, icon: &Path) -> Result<(), String> {
+            // imita o Windows: reescreve o arquivo do atalho
+            std::fs::write(lnk, b"MODIFICADO").map_err(|e| e.to_string())?;
+            self.set.lock().unwrap().push((lnk.into(), icon.into()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn shortcuts_get_category_icons_and_revert_returns_the_original_bytes() {
+        use crate::store::atalhos::Shortcut;
+        let (d, l) = lib();
+        full_pack(&l, "completo");
+        let desk = d.path().join("desk");
+        std::fs::create_dir_all(&desk).unwrap();
+        let mk = |n: &str, t: &str| {
+            let p = desk.join(format!("{n}.lnk"));
+            std::fs::write(&p, format!("ORIGINAL-{n}")).unwrap();
+            Shortcut {
+                path: p,
+                target: t.into(),
+            }
+        };
+        let sys = LnkSys {
+            lnks: vec![
+                mk("Google Chrome", r"C:\x\chrome.exe"),
+                mk("Discord", r"C:\x\Update.exe"),
+                mk("Downloads", r"C:\Users\a\Downloads"),
+            ],
+            ..Default::default()
+        };
+        let r = l.apply_shortcuts("completo", &sys).unwrap();
+        assert_eq!((r.changed, r.skipped), (2, 1));
+        assert_eq!(l.state().active_shortcuts(), Some("completo"));
+        let set = sys.set.lock().unwrap().clone();
+        assert!(set[0].1.ends_with("app_browser.ico"));
+        assert!(set[1].1.ends_with("app_chat.ico"));
+        assert_eq!(
+            std::fs::read(desk.join("Downloads.lnk")).unwrap(),
+            b"ORIGINAL-Downloads"
+        );
+
+        // Aplicar de novo (outro pacote) não troca o backup do original pelo arquivo já alterado.
+        l.apply_shortcuts("completo", &sys).unwrap();
+        let rv = l.revert_shortcuts(&sys).unwrap();
+        assert_eq!((rv.restored, rv.failed.len()), (2, 0));
+        assert_eq!(
+            std::fs::read(desk.join("Google Chrome.lnk")).unwrap(),
+            b"ORIGINAL-Google Chrome"
+        );
+        assert_eq!(
+            std::fs::read(desk.join("Discord.lnk")).unwrap(),
+            b"ORIGINAL-Discord"
+        );
+        assert_eq!(l.state().active_shortcuts(), None);
+        assert!(l.revert_shortcuts(&sys).is_err());
+    }
+
+    #[test]
+    fn shortcuts_need_a_pack_with_app_icons() {
+        let (_d, l) = lib();
+        let c = Catalog::bundled().unwrap();
+        let item = c.get("icones-flat").unwrap();
+        l.install(item, &HttpFetch).unwrap();
+        let err = l
+            .apply_shortcuts("icones-flat", &LnkSys::default())
+            .unwrap_err();
+        assert!(err.contains("aplicativos"));
+    }
+
+    /// Lê os arquivos do repositório (`catalog/loja/`) no lugar da internet.
+    struct RepoFetch;
+    impl Fetch for RepoFetch {
+        fn get(&self, url: &str, _: u64) -> Result<Vec<u8>, String> {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../catalog/loja");
+            let rel = if url == crate::store::catalog::REMOTE_URL {
+                "remoto.json".to_string()
+            } else {
+                format!("remoto/{}", url.rsplit('/').next().unwrap())
+            };
+            std::fs::read(root.join(rel)).map_err(|e| e.to_string())
+        }
+    }
+
+    #[test]
+    fn every_online_pack_in_the_repo_checks_out_and_installs() {
+        let (_d, l) = lib();
+        let c = Catalog::bundled()
+            .unwrap()
+            .with_remote(&RepoFetch, crate::store::catalog::REMOTE_URL)
+            .unwrap();
+        let remotos: Vec<_> = c.items.iter().filter(|i| i.remote).collect();
+        assert!(
+            remotos.len() >= 21,
+            "catálogo online sem os itens esperados"
+        );
+        for i in remotos {
+            l.install(i, &RepoFetch)
+                .unwrap_or_else(|e| panic!("{}: {e}", i.id));
+            assert!(
+                !i.author.is_empty() && !i.license.is_empty(),
+                "{} sem autor/licença",
+                i.id
+            );
+            // pacotes com a tag "atalhos" têm de trazer ícone para todas as categorias de app
+            if i.tags.iter().any(|t| t == "atalhos") {
+                let (_, roles) = l.roles(i.kind, &i.id).unwrap();
+                for r in APP_ROLES {
+                    assert!(roles.contains_key(*r), "{} sem {r}", i.id);
+                }
+            }
+        }
     }
 }

@@ -943,6 +943,23 @@ export interface LojaPage {
   items: LojaItem[];
   online: boolean;
   online_error: string | null;
+  /** Pacote cujos ícones estão nos atalhos (.lnk) agora. */
+  shortcuts_active: string | null;
+}
+
+export interface LojaShortcutsApplied {
+  id: string;
+  changed: number;
+  skipped: number;
+  failed: string[];
+  restart_explorer: boolean;
+}
+
+export interface LojaShortcutsReverted {
+  id: string;
+  restored: number;
+  failed: string[];
+  restart_explorer: boolean;
 }
 
 export interface LojaApplied {
@@ -962,6 +979,10 @@ export const lojaRemove = (id: string, online: boolean) =>
 export const lojaApply = (id: string, online: boolean) =>
   invoke<LojaApplied>("loja_apply", { id, online });
 export const lojaRevert = (kind: LojaKind) => invoke<LojaReverted>("loja_revert", { kind });
+export const lojaApplyShortcuts = (id: string, online: boolean) =>
+  invoke<LojaShortcutsApplied>("loja_apply_shortcuts", { id, online });
+export const lojaRevertShortcuts = () =>
+  invoke<LojaShortcutsReverted>("loja_revert_shortcuts");
 
 export interface TerminalProfile {
   shell: string;

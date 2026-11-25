@@ -5,7 +5,8 @@ use crate::commands::tweaks::TweaksState;
 use sentinela_core::activity::{self, ActivityKind};
 use sentinela_core::store::sys::WinSys;
 use sentinela_core::store::{
-    Applied, Catalog, HttpFetch, Item, Kind, Library, REMOTE_URL, Reverted,
+    Applied, AppliedShortcuts, Catalog, HttpFetch, Item, Kind, Library, REMOTE_URL, Reverted,
+    RevertedShortcuts,
 };
 use serde::Serialize;
 use tauri::State;
@@ -26,6 +27,8 @@ pub struct LojaPage {
     /// Por que o catálogo online não carregou (o embutido sempre vale).
     pub online_error: Option<String>,
     pub online: bool,
+    /// Pacote cujos ícones estão nos atalhos (.lnk) agora.
+    pub shortcuts_active: Option<String>,
 }
 
 async fn blocking<T: Send + 'static>(
@@ -79,6 +82,7 @@ pub async fn loja_list(online: bool) -> Result<LojaPage, String> {
             items,
             online: online && online_error.is_none(),
             online_error,
+            shortcuts_active: state.active_shortcuts().map(str::to_string),
         })
     })
     .await
@@ -137,6 +141,40 @@ pub async fn loja_revert(kind: Kind, state: State<'_, TweaksState>) -> Result<Re
         let backend = state.backend();
         let done = library()?.revert(kind, backend.as_ref(), &WinSys)?;
         log(&format!("Loja: revertido {}", done.id));
+        Ok(done)
+    })
+    .await
+}
+
+/// Troca o ícone dos atalhos (Área de Trabalho e Menu Iniciar) pelos glifos de aplicativo do
+/// pacote. Cada `.lnk` original é copiado antes e volta com `loja_revert_shortcuts`.
+#[tauri::command]
+pub async fn loja_apply_shortcuts(id: String, online: bool) -> Result<AppliedShortcuts, String> {
+    blocking(move || {
+        let (cat, _) = catalog(online)?;
+        let item = cat.get(&id).ok_or("Item não encontrado no catálogo.")?;
+        let lib = library()?;
+        if !lib.installed(item.kind, &item.id) {
+            lib.install(item, &HttpFetch)?;
+        }
+        let done = lib.apply_shortcuts(&item.id, &WinSys)?;
+        log(&format!(
+            "Loja: ícones de aplicativos de {} em {} atalho(s)",
+            item.name, done.changed
+        ));
+        Ok(done)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn loja_revert_shortcuts() -> Result<RevertedShortcuts, String> {
+    blocking(move || {
+        let done = library()?.revert_shortcuts(&WinSys)?;
+        log(&format!(
+            "Loja: {} atalho(s) devolvido(s) ao original",
+            done.restored
+        ));
         Ok(done)
     })
     .await
