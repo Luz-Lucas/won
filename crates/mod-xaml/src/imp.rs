@@ -168,6 +168,17 @@ fn mods_dir() -> Option<std::path::PathBuf> {
     Some(std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Sentinela/mods"))
 }
 
+/// A pesquisa (SearchHost.exe) sempre registra a árvore, para descobrir os alvos de estilo dela.
+fn is_search_host() -> bool {
+    static V: OnceLock<bool> = OnceLock::new();
+    *V.get_or_init(|| {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().eq_ignore_ascii_case("searchhost.exe")))
+            .unwrap_or(false)
+    })
+}
+
 fn want_on() -> (bool, Style) {
     let Some(dir) = mods_dir() else { return (false, Style::default()) };
     let st = std::fs::read_to_string(dir.join("xaml-barra.cfg"))
@@ -292,7 +303,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
         // As strings pertencem a nós; `BSTR` libera no drop.
         let name = element.name.to_string();
         let ty = element.type_name.to_string();
-        if mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists()) && mutation == 0 {
+        if (is_search_host() || mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists())) && mutation == 0 {
             dump_log(&format!("{ty} #{name}"));
         }
         if mutation == 1 {
@@ -493,7 +504,7 @@ pub extern "system" fn DllMain(module: HMODULE, reason: u32, _r: *mut c_void) ->
         let _ = MODULE.set(module.0 as usize);
         // Só dentro do Explorer ou do menu Iniciar: qualquer outro processo ignora.
         let exe = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()));
-        if matches!(exe.as_deref(), Some("explorer.exe") | Some("startmenuexperiencehost.exe")) {
+        if matches!(exe.as_deref(), Some("explorer.exe") | Some("startmenuexperiencehost.exe") | Some("searchhost.exe")) {
             std::thread::spawn(install);
         }
     }

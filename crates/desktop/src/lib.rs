@@ -15,6 +15,9 @@ pub mod tiling;
 pub mod win;
 
 #[cfg(windows)]
+pub mod winsys;
+
+#[cfg(windows)]
 pub mod winbar;
 
 #[cfg(windows)]

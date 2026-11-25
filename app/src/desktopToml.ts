@@ -6,7 +6,7 @@ import { parse } from "smol-toml";
  * o programa continua validando tudo ao salvar.
  */
 
-export type Module = "title" | "clock" | "cpu" | "ram";
+export type Module = "title" | "clock" | "cpu" | "ram" | "volume" | "network";
 export type Zone = "left" | "center" | "right";
 export type Layout = "master-stack" | "columns" | "grid" | "monocle" | "rows";
 
@@ -64,7 +64,7 @@ export interface Sections {
   launcher: LauncherModel | null;
 }
 
-export const MODULES: Module[] = ["title", "cpu", "ram", "clock"];
+export const MODULES: Module[] = ["title", "network", "volume", "cpu", "ram", "clock"];
 export const LAYOUTS: Layout[] = ["master-stack", "columns", "grid", "monocle", "rows"];
 
 export const DEFAULT_BAR: BarModel = {

@@ -28,6 +28,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SM_CYSCREEN, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW, SW_SHOWNOACTIVATE, SetForegroundWindow,
     SetLayeredWindowAttributes, ShowWindow, WM_ERASEBKGND, WM_LBUTTONDOWN, WM_PAINT, WNDCLASSEXW,
     WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    DrawIconEx, GetClassLongPtrW, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_GETICON,
 };
 
 const CLASS: &str = "SentinelaDesktopBar";
@@ -57,6 +58,8 @@ const KEY: u32 = 0x00FF_00FF;
 struct AppItem {
     hwnd: isize,
     title: String,
+    /// HICON da janela (0 = ainda não achou; não é nosso, não se destrói).
+    icon: isize,
 }
 
 struct Bar {
@@ -68,6 +71,9 @@ struct Bar {
     cfg: BarConfig,
     cpu_prev: (u64, u64, u64),
     cpu: u8,
+    vol: String,
+    net: String,
+    ticks: u32,
     hidden_taskbar: bool,
 }
 
@@ -126,6 +132,8 @@ fn module_text(b: &Bar, m: Module) -> String {
         Module::Clock => bar::format_time(&b.cfg.clock_format, &now()),
         Module::Cpu => format!("CPU {}%", b.cpu),
         Module::Ram => format!("RAM {}%", ram_percent()),
+        Module::Volume => b.vol.clone(),
+        Module::Network => b.net.clone(),
     }
 }
 
@@ -181,6 +189,7 @@ fn visible_windows(own: HWND) -> Vec<AppItem> {
         out.list.push(AppItem {
             hwnd: hwnd as isize,
             title: info.title,
+            icon: 0,
         });
         1
     }
@@ -192,6 +201,27 @@ fn visible_windows(own: HWND) -> Vec<AppItem> {
     out.list
 }
 
+/// Ícone pequeno da janela: pede à própria janela (rápido, com limite de tempo) e, sem resposta,
+/// usa o ícone da classe.
+fn app_icon(hwnd: HWND) -> isize {
+    unsafe {
+        let mut r: usize = 0;
+        for kind in [2usize, 0, 1] {
+            // ICON_SMALL2, ICON_SMALL, ICON_BIG
+            if SendMessageTimeoutW(hwnd, WM_GETICON, kind, 0, SMTO_ABORTIFHUNG, 40, &mut r) != 0
+                && r != 0
+            {
+                return r as isize;
+            }
+        }
+        let c = GetClassLongPtrW(hwnd, -34); // GCLP_HICONSM
+        if c != 0 {
+            return c as isize;
+        }
+        GetClassLongPtrW(hwnd, -14) as isize // GCLP_HICON
+    }
+}
+
 /// Mantém a ordem dos botões: o que já estava fica no lugar, o novo entra no fim.
 fn merge_apps(old: &mut Vec<AppItem>, fresh: Vec<AppItem>) {
     old.retain(|o| fresh.iter().any(|f| f.hwnd == o.hwnd));
@@ -199,9 +229,14 @@ fn merge_apps(old: &mut Vec<AppItem>, fresh: Vec<AppItem>) {
         if let Some(f) = fresh.iter().find(|f| f.hwnd == o.hwnd) {
             o.title.clone_from(&f.title);
         }
+        if o.icon == 0 {
+            o.icon = app_icon(o.hwnd as HWND);
+        }
     }
     for f in fresh {
         if !old.iter().any(|o| o.hwnd == f.hwnd) {
+            let mut f = f;
+            f.icon = app_icon(f.hwnd as HWND);
             old.push(f);
         }
     }
@@ -261,12 +296,15 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
         let right_text = group_text(b, &mods);
         let right_w = text_width(hdc, &right_text) + 2 * PAD;
         let item_pad = 10;
+        // Ícone de 16 px (na escala da tela) mais um respiro.
+        let icon_px = 16 * dpi / 96;
+        let icon_w = icon_px + 6;
         let wants: Vec<(String, i32)> = b
             .apps
             .iter()
             .map(|a| {
                 let t = bar::truncate(&a.title, 28);
-                let w = text_width(hdc, &t) + 2 * item_pad;
+                let w = text_width(hdc, &t) + 2 * item_pad + icon_w;
                 (t, w)
             })
             .collect();
@@ -316,10 +354,14 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                 // Encolhe o texto junto com o botão.
                 let chars = text.chars().count().max(1) as i32;
                 let full = text_width(hdc, text).max(1);
-                let fit = (((iw - 2 * item_pad) * chars) / full).max(1) as usize;
+                let fit = (((iw - 2 * item_pad - icon_w) * chars) / full).max(1) as usize;
                 let shown = bar::truncate(text, fit);
                 let wt = shown.encode_utf16().collect::<Vec<u16>>();
-                TextOutW(hdc, x + item_pad, ty, wt.as_ptr(), wt.len() as i32);
+                if a.icon != 0 {
+                    let iy = cell.top + (cell.bottom - cell.top - icon_px) / 2;
+                    DrawIconEx(hdc, x + item_pad, iy, a.icon as _, icon_px, icon_px, 0, std::ptr::null_mut(), 3);
+                }
+                TextOutW(hdc, x + item_pad + icon_w, ty, wt.as_ptr(), wt.len() as i32);
                 hits.push((cell, a.hwnd));
                 x += iw + 4;
             }
@@ -579,6 +621,9 @@ pub fn apply(cfg: Option<&BarConfig>) {
                 cfg: cfg.clone(),
                 cpu_prev: cpu_sample(),
                 cpu: 0,
+                vol: String::new(),
+                net: String::new(),
+                ticks: 0,
                 hidden_taskbar: cfg.hide_native_taskbar,
             });
         });
@@ -613,6 +658,11 @@ pub fn tick(fullscreen_foreground: bool) {
         let cur = cpu_sample();
         b.cpu = bar::cpu_percent(b.cpu_prev, cur);
         b.cpu_prev = cur;
+        b.vol = crate::winsys::volume_text();
+        if b.ticks % 5 == 0 {
+            b.net = crate::winsys::network_text();
+        }
+        b.ticks = b.ticks.wrapping_add(1);
         if b.cfg.islands {
             let fresh = visible_windows(b.hwnd);
             merge_apps(&mut b.apps, fresh);

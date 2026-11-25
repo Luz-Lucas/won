@@ -21,12 +21,16 @@ const MODULE_LABEL: Record<Module, string> = {
   title: "Título da janela",
   cpu: "CPU",
   ram: "Memória",
+  volume: "Volume",
+  network: "Rede",
   clock: "Relógio",
 };
 const MODULE_SAMPLE: Record<Module, string> = {
   title: "Janela em foco",
   cpu: "CPU 12%",
   ram: "RAM 48%",
+  volume: "VOL 45%",
+  network: "Wi-Fi",
   clock: "14:32",
 };
 const ZONES: { id: Zone; label: string }[] = [

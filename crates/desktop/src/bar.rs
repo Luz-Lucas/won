@@ -20,6 +20,10 @@ pub enum Module {
     Clock,
     Cpu,
     Ram,
+    /// Volume do dispositivo de som padrão.
+    Volume,
+    /// Tipo de conexão (Wi-Fi, cabo ou sem rede).
+    Network,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

@@ -386,7 +386,13 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
         b.center.clone().unwrap_or_default(),
         b.right
             .clone()
-            .unwrap_or_else(|| vec![Module::Cpu, Module::Ram, Module::Clock]),
+            .unwrap_or_else(|| {
+                if b.islands {
+                    vec![Module::Network, Module::Volume, Module::Cpu, Module::Ram, Module::Clock]
+                } else {
+                    vec![Module::Cpu, Module::Ram, Module::Clock]
+                }
+            }),
     );
     if left.len() + center.len() + right.len() > 12 {
         errors.push("bar: no máximo 12 módulos".into());
