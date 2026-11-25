@@ -476,14 +476,14 @@ def itens_externos():
     os.makedirs(os.path.join(SAIDA, "remoto"), exist_ok=True)
     for id_, nome, desc, conj, nomes, tags, preto in ext.PACOTES:
         _, nome_fonte, autor, lic, attr, url = ext.FONTES[conj]
-        conteudo, manifesto = ext.pacote(conj, nomes, preto)
+        conteudo, manifesto = ext.pacote(id_, conj, nomes, preto)
         conteudo["manifest.json"] = json.dumps(manifesto, indent=1).encode()
         z = zip_bytes(conteudo)
         with open(os.path.join(SAIDA, "remoto", f"{id_}.zip"), "wb") as f:
             f.write(z)
-        prev = png(ext.previa(conj, nomes, preto))
+        prev = png(ext.previa(id_, conj, nomes, preto))
         saida.append(dict(id=id_, tipo="icones", nome=nome, autor=f"{autor} ({nome_fonte})", licenca=lic,
-                          descricao=f"{desc} Fonte: {url}", tags=tags,
+                          descricao=f"{desc} Fonte: {url}", tags=tags + ["atalhos", "unidades", "arquivos"],
                           sha256=hashlib.sha256(z).hexdigest(), bytes=len(z), url=RAW + f"{id_}.zip",
                           previa_b64=base64.b64encode(prev).decode()))
     return saida

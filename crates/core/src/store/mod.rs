@@ -7,9 +7,11 @@
 //! "Aplicar" aponta o registro do usuário (HKCU) para esses arquivos, guardando
 //! antes o valor anterior; "Reverter" devolve exatamente o que havia.
 
+pub mod atalhos;
 pub mod catalog;
 pub mod library;
 pub mod sys;
 
+pub use atalhos::{AppliedShortcuts, RevertedShortcuts};
 pub use catalog::{Catalog, Fetch, HttpFetch, Item, Kind, REMOTE_URL};
 pub use library::{Applied, Library, LibraryState, Reverted};

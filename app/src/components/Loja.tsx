@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   lojaApply,
+  lojaApplyShortcuts,
   lojaInstall,
   lojaList,
   lojaRemove,
   lojaRevert,
+  lojaRevertShortcuts,
   restartExplorer,
   themeApply,
   themePreview,
@@ -49,6 +51,8 @@ export default function Loja() {
   const [note, setNote] = useState<string | null>(null);
   const [askExplorer, setAskExplorer] = useState(false);
   const [pending, setPending] = useState<PendingTheme | null>(null);
+  const [shortcutsActive, setShortcutsActive] = useState<string | null>(null);
+  const [askShortcuts, setAskShortcuts] = useState<LojaItem | null>(null);
 
   const load = useCallback((wantOnline: boolean) => {
     return lojaList(wantOnline).then(
@@ -56,6 +60,7 @@ export default function Loja() {
         setItems(p.items);
         setOnline(p.online);
         setOnlineError(p.online_error);
+        setShortcutsActive(p.shortcuts_active);
       },
       (e) => setError(errorText(e)),
     );
@@ -112,6 +117,29 @@ export default function Loja() {
       const r = await lojaRevert(i.kind);
       if (r.failed.length > 0) throw new Error(`Não deu para devolver tudo: ${r.failed.join("; ")}`);
       setNote("Revertido ao que estava antes.");
+      if (r.restart_explorer) setAskExplorer(true);
+    });
+
+  // Atalhos (.lnk): troca o ícone dos apps da Área de Trabalho e do Menu Iniciar; confirma antes.
+  const confirmShortcuts = async () => {
+    const i = askShortcuts;
+    setAskShortcuts(null);
+    if (!i) return;
+    await run(i.id, async () => {
+      const r = await lojaApplyShortcuts(i.id, online);
+      if (r.failed.length > 0) {
+        throw new Error(`${r.changed} atalho(s) trocados; falharam: ${r.failed.join("; ")}`);
+      }
+      setNote(`${r.changed} atalho(s) com os ícones de "${i.name}". "Restaurar atalhos" devolve os originais.`);
+      if (r.restart_explorer) setAskExplorer(true);
+    });
+  };
+
+  const restoreShortcuts = () =>
+    run("atalhos", async () => {
+      const r = await lojaRevertShortcuts();
+      if (r.failed.length > 0) throw new Error(`Não deu para devolver tudo: ${r.failed.join("; ")}`);
+      setNote(`${r.restored} atalho(s) voltaram ao ícone original.`);
       if (r.restart_explorer) setAskExplorer(true);
     });
 
@@ -177,6 +205,14 @@ export default function Loja() {
         </p>
       )}
       {note && <div className="notice">{note}</div>}
+      {shortcutsActive && (
+        <div className="notice" role="status">
+          <span>{`Ícones de aplicativos aplicados nos atalhos (${byId.get(shortcutsActive)?.name ?? shortcutsActive}). `}</span>
+          <button type="button" className="btn" disabled={busy !== null} onClick={() => void restoreShortcuts()}>
+            Restaurar atalhos
+          </button>
+        </div>
+      )}
       <div className="loja-bar">
         <div role="tablist" aria-label="Categorias" className="loja-tabs">
           {TABS.map((t) => (
@@ -264,9 +300,16 @@ export default function Loja() {
                     </button>
                   </>
                 ) : i.applied ? (
-                  <button type="button" className="btn" disabled={busy !== null} onClick={() => void revert(i)} aria-label={`Reverter ${i.name}`}>
-                    {working ? "Aguarde…" : "Reverter"}
-                  </button>
+                  <>
+                    <button type="button" className="btn" disabled={busy !== null} onClick={() => void revert(i)} aria-label={`Reverter ${i.name}`}>
+                      {working ? "Aguarde…" : "Reverter"}
+                    </button>
+                    {i.tags.includes("atalhos") && (
+                      <button type="button" className="btn" disabled={busy !== null} onClick={() => setAskShortcuts(i)} aria-label={`Aplicar ${i.name} nos atalhos`}>
+                        Aplicar nos atalhos
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <>
                     <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void apply(i)} aria-label={`Aplicar ${i.name}`}>
@@ -284,8 +327,9 @@ export default function Loja() {
       </ul>
       <p className="muted">
         Ponteiros e ícones mudam só a sua conta e guardam o valor anterior: "Reverter" devolve
-        exatamente o que havia. Os itens do programa são originais do WON (CC0); créditos em
-        docs/loja-creditos.md.
+        exatamente o que havia. Os itens do programa são originais do WON (CC0). Os pacotes
+        de terceiros (Fluent, Phosphor, Tabler, Lucide, Bootstrap, Material, Font Awesome,
+        game-icons, Twemoji) mantêm autor e licença de cada um; créditos em docs/loja-creditos.md.
       </p>
       {pending && (
         <ConfirmDialog
@@ -303,6 +347,24 @@ export default function Loja() {
             <li>{`Ícones: ${byId.get(pending.item.icons ?? "")?.name ?? "—"}`}</li>
           </ul>
           <p className="muted">Dá para desfazer tudo de uma vez.</p>
+        </ConfirmDialog>
+      )}
+      {askShortcuts && (
+        <ConfirmDialog
+          title={`Trocar o ícone dos atalhos por "${askShortcuts.name}"?`}
+          confirmLabel="Trocar ícones"
+          onConfirm={() => void confirmShortcuts()}
+          onCancel={() => setAskShortcuts(null)}
+        >
+          <p>
+            Muda o ícone dos atalhos da sua Área de Trabalho e do seu Menu Iniciar para um desenho da
+            categoria do programa (navegador, terminal, chat, jogo…). Pastas, páginas da web e apps
+            da Microsoft Store ficam como estão.
+          </p>
+          <p className="muted">
+            O WON guarda uma cópia de cada atalho antes. "Restaurar atalhos" devolve os arquivos
+            originais.
+          </p>
         </ConfirmDialog>
       )}
       {askExplorer && (
