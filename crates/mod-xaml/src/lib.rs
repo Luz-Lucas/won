@@ -32,6 +32,8 @@ pub struct Style {
     pub start_hide_all: bool,
     /// Experimental: esconde também a lista A-Z (`AllAppsGrid`). Pode esvaziar o Iniciar.
     pub start_hide_list: bool,
+    /// Experimental: força o modo escuro na tela de resultados da pesquisa (WebView2).
+    pub search_dark: bool,
     /// Duas ilhas na barra nativa: uma atrás dos apps (largura acompanha os ícones) e outra atrás
     /// da bandeja/relógio. Usa `fill` e `radius` para as duas.
     pub islands: bool,
@@ -71,6 +73,7 @@ impl Default for Style {
             start_radius: None,
             start_hide_all: false,
             start_hide_list: false,
+            search_dark: false,
             islands: false,
             island_pad: 14.0,
             island_tray_pad: 10.0,
@@ -148,6 +151,7 @@ pub fn parse_style(text: &str) -> Style {
             "start_radius" => st.start_radius = v.parse::<f64>().ok().map(|r| r.clamp(0.0, 60.0)),
             "start_hide_all" => st.start_hide_all = v == "true" || v == "1",
             "start_hide_list" => st.start_hide_list = v == "true" || v == "1",
+            "search_dark" => st.search_dark = v == "true" || v == "1",
             "islands" => st.islands = v == "true" || v == "1",
             "island_pad" => {
                 st.island_pad = v
@@ -250,6 +254,7 @@ start_radius=20",
         assert!(parse_style("start_hide_all=true").start_hide_all);
         assert!(!parse_style("start_hide_all=true").start_hide_list);
         assert!(parse_style("start_hide_list=true").start_hide_list);
+        assert!(parse_style("search_dark=true").search_dark);
         let i = parse_style("islands=true\nisland_pad=20\nisland_v=99");
         assert!(i.islands);
         assert_eq!(i.island_pad, 20.0);

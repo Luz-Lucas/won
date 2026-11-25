@@ -1351,6 +1351,21 @@ pub extern "system" fn DllCanUnloadNow() -> HRESULT {
 type InitFn = unsafe extern "system" fn(PCWSTR, u32, PCWSTR, PCWSTR, GUID, PCWSTR) -> HRESULT;
 
 fn install() {
+    // A tela de resultados da pesquisa é um WebView2: o único jeito de escurecê-la daqui é pedir
+    // o modo escuro ao navegador, antes de ele ser criado (vale para a próxima abertura).
+    if is_search_host() {
+        let (on, st) = want_on();
+        if on && st.search_dark {
+            // SAFETY: executado cedo, antes de a pesquisa criar o WebView2; só esta thread mexe nisso.
+            unsafe {
+                std::env::set_var(
+                    "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                    "--force-dark-mode --enable-features=WebContentsForceDark",
+                );
+            }
+            log("pesquisa: modo escuro forçado no WebView2");
+        }
+    }
     let Some(&base) = MODULE.get() else { return };
     let mut buf = [0u16; 520];
     let n = unsafe { GetModuleFileNameW(Some(HMODULE(base as *mut c_void)), &mut buf) } as usize;

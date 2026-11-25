@@ -259,6 +259,14 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
               />{" "}
               Esconder a lista A-Z inteira (experimental, pode esvaziar o Iniciar)
             </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={style.searchDark}
+                onChange={(e) => set({ searchDark: e.target.checked })}
+              />{" "}
+              Forçar modo escuro na tela de resultados da pesquisa (experimental; vale depois de reiniciar a pesquisa)
+            </label>
           </div>
           <div className="row">
             <label>
