@@ -417,6 +417,34 @@ fn mods_dir() -> Option<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("SENTINELA_MODS_DIR") {
         return Some(d.into());
     }
+    // Em processos empacotados (a pesquisa) %LOCALAPPDATA% aponta para a pasta do pacote. A pasta
+    // dos dados sai do caminho da própria DLL: <Local>\Programs\Sentinela\mods\x.dll.
+    if let Some(m) = MODULE.get() {
+        let mut buf = [0u16; 520];
+        let n = unsafe {
+            windows::Win32::System::LibraryLoader::GetModuleFileNameW(
+                Some(HMODULE(*m as *mut c_void)),
+                &mut buf,
+            )
+        } as usize;
+        if n > 0 && n < buf.len() {
+            let dll = std::path::PathBuf::from(String::from_utf16_lossy(&buf[..n]));
+            let dirs: Vec<_> = dll.ancestors().skip(1).take(3).collect();
+            if let [mods, sentinela, programs] = dirs.as_slice() {
+                let name = |p: &std::path::Path| {
+                    p.file_name()
+                        .map(|x| x.to_string_lossy().to_ascii_lowercase())
+                };
+                if name(mods).as_deref() == Some("mods")
+                    && name(sentinela).as_deref() == Some("sentinela")
+                    && name(programs).as_deref() == Some("programs")
+                    && let Some(local) = programs.parent()
+                {
+                    return Some(local.join("Sentinela/mods"));
+                }
+            }
+        }
+    }
     Some(std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Sentinela/mods"))
 }
 
