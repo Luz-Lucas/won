@@ -331,17 +331,19 @@ fn bar_width(fe: &FrameworkElement) -> f64 {
 }
 
 /// Margens das duas ilhas a partir do que está na tela agora. `None` = ainda sem medidas.
-/// Posição X de `el` no sistema de coordenadas de `ancestor` (soma dos deslocamentos).
-fn x_in(ancestor: &windows_core::IUnknown, el: &UIElement) -> Option<f64> {
+/// Raiz da árvore de `el` e a soma dos deslocamentos X até ela (posição na raiz).
+fn root_and_x(el: &UIElement) -> Option<(windows_core::IUnknown, f64)> {
     let mut sum = 0.0;
     let mut cur = el.clone();
-    for _ in 0..16 {
+    for _ in 0..64 {
         sum += f64::from(cur.ActualOffset().ok()?.X);
-        let p = VisualTreeHelper::GetParent(&cur).ok()?;
-        if p.cast::<windows_core::IUnknown>().ok()? == *ancestor {
-            return Some(sum);
+        match VisualTreeHelper::GetParent(&cur) {
+            Ok(p) => match p.cast::<UIElement>() {
+                Ok(pu) => cur = pu,
+                Err(_) => return Some((p.cast::<windows_core::IUnknown>().ok()?, sum)),
+            },
+            Err(_) => return Some((cur.cast::<windows_core::IUnknown>().ok()?, sum)),
         }
-        cur = p.cast::<UIElement>().ok()?;
     }
     None
 }
@@ -366,12 +368,16 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
     // Cada barra (monitor principal e secundários) tem o seu ItemsRepeater: usa o que está dentro
     // do mesmo pai do retângulo e ignora os das outras barras.
     let anchor = VisualTreeHelper::GetParent(fe)
-        .ok()
-        .and_then(|p| p.cast::<windows_core::IUnknown>().ok())?;
+        .ok()?
+        .cast::<UIElement>()
+        .ok()?;
+    let (anchor_root, anchor_x) = root_and_x(&anchor)?;
     let reps = REPEATER.lock().unwrap();
+    // Posição do repeater no espaço do pai do retângulo (mesma raiz = mesma barra).
     let (rep, rep_x) = reps.iter().find_map(|m| {
         let u = m.0.cast::<UIElement>().ok()?;
-        Some((m.0.clone(), x_in(&anchor, &u)?))
+        let (root, x) = root_and_x(&u)?;
+        (root == anchor_root).then(|| (m.0.clone(), x - anchor_x))
     })?;
     drop(reps);
     let w = width_of(&rep);
@@ -503,6 +509,13 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
                     }
                 }
                 fe.SetMargin(m)?;
+            } else if !t.is_border {
+                static WARNED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if WARNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 5 {
+                    log(
+                        "ilha apps: sem medida (repetidor da mesma barra nao achado ou sem largura)",
+                    );
+                }
             }
         } else if t.is_border {
             ui.SetOpacity(if st.hide_border {
