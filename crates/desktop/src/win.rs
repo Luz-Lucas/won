@@ -121,6 +121,20 @@ pub(crate) fn window_info(hwnd: HWND) -> Option<WindowInfo> {
     }
 }
 
+pub(crate) fn process_path(pid: u32) -> Option<PathBuf> {
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut len);
+        CloseHandle(h);
+        (ok != 0).then(|| PathBuf::from(String::from_utf16_lossy(&buf[..len as usize])))
+    }
+}
+
 fn process_name(pid: u32) -> Option<String> {
     unsafe {
         let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);

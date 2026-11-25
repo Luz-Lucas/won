@@ -229,7 +229,50 @@ fn app_icon(hwnd: HWND) -> isize {
         if c != 0 {
             return c as isize;
         }
-        GetClassLongPtrW(hwnd, -14) as isize // GCLP_HICON
+        let c = GetClassLongPtrW(hwnd, -14); // GCLP_HICON
+        if c != 0 {
+            return c as isize;
+        }
+        exe_icon(hwnd)
+    }
+}
+
+/// Janelas que não respondem a WM_GETICON (Explorador de Arquivos, Configurações e outros apps
+/// UWP): usa o ícone do executável. No `ApplicationFrameHost` o app de verdade fica numa
+/// janela filha (`Windows.UI.Core.CoreWindow`).
+unsafe fn exe_icon(hwnd: HWND) -> isize {
+    use windows_sys::Win32::UI::Shell::ExtractIconExW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        let mut path = crate::win::process_path(pid);
+        let is_host = path.as_ref().and_then(|p| p.file_name()).is_some_and(|n| {
+            n.to_string_lossy()
+                .eq_ignore_ascii_case("ApplicationFrameHost.exe")
+        });
+        if is_host {
+            let core = FindWindowExW(
+                hwnd,
+                std::ptr::null_mut(),
+                wide("Windows.UI.Core.CoreWindow").as_ptr(),
+                std::ptr::null(),
+            );
+            if !core.is_null() {
+                let mut p2 = 0u32;
+                GetWindowThreadProcessId(core, &mut p2);
+                path = crate::win::process_path(p2).or(path);
+            }
+        }
+        let Some(path) = path else { return 0 };
+        let w = wide(&path.to_string_lossy());
+        let mut small: windows_sys::Win32::UI::WindowsAndMessaging::HICON = std::ptr::null_mut();
+        let n = ExtractIconExW(w.as_ptr(), 0, std::ptr::null_mut(), &mut small, 1);
+        if n > 0 && !small.is_null() {
+            small as isize
+        } else {
+            0
+        }
     }
 }
 
