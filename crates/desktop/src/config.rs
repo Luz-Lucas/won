@@ -260,6 +260,8 @@ struct RawBar {
     foreground: Option<String>,
     font: Option<String>,
     font_size: Option<u32>,
+    font_weight: Option<u32>,
+    icons_only_from: Option<u32>,
     #[serde(default)]
     hide_native_taskbar: bool,
     left: Option<Vec<Module>>,
@@ -460,6 +462,14 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
             bar::MAX_FONT
         ));
     }
+    let font_weight = b.font_weight.unwrap_or(700);
+    if !(100..=900).contains(&font_weight) {
+        errors.push("bar: font_weight deve ficar entre 100 e 900".into());
+    }
+    let icons_only_from = b.icons_only_from.unwrap_or(3);
+    if icons_only_from > 30 {
+        errors.push("bar: icons_only_from vai de 0 a 30".into());
+    }
     let font = b.font.clone().unwrap_or_else(|| "Segoe UI".into());
     if font.trim().is_empty() || font.chars().count() > 31 || font.contains('\0') {
         errors.push("bar: font inválida".into());
@@ -507,6 +517,8 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
         foreground,
         font,
         font_size,
+        font_weight,
+        icons_only_from,
         hide_native_taskbar: b.hide_native_taskbar,
         left,
         center,
@@ -784,6 +796,8 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # foreground = "#FFFFFF"
 # font = "Segoe UI"
 # font_size = 12
+# font_weight = 700            # 100 a 900 (400 normal, 700 negrito)
+# icons_only_from = 3          # com 3 ou mais janelas, a ilha mostra só ícones (0 = nunca)
 # left = ["title"]             # módulos: title, clock, cpu, ram
 # center = []
 # right = ["cpu", "ram", "clock"]

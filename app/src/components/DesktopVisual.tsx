@@ -268,6 +268,25 @@ export default function DesktopVisual({
               </fieldset>
               <Range label="Altura da barra" value={bar.height} min={20} max={96} onChange={(v) => setBar({ height: v })} format={(v) => `${v} px`} />
               <Range label="Tamanho da fonte" value={bar.fontSize} min={8} max={32} onChange={(v) => setBar({ fontSize: v })} format={(v) => `${v} pt`} />
+              <label>
+                Fonte{" "}
+                <input
+                  type="text"
+                  aria-label="Nome da fonte"
+                  value={bar.font}
+                  maxLength={31}
+                  onChange={(e) => setBar({ font: e.target.value })}
+                />
+              </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.fontWeight >= 600}
+                  onChange={(e) => setBar({ fontWeight: e.target.checked ? 700 : 400 })}
+                />
+                <span>Fonte em negrito</span>
+              </label>
+              <Range label="Só ícones a partir de" value={bar.iconsOnlyFrom} min={0} max={12} onChange={(v) => setBar({ iconsOnlyFrom: v })} format={(v) => (v === 0 ? "nunca" : `${v} janelas`)} />
               <div className="dv-colors">
                 <label>
                   Fundo{" "}

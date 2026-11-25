@@ -17,6 +17,10 @@ export interface BarModel {
   foreground: string;
   font: string;
   fontSize: number;
+  /** 100 a 900: 400 normal, 700 negrito. */
+  fontWeight: number;
+  /** Com este número de janelas ou mais a ilha mostra só ícones (0 = nunca). */
+  iconsOnlyFrom: number;
   hideNative: boolean;
   left: Module[];
   center: Module[];
@@ -97,6 +101,8 @@ export const DEFAULT_BAR: BarModel = {
   foreground: "#E6E8EB",
   font: "Segoe UI",
   fontSize: 12,
+  fontWeight: 700,
+  iconsOnlyFrom: 3,
   hideNative: false,
   left: ["title"],
   center: [],
@@ -146,6 +152,8 @@ export function readSections(text: string): Sections | null {
       foreground: str(b.foreground, DEFAULT_BAR.foreground),
       font: str(b.font, DEFAULT_BAR.font),
       fontSize: num(b.font_size, DEFAULT_BAR.fontSize),
+      fontWeight: num(b.font_weight, DEFAULT_BAR.fontWeight),
+      iconsOnlyFrom: num(b.icons_only_from, DEFAULT_BAR.iconsOnlyFrom),
       hideNative: b.hide_native_taskbar === true,
       left: mods(b.left, DEFAULT_BAR.left),
       center: mods(b.center, DEFAULT_BAR.center),
@@ -225,6 +233,8 @@ function barToml(b: BarModel): string {
     `foreground = ${q(b.foreground)}`,
     `font = ${q(b.font)}`,
     `font_size = ${Math.round(b.fontSize)}`,
+    `font_weight = ${Math.round(b.fontWeight)}`,
+    `icons_only_from = ${Math.round(b.iconsOnlyFrom)}`,
     `hide_native_taskbar = ${b.hideNative}`,
     `left = ${list(b.left)}`,
     `center = ${list(b.center)}`,

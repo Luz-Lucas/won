@@ -43,6 +43,9 @@ pub struct Tiler {
     placed_at: Option<std::time::Instant>,
     /// Verificações seguidas em que a janela estava longe do lugar.
     strikes: HashMap<isize, u8>,
+    /// Janelas com tamanho mínimo maior que o espaço (Spotify): ficam do tamanho que têm, na
+    /// borda direita, e as outras se organizam no que sobra. Valor = largura.
+    reserved: HashMap<isize, i32>,
     seen: usize,
 }
 
@@ -64,6 +67,7 @@ impl Tiler {
             last: Vec::new(),
             placed_at: None,
             strikes: HashMap::new(),
+            reserved: HashMap::new(),
             seen: usize::MAX,
         }
     }
@@ -132,6 +136,8 @@ impl Tiler {
             self.seen = found.len();
             crate::dlog::log(&format!("tiling: {} janela(s) candidata(s)", found.len()));
         }
+        self.reserved
+            .retain(|h, _| found.iter().any(|(f, _)| f == h));
         let mut per_monitor: HashMap<isize, Vec<isize>> = HashMap::new();
         for (hwnd, mon) in &found {
             per_monitor.entry(*mon).or_default().push(*hwnd);
@@ -157,15 +163,38 @@ impl Tiler {
                 "tiling: monitor {mon} área {area:?} janelas {}",
                 list.len()
             ));
+            let (resv, norm): (Vec<isize>, Vec<isize>) = list
+                .iter()
+                .copied()
+                .partition(|h| self.reserved.contains_key(h));
+            // Janelas que não encolhem ficam na borda direita, do tamanho que têm.
+            let mut right_edge = area.right;
+            for h in &resv {
+                let w = self.reserved[h].min(area.right - area.left);
+                plan.push((
+                    *h,
+                    Rect {
+                        left: right_edge - w,
+                        top: area.top,
+                        right: right_edge,
+                        bottom: area.bottom,
+                    },
+                ));
+                right_edge -= w + self.cfg.gap as i32;
+            }
+            let area = Rect {
+                right: right_edge.max(area.left + 200),
+                ..area
+            };
             let index = monitors.iter().position(|m| m == mon).map_or(1, |i| i + 1);
             let (layout, max) = self.cfg.for_monitor(index, area);
             // Acima do limite do monitor, as janelas ficam soltas onde estão.
-            let n = max.map_or(list.len(), |m| m.min(list.len()));
+            let n = max.map_or(norm.len(), |m| m.min(norm.len()));
             let cfg = TilingConfig {
                 layout,
                 ..self.cfg.clone()
             };
-            for (h, r) in list.iter().zip(tiling::arrange(&cfg, area, n)) {
+            for (h, r) in norm.iter().zip(tiling::arrange(&cfg, area, n)) {
                 plan.push((*h, r));
             }
         }
@@ -301,7 +330,16 @@ impl Tiler {
                     (now_r.right - now_r.left) > (target.right - target.left) + dl + dr + 8;
                 let over_h =
                     (now_r.bottom - now_r.top) > (target.bottom - target.top) + dt + db + 8;
-                if over_w || over_h {
+                if over_w && !self.reserved.contains_key(&(hwnd as isize)) {
+                    // Não encolhe: reserva a largura que tem e deixa as outras janelas se ajustarem.
+                    self.reserved
+                        .insert(hwnd as isize, now_r.right - now_r.left - dl - dr);
+                    self.last.clear();
+                    crate::dlog::log(&format!(
+                        "tiling: janela {hwnd:?} tem largura mínima {}; as outras se ajustam",
+                        now_r.right - now_r.left
+                    ));
+                } else if over_w || over_h {
                     self.floating.insert(hwnd as isize);
                     self.saved.remove(&(hwnd as isize));
                     self.last.clear();

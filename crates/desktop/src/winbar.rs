@@ -10,10 +10,10 @@ use std::os::windows::ffi::OsStrExt;
 use windows_sys::Win32::Foundation::{FILETIME, HWND, LPARAM, LRESULT, RECT, SYSTEMTIME, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::DwmGetWindowAttribute;
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateFontW, CreateSolidBrush,
-    DeleteDC, DeleteObject, EndPaint, FillRect, GetDeviceCaps, GetStockObject,
-    GetTextExtentPoint32W, InvalidateRect, LOGPIXELSY, NULL_PEN, PAINTSTRUCT, RoundRect, SRCCOPY,
-    SelectObject, SetBkMode, SetTextColor, TRANSPARENT, TextOutW,
+    BeginPaint, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC, DeleteObject,
+    EndPaint, FillRect, GetDeviceCaps, GetStockObject, GetTextExtentPoint32W, InvalidateRect,
+    LOGPIXELSY, NULL_PEN, PAINTSTRUCT, RoundRect, SelectObject, SetBkMode, SetTextColor,
+    TRANSPARENT, TextOutW,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::SystemInformation::{
@@ -24,11 +24,11 @@ use windows_sys::Win32::UI::Shell::{APPBARDATA, SHAppBarMessage};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DrawIconEx, EnumWindows, FindWindowExW,
     FindWindowW, GW_OWNER, GWL_EXSTYLE, GetClassLongPtrW, GetForegroundWindow, GetSystemMetrics,
-    GetWindow, GetWindowLongW, GetWindowTextW, IsIconic, IsWindowVisible, LWA_COLORKEY,
-    RegisterClassExW, SM_CXSCREEN, SM_CYSCREEN, SMTO_ABORTIFHUNG, SW_HIDE, SW_MINIMIZE, SW_RESTORE,
-    SW_SHOW, SW_SHOWNOACTIVATE, SendMessageTimeoutW, SetForegroundWindow,
-    SetLayeredWindowAttributes, ShowWindow, WM_ERASEBKGND, WM_GETICON, WM_LBUTTONDOWN, WM_PAINT,
-    WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    GetWindow, GetWindowLongW, GetWindowTextW, IsIconic, IsWindowVisible, RegisterClassExW,
+    SM_CXSCREEN, SM_CYSCREEN, SMTO_ABORTIFHUNG, SW_HIDE, SW_MINIMIZE, SW_RESTORE, SW_SHOW,
+    SW_SHOWNOACTIVATE, SendMessageTimeoutW, SetForegroundWindow, ShowWindow, WM_ERASEBKGND,
+    WM_GETICON, WM_LBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 const CLASS: &str = "SentinelaDesktopBar";
@@ -53,7 +53,6 @@ fn colorref(c: Rgb) -> u32 {
 }
 
 /// Cor que fica transparente (e deixa o clique passar) no modo de ilhas.
-const KEY: u32 = 0x00FF_00FF;
 
 struct AppItem {
     hwnd: isize,
@@ -252,19 +251,50 @@ fn merge_apps(old: &mut Vec<AppItem>, fresh: Vec<AppItem>) {
     }
 }
 
+/// Bitmap de 32 bits que o programa acessa direto (`pixels` aponta para w*h valores 0x00RRGGBB).
+unsafe fn make_dib(
+    hdc: windows_sys::Win32::Graphics::Gdi::HDC,
+    w: i32,
+    h: i32,
+) -> (windows_sys::Win32::Graphics::Gdi::HBITMAP, *mut u32) {
+    use windows_sys::Win32::Graphics::Gdi::{BI_RGB, BITMAPINFO, CreateDIBSection, DIB_RGB_COLORS};
+    unsafe {
+        let mut bi: BITMAPINFO = std::mem::zeroed();
+        bi.bmiHeader.biSize =
+            std::mem::size_of::<windows_sys::Win32::Graphics::Gdi::BITMAPINFOHEADER>() as u32;
+        bi.bmiHeader.biWidth = w;
+        bi.bmiHeader.biHeight = -h; // de cima para baixo
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB;
+        let mut bits: *mut std::ffi::c_void = std::ptr::null_mut();
+        let bmp = CreateDIBSection(hdc, &bi, DIB_RGB_COLORS, &mut bits, std::ptr::null_mut(), 0);
+        (bmp, bits as *mut u32)
+    }
+}
+
+/// Desenha as ilhas com borda suavizada: o texto e os ícones saem do GDI num bitmap de 32 bits,
+/// e a transparência por pixel vem de uma máscara desenhada em 4x e reduzida (antisserrilhado).
 unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
+    use windows_sys::Win32::Foundation::{POINT, SIZE};
+    use windows_sys::Win32::Graphics::Gdi::{AC_SRC_ALPHA, AC_SRC_OVER, BLENDFUNCTION};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{ULW_ALPHA, UpdateLayeredWindow};
+    const SS: i32 = 4;
     unsafe {
         let mut ps: PAINTSTRUCT = std::mem::zeroed();
         let hdc0 = BeginPaint(hwnd, &mut ps);
         let mut rc: RECT = std::mem::zeroed();
         windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect(hwnd, &mut rc);
         let (w, h) = (rc.right - rc.left, rc.bottom - rc.top);
+        if w <= 0 || h <= 0 {
+            EndPaint(hwnd, &ps);
+            return;
+        }
         let hdc = CreateCompatibleDC(hdc0);
-        let bmp = CreateCompatibleBitmap(hdc0, w, h);
+        let (bmp, pixels) = make_dib(hdc0, w, h);
         let old_bmp = SelectObject(hdc, bmp);
-        let key = CreateSolidBrush(KEY);
-        FillRect(hdc, &rc, key);
-        DeleteObject(key);
+        let bg = CreateSolidBrush(colorref(b.cfg.background));
+        FillRect(hdc, &rc, bg);
 
         let dpi = GetDeviceCaps(hdc, LOGPIXELSY as i32);
         let font = CreateFontW(
@@ -272,14 +302,14 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
             0,
             0,
             0,
-            400,
+            b.cfg.font_weight as i32,
             0,
             0,
             0,
             1,
             0,
             0,
-            5,
+            4,
             0,
             wide(&b.cfg.font).as_ptr(),
         );
@@ -292,7 +322,6 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
         let ih = (h - 2 * m).max(8);
         let ty = m + (ih - size.cy) / 2;
         let r = (b.cfg.island_radius as i32 * 2).max(1);
-        let bg = CreateSolidBrush(colorref(b.cfg.background));
         let sel = CreateSolidBrush(colorref(mix(b.cfg.background, b.cfg.foreground, 22)));
         let old_pen = SelectObject(hdc, GetStockObject(NULL_PEN));
 
@@ -309,10 +338,15 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
         // Ícone de 16 px (na escala da tela) mais um respiro.
         let icon_px = 16 * dpi / 96;
         let icon_w = icon_px + 6;
+        // Com 3 ou mais janelas (configurável), só os ícones.
+        let icons_only = b.cfg.icons_only_from > 0 && b.apps.len() as u32 >= b.cfg.icons_only_from;
         let wants: Vec<(String, i32)> = b
             .apps
             .iter()
             .map(|a| {
+                if icons_only {
+                    return (String::new(), 2 * item_pad + icon_px);
+                }
                 let t = bar::truncate(&a.title, 28);
                 let w = text_width(hdc, &t) + 2 * item_pad + icon_w;
                 (t, w)
@@ -333,8 +367,6 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
         hits.clear();
         let fg = GetForegroundWindow() as isize;
         if apps_w > 0 {
-            SelectObject(hdc, bg);
-            RoundRect(hdc, apps_x, m, apps_x + apps_w, m + ih, r, r);
             let mut x = apps_x + 6;
             for ((a, (text, _)), iw) in b.apps.iter().zip(wants.iter()).zip(widths.iter()) {
                 let cell = RECT {
@@ -361,17 +393,16 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                     b.cfg.foreground
                 };
                 SetTextColor(hdc, colorref(col));
-                // Encolhe o texto junto com o botão.
-                let chars = text.chars().count().max(1) as i32;
-                let full = text_width(hdc, text).max(1);
-                let fit = (((iw - 2 * item_pad - icon_w) * chars) / full).max(1) as usize;
-                let shown = bar::truncate(text, fit);
-                let wt = shown.encode_utf16().collect::<Vec<u16>>();
                 if a.icon != 0 {
                     let iy = cell.top + (cell.bottom - cell.top - icon_px) / 2;
+                    let ix = if icons_only {
+                        x + (iw - icon_px) / 2
+                    } else {
+                        x + item_pad
+                    };
                     DrawIconEx(
                         hdc,
-                        x + item_pad,
+                        ix,
                         iy,
                         a.icon as _,
                         icon_px,
@@ -381,18 +412,104 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                         3,
                     );
                 }
-                TextOutW(hdc, x + item_pad + icon_w, ty, wt.as_ptr(), wt.len() as i32);
+                if !icons_only {
+                    // Encolhe o texto junto com o botão.
+                    let chars = text.chars().count().max(1) as i32;
+                    let full = text_width(hdc, text).max(1);
+                    let fit = (((iw - 2 * item_pad - icon_w) * chars) / full).max(1) as usize;
+                    let shown = bar::truncate(text, fit);
+                    let wt = shown.encode_utf16().collect::<Vec<u16>>();
+                    TextOutW(hdc, x + item_pad + icon_w, ty, wt.as_ptr(), wt.len() as i32);
+                }
                 hits.push((cell, a.hwnd));
                 x += iw + 4;
             }
         }
-        SelectObject(hdc, bg);
-        RoundRect(hdc, right_x, m, right_x + right_w, m + ih, r, r);
         SetTextColor(hdc, colorref(b.cfg.foreground));
         let wt = right_text.encode_utf16().collect::<Vec<u16>>();
         TextOutW(hdc, right_x + PAD, ty, wt.as_ptr(), wt.len() as i32);
 
-        BitBlt(hdc0, 0, 0, w, h, hdc, 0, 0, SRCCOPY);
+        // Máscara das ilhas em 4x (branco sobre preto), reduzida para a transparência por pixel.
+        let hdc_m = CreateCompatibleDC(hdc0);
+        let (bmp_m, mask) = make_dib(hdc0, w * SS, h * SS);
+        let old_m = SelectObject(hdc_m, bmp_m);
+        let mrc = RECT {
+            left: 0,
+            top: 0,
+            right: w * SS,
+            bottom: h * SS,
+        };
+        let black = CreateSolidBrush(0);
+        FillRect(hdc_m, &mrc, black);
+        let white = CreateSolidBrush(0x00FF_FFFF);
+        SelectObject(hdc_m, white);
+        let old_pen_m = SelectObject(hdc_m, GetStockObject(NULL_PEN));
+        if apps_w > 0 {
+            RoundRect(
+                hdc_m,
+                apps_x * SS,
+                m * SS,
+                (apps_x + apps_w) * SS,
+                (m + ih) * SS,
+                r * SS,
+                r * SS,
+            );
+        }
+        RoundRect(
+            hdc_m,
+            right_x * SS,
+            m * SS,
+            (right_x + right_w) * SS,
+            (m + ih) * SS,
+            r * SS,
+            r * SS,
+        );
+        let (wu, hu, ss) = (w as usize, h as usize, SS as usize);
+        if !pixels.is_null() && !mask.is_null() {
+            for y in 0..hu {
+                for x in 0..wu {
+                    let mut sum = 0u32;
+                    for sy in 0..ss {
+                        let row = (y * ss + sy) * wu * ss + x * ss;
+                        for sx in 0..ss {
+                            sum += *mask.add(row + sx) & 0xFF;
+                        }
+                    }
+                    let a = sum / (ss * ss) as u32;
+                    let px = pixels.add(y * wu + x);
+                    let c = *px;
+                    let (cr, cg, cb) = ((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
+                    *px =
+                        (a << 24) | ((cr * a / 255) << 16) | ((cg * a / 255) << 8) | (cb * a / 255);
+                }
+            }
+        }
+        let blend = BLENDFUNCTION {
+            BlendOp: AC_SRC_OVER as u8,
+            BlendFlags: 0,
+            SourceConstantAlpha: 255,
+            AlphaFormat: AC_SRC_ALPHA as u8,
+        };
+        let sz = SIZE { cx: w, cy: h };
+        let origin = POINT { x: 0, y: 0 };
+        UpdateLayeredWindow(
+            hwnd,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            &sz,
+            hdc,
+            &origin,
+            0,
+            &blend,
+            ULW_ALPHA,
+        );
+
+        SelectObject(hdc_m, old_pen_m);
+        SelectObject(hdc_m, old_m);
+        DeleteObject(black);
+        DeleteObject(white);
+        DeleteObject(bmp_m);
+        DeleteDC(hdc_m);
         SelectObject(hdc, old_pen);
         SelectObject(hdc, old_font);
         SelectObject(hdc, old_bmp);
@@ -422,7 +539,22 @@ unsafe fn paint(hwnd: HWND, b: &Bar) {
         let dpi = GetDeviceCaps(hdc, LOGPIXELSY as i32);
         let height = -(b.cfg.font_size as i32 * dpi / 72);
         let face = wide(&b.cfg.font);
-        let font = CreateFontW(height, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0, face.as_ptr());
+        let font = CreateFontW(
+            height,
+            0,
+            0,
+            0,
+            b.cfg.font_weight as i32,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            5,
+            0,
+            face.as_ptr(),
+        );
         let old = SelectObject(hdc, font);
         SetBkMode(hdc, TRANSPARENT as i32);
         SetTextColor(hdc, colorref(b.cfg.foreground));
@@ -559,6 +691,10 @@ pub fn apply(cfg: Option<&BarConfig>) {
         wc.cbSize = std::mem::size_of::<WNDCLASSEXW>() as u32;
         wc.lpfnWndProc = Some(wndproc);
         wc.hInstance = hinst;
+        wc.hCursor = windows_sys::Win32::UI::WindowsAndMessaging::LoadCursorW(
+            std::ptr::null_mut(),
+            windows_sys::Win32::UI::WindowsAndMessaging::IDC_ARROW,
+        );
         wc.lpszClassName = class.as_ptr();
         RegisterClassExW(&wc); // já registrada na segunda vez: sem problema
 
@@ -587,9 +723,6 @@ pub fn apply(cfg: Option<&BarConfig>) {
         );
         if hwnd.is_null() {
             return;
-        }
-        if cfg.islands {
-            SetLayeredWindowAttributes(hwnd, KEY, 0, LWA_COLORKEY);
         }
 
         // Reserva a borda: o Windows encolhe a área útil das outras janelas.

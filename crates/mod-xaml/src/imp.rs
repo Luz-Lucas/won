@@ -102,11 +102,10 @@ static START: Mutex<Vec<TrackedStart>> = Mutex::new(Vec::new());
 /// Só o botão/rótulo "Todos os aplicativos" (controles-folha com esse nome). Nunca contêineres,
 /// páginas ou painéis: esconder um pai esvaziaria também os apps fixados.
 fn is_all_apps_leaf(ty: &str, name: &str) -> bool {
-    // Modo lista do Iniciar (árvore real do PC): a lista A-Z é o GridView `AllAppsGrid` e a de
-    // letras o ListView `ZoomedOutListView`. Os apps fixados ficam em outro painel.
-    if (name == "AllAppsGrid" || name == "ZoomedOutListView")
-        && (ty.ends_with("GridView") || ty.ends_with("ListView"))
-    {
+    // Modo lista do Iniciar (árvore real do PC): a lista A-Z é o GridView `AllAppsGrid`.
+    // Os apps fixados ficam em outro painel (`PinnedList`).
+    // `ZoomedOutListView` fica de fora: é parte do SemanticZoom e esconder esvaziava o Iniciar.
+    if name == "AllAppsGrid" && ty.ends_with("GridView") {
         return true;
     }
     let n = name.to_ascii_lowercase();
