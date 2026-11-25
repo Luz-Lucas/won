@@ -173,7 +173,48 @@ static MODULE: OnceLock<usize> = OnceLock::new();
 struct Measured(FrameworkElement);
 unsafe impl Send for Measured {}
 static REPEATER: Mutex<Option<Measured>> = Mutex::new(None);
-static TRAY: Mutex<Option<Measured>> = Mutex::new(None);
+
+#[repr(C)]
+struct WinRect {
+    l: i32,
+    t: i32,
+    r: i32,
+    b: i32,
+}
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn FindWindowW(class: *const u16, title: *const u16) -> isize;
+    fn FindWindowExW(parent: isize, after: isize, class: *const u16, title: *const u16) -> isize;
+    fn GetWindowRect(hwnd: isize, rect: *mut WinRect) -> i32;
+    fn GetDpiForWindow(hwnd: isize) -> u32;
+}
+
+/// Largura da área de notificação em DIPs, lida da janela Win32 (sem tocar no XAML).
+fn tray_width_dip() -> Option<f64> {
+    let w = |s: &str| s.encode_utf16().chain(Some(0)).collect::<Vec<u16>>();
+    unsafe {
+        let bar = FindWindowW(w("Shell_TrayWnd").as_ptr(), std::ptr::null());
+        if bar == 0 {
+            return None;
+        }
+        let tray = FindWindowExW(bar, 0, w("TrayNotifyWnd").as_ptr(), std::ptr::null());
+        if tray == 0 {
+            return None;
+        }
+        let mut r = WinRect {
+            l: 0,
+            t: 0,
+            r: 0,
+            b: 0,
+        };
+        if GetWindowRect(tray, &mut r) == 0 {
+            return None;
+        }
+        let px = f64::from(r.r - r.l);
+        let dpi = f64::from(GetDpiForWindow(bar).max(96));
+        (px > 8.0 && px < 1200.0).then(|| px * 96.0 / dpi)
+    }
+}
 
 fn width_of(fe: &FrameworkElement) -> f64 {
     fe.ActualWidth().unwrap_or(0.0)
@@ -205,11 +246,9 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         return None;
     }
     if is_tray {
-        let tray = TRAY.lock().unwrap();
-        let w = width_of(&tray.as_ref()?.0);
-        if w <= 0.0 {
-            return None;
-        }
+        // A bandeja não é medida pelo XAML (tocar nela derrubava o Explorer). A largura vem da
+        // janela Win32 `TrayNotifyWnd`, em DIPs; sem ela, usa uma largura típica.
+        let w = tray_width_dip().unwrap_or(240.0);
         let left = (total - st.island_edge - w - 2.0 * st.island_tray_pad).max(0.0);
         return Some(Thickness {
             Left: left,
@@ -505,13 +544,8 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                 let insp: windows::core::IInspectable =
                     unsafe { windows::core::IInspectable::from_raw(raw) };
                 if let Ok(fe) = insp.cast::<FrameworkElement>() {
-                    let slot = if name == "TaskbarFrameRepeater" {
-                        &REPEATER
-                    } else {
-                        &TRAY
-                    };
                     log(&format!("medindo {ty} #{name}"));
-                    *slot.lock().unwrap() = Some(Measured(fe));
+                    *REPEATER.lock().unwrap() = Some(Measured(fe));
                 }
             }
             return S_OK;
