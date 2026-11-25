@@ -519,6 +519,40 @@ fn hidden_ancestors() -> Vec<windows_core::IUnknown> {
     out
 }
 
+/// Ancestrais dos botões de aplicativo (`Taskbar.TaskListButton`): a ilha dos apps cobre só os
+/// contêineres do repetidor que levam esses botões, sem o espaço de Iniciar, pesquisa etc.
+fn app_button_ancestors() -> Vec<windows_core::IUnknown> {
+    let items: Vec<FrameworkElement> = BTNS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|b| !b.start)
+        .map(|b| b.fe.clone())
+        .collect();
+    let mut out = Vec::new();
+    for fe in items {
+        if let Ok(u) = fe.cast::<windows_core::IUnknown>() {
+            out.push(u);
+        }
+        let Ok(mut cur) = fe.cast::<UIElement>() else {
+            continue;
+        };
+        for _ in 0..10 {
+            let Ok(p) = VisualTreeHelper::GetParent(&cur) else {
+                break;
+            };
+            if let Ok(u) = p.cast::<windows_core::IUnknown>() {
+                out.push(u);
+            }
+            match p.cast::<UIElement>() {
+                Ok(pu) => cur = pu,
+                Err(_) => break,
+            }
+        }
+    }
+    out
+}
+
 fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Thickness> {
     let total = bar_width(fe);
     if total <= 0.0 {
@@ -559,6 +593,8 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
     let (mut lo, mut hi) = (f64::MAX, f64::MIN);
     let n = VisualTreeHelper::GetChildrenCount(&rep).unwrap_or(0);
     let hidden = hidden_ancestors();
+    let apps_set = app_button_ancestors();
+    let mut diag = String::new();
     for i in 0..n {
         let Ok(c) = VisualTreeHelper::GetChild(&rep, i) else {
             continue;
@@ -570,10 +606,19 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         if cw <= 0.0 {
             continue;
         }
-        if let Ok(cuk) = c.cast::<windows_core::IUnknown>()
-            && hidden.iter().any(|h| *h == cuk)
-        {
-            continue;
+        if let Ok(cuk) = c.cast::<windows_core::IUnknown>() {
+            let is_hidden = hidden.iter().any(|h| *h == cuk);
+            let is_app = apps_set.iter().any(|h| *h == cuk);
+            diag.push_str(&format!(
+                " [x={:.0} w={:.0} {}{}]",
+                cu.ActualOffset().map(|o| f64::from(o.X)).unwrap_or(-1.0),
+                cw,
+                if is_app { "app" } else { "outro" },
+                if is_hidden { " oculto" } else { "" }
+            ));
+            if is_hidden || (!apps_set.is_empty() && !is_app) {
+                continue;
+            }
         }
         let off = f64::from(cu.ActualOffset().ok()?.X);
         // Botão recém-criado ou saindo (ainda sem posição): offset 0 puxaria a ilha para a
@@ -584,6 +629,14 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         let cx = rep_x + off;
         lo = lo.min(cx);
         hi = hi.max(cx + cw);
+    }
+    static LAST_DIAG: Mutex<String> = Mutex::new(String::new());
+    {
+        let mut l = LAST_DIAG.lock().unwrap();
+        if *l != diag {
+            log(&format!("filhos do repetidor:{diag}"));
+            *l = diag.clone();
+        }
     }
     if hi <= lo {
         // Nenhum botão visível (zero apps e Iniciar oculto): sem ilha. Left < 0 sinaliza "esconder".
