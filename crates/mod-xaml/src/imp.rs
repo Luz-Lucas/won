@@ -263,7 +263,30 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
     if w <= 0.0 {
         return None;
     }
-    let x = rep.cast::<UIElement>().ok()?.ActualOffset().ok()?.X as f64;
+    let rep_x = f64::from(rep.cast::<UIElement>().ok()?.ActualOffset().ok()?.X);
+    // O ItemsRepeater costuma ocupar a barra inteira: a ilha acompanha só os botões dentro dele.
+    let (mut lo, mut hi) = (f64::MAX, f64::MIN);
+    let n = VisualTreeHelper::GetChildrenCount(rep).unwrap_or(0);
+    for i in 0..n {
+        let Ok(c) = VisualTreeHelper::GetChild(rep, i) else {
+            continue;
+        };
+        let (Ok(cf), Ok(cu)) = (c.cast::<FrameworkElement>(), c.cast::<UIElement>()) else {
+            continue;
+        };
+        let cw = width_of(&cf);
+        if cw <= 0.0 {
+            continue;
+        }
+        let cx = f64::from(cu.ActualOffset().ok()?.X);
+        lo = lo.min(cx);
+        hi = hi.max(cx + cw);
+    }
+    let (x, w) = if hi > lo {
+        (rep_x + lo, hi - lo)
+    } else {
+        (rep_x, w)
+    };
     let left = (x - st.island_pad).max(0.0);
     let right = (total - x - w - st.island_pad).max(0.0);
     Some(Thickness {
