@@ -389,15 +389,22 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                     let pen = CreatePen(PS_SOLID, 2, colorref(ring));
                     let old_p = SelectObject(hdc, pen);
                     let old_b = SelectObject(hdc, GetStockObject(NULL_BRUSH));
-                    let g = if icons_only { 2 } else { 0 };
+                    // Contorno só em volta do ícone.
+                    let ix = if icons_only {
+                        x + (iw - icon_px) / 2
+                    } else {
+                        x + item_pad
+                    };
+                    let iy = cell.top + (cell.bottom - cell.top - icon_px) / 2;
+                    let g = 4;
                     RoundRect(
                         hdc,
-                        cell.left - g,
-                        cell.top - g,
-                        cell.right + g,
-                        cell.bottom + g,
-                        r / 2 + 2 + g,
-                        r / 2 + 2 + g,
+                        ix - g,
+                        iy - g,
+                        ix + icon_px + g,
+                        iy + icon_px + g,
+                        icon_px / 2 + g,
+                        icon_px / 2 + g,
                     );
                     SelectObject(hdc, old_b);
                     SelectObject(hdc, old_p);
