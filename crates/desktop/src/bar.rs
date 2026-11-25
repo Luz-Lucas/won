@@ -24,6 +24,8 @@ pub enum Module {
     Volume,
     /// Tipo de conexão (Wi-Fi, cabo ou sem rede).
     Network,
+    /// Música ou vídeo que está tocando (some quando nada toca).
+    Media,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

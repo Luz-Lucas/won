@@ -25,6 +25,7 @@ const MODULE_LABEL: Record<Module, string> = {
   ram: "Memória",
   volume: "Volume",
   network: "Rede",
+  media: "Mídia tocando",
   clock: "Relógio",
 };
 const MODULE_SAMPLE: Record<Module, string> = {
@@ -33,6 +34,7 @@ const MODULE_SAMPLE: Record<Module, string> = {
   ram: "RAM 48%",
   volume: "VOL 45%",
   network: "Wi-Fi",
+  media: "♪ Artista - Música",
   clock: "14:32",
 };
 const ZONES: { id: Zone; label: string }[] = [

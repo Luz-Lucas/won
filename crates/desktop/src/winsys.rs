@@ -98,3 +98,27 @@ pub fn network_text() -> String {
         None => "Sem rede".into(),
     }
 }
+
+/// "♪ Artista - Título" da mídia que está tocando (Spotify, navegador...), ou vazio.
+pub fn media_text() -> String {
+    use windows::Media::Control::{
+        GlobalSystemMediaTransportControlsSessionManager as Manager,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
+    };
+    let get = || -> windows::core::Result<String> {
+        let mgr = Manager::RequestAsync()?.join()?;
+        let session = mgr.GetCurrentSession()?;
+        if session.GetPlaybackInfo()?.PlaybackStatus()? != Status::Playing {
+            return Ok(String::new());
+        }
+        let props = session.TryGetMediaPropertiesAsync()?.join()?;
+        let title = props.Title()?.to_string();
+        let artist = props.Artist()?.to_string();
+        Ok(match (artist.is_empty(), title.is_empty()) {
+            (_, true) => String::new(),
+            (true, false) => format!("\u{266a} {title}"),
+            (false, false) => format!("\u{266a} {artist} - {title}"),
+        })
+    };
+    get().unwrap_or_default()
+}

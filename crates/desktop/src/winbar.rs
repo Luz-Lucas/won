@@ -73,6 +73,7 @@ struct Bar {
     cpu: u8,
     vol: String,
     net: String,
+    media: String,
     ticks: u32,
     hidden_taskbar: bool,
 }
@@ -134,6 +135,7 @@ fn module_text(b: &Bar, m: Module) -> String {
         Module::Ram => format!("RAM {}%", ram_percent()),
         Module::Volume => b.vol.clone(),
         Module::Network => b.net.clone(),
+        Module::Media => bar::truncate(&b.media, 48),
     }
 }
 
@@ -633,6 +635,7 @@ pub fn apply(cfg: Option<&BarConfig>) {
                 cpu: 0,
                 vol: String::new(),
                 net: String::new(),
+                media: String::new(),
                 ticks: 0,
                 hidden_taskbar: cfg.hide_native_taskbar,
             });
@@ -671,6 +674,9 @@ pub fn tick(fullscreen_foreground: bool) {
         b.vol = crate::winsys::volume_text();
         if b.ticks % 5 == 0 {
             b.net = crate::winsys::network_text();
+            if b.cfg.left.iter().chain(&b.cfg.center).chain(&b.cfg.right).any(|m| *m == Module::Media) {
+                b.media = crate::winsys::media_text();
+            }
         }
         b.ticks = b.ticks.wrapping_add(1);
         if b.cfg.islands {
