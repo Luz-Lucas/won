@@ -884,6 +884,7 @@ pub fn tick(fullscreen_foreground: bool) {
         unsafe {
             let fg = GetForegroundWindow();
             let maximized = b.cfg.hide_when_maximized
+                && !b.apps.is_empty()
                 && !fg.is_null()
                 && fg != b.hwnd
                 && IsWindowVisible(fg) != 0
