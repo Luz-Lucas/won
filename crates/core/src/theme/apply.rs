@@ -85,7 +85,7 @@ pub fn accent_tweak(c: Rgb) -> Tweak {
     Tweak {
         id: ACCENT_ID.into(),
         title: format!("Cor de destaque do Windows ({})", c.hex()),
-        description: "Muda a cor de destaque do Windows para a do tema.".into(),
+        description: "Muda a cor de destaque do Windows para a do tema e liga o modo escuro (apps e sistema).".into(),
         group: Group::Personalizacao,
         evidence: Evidence::Comprovado,
         effect: Effect::Relogon,
@@ -104,6 +104,18 @@ pub fn accent_tweak(c: Rgb) -> Tweak {
                 r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent",
                 "AccentColorMenu",
                 abgr(c),
+            ),
+            // Modo escuro dos apps e do sistema: a pesquisa do Windows (resultados em WebView2)
+            // só escurece por aqui, o XAML não alcança.
+            dword(
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "AppsUseLightTheme",
+                0,
+            ),
+            dword(
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "SystemUsesLightTheme",
+                0,
             ),
         ],
         choice: None,

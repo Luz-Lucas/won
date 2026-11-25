@@ -155,8 +155,16 @@ pub fn mods_recovery_write() -> Result<String, String> {
 const SHELL_MODS: [(&str, &str, &str); 4] = [
     ("icones", "icones-pequenos", "sentinela_mod_icons.dll"),
     ("rotulos", "rotulos-barra", "sentinela_mod_labels.dll"),
-    ("tema", "tema-sem-assinatura-sessao", "sentinela_mod_theme.dll"),
-    ("xaml", sentinela_mods::XAML_MOD_NAME, "sentinela_mod_xaml.dll"),
+    (
+        "tema",
+        "tema-sem-assinatura-sessao",
+        "sentinela_mod_theme.dll",
+    ),
+    (
+        "xaml",
+        sentinela_mods::XAML_MOD_NAME,
+        "sentinela_mod_xaml.dll",
+    ),
 ];
 
 #[derive(Debug, Serialize)]
@@ -248,11 +256,16 @@ pub async fn shell_mod_set(id: String, on: bool) -> Result<usize, String> {
         let r = match id.as_str() {
             "icones" => sentinela_mods::enable_shell_icons(&dir, &exe, &dll, build, &[], true),
             "rotulos" => sentinela_mods::enable_shell_labels(&dir, &exe, &dll, build, &[], true),
-            "tema" => sentinela_mods::enable_shell_theme_session(&dir, &exe, &dll, build, &[], true),
+            "tema" => {
+                sentinela_mods::enable_shell_theme_session(&dir, &exe, &dll, build, &[], true)
+            }
             _ => sentinela_mods::enable_shell_xaml(&dir, &exe, &dll, build, &[], true),
         };
         let done = r.map_err(|e| format!("{e:#}"))?;
-        log(format!("Efeito {name} ligado em {} processo(s)", done.len()));
+        log(format!(
+            "Efeito {name} ligado em {} processo(s)",
+            done.len()
+        ));
         Ok(done.len())
     })
     .await

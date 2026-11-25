@@ -347,7 +347,17 @@ fn apply_ids(
         let v = view(t, b);
         let mut result = match v.status {
             TweakStatus::Unavailable => item(id, false, "indisponível nesta máquina"),
-            TweakStatus::Applied => item(id, true, "já estava aplicada"),
+            TweakStatus::Applied => {
+                if adopt_external(t, b, journal, journal_path) {
+                    item(
+                        id,
+                        true,
+                        "assumida pelo Sentinela (desfazer volta ao padrão do Windows)",
+                    )
+                } else {
+                    item(id, true, "já estava aplicada")
+                }
+            }
             TweakStatus::NotApplied | TweakStatus::Partial => {
                 match apply_one(t, b, journal, journal_path) {
                     Ok((wrote, skipped)) if !skipped.is_empty() => {
@@ -382,6 +392,46 @@ fn apply_ids(
         results.push(result);
     }
     (results, effect)
+}
+
+/// Ajuste já ligado fora do Sentinela (e ausente do diário): só de valores do registro, passa
+/// a constar no diário com o "antes" = valor ausente, ou seja, o padrão do Windows. Assim dá
+/// para desligá-lo pelo app. Devolve `true` se registrou.
+fn adopt_external(t: &Tweak, b: &dyn SystemBackend, journal: &mut Journal, path: &Path) -> bool {
+    if journal.entries.iter().any(|e| e.tweak_id == t.id)
+        || t.choice.is_some()
+        || t.actions.is_empty()
+        || !t
+            .actions
+            .iter()
+            .all(|a| matches!(a, Action::Registry { .. }))
+    {
+        return false;
+    }
+    let mut actions = Vec::new();
+    for a in &t.actions {
+        let Ok(cur) = b.read(a) else { return false };
+        actions.push(JournalAction {
+            action: a.clone(),
+            before: Snapshot::Registry { value: None },
+            written: cur,
+            done: true,
+            key_created: false,
+            created_from: None,
+        });
+    }
+    let backup = journal.entries.clone();
+    journal.entries.push(JournalEntry {
+        tweak_id: t.id.clone(),
+        title: t.title.clone(),
+        applied_at: crate::updater::now_rfc3339(),
+        actions,
+    });
+    if journal.save(path).is_err() {
+        journal.entries = backup;
+        return false;
+    }
+    true
 }
 
 /// Simula desfazer `ids` (na ordem dada) sem escrever nada. `Err` com a
@@ -874,13 +924,18 @@ mod tests {
             vec![
                 (&false, "requer administrador"),
                 (&false, "indisponível nesta máquina"),
-                (&true, "já estava aplicada"),
+                (
+                    &true,
+                    "assumida pelo Sentinela (desfazer volta ao padrão do Windows)"
+                ),
                 (&false, "otimização desconhecida"),
             ]
         );
         assert_eq!(r.effect, Effect::Immediate);
         assert_eq!(b.get(&reg("A", 1)), absent());
-        assert!(!p.exists(), "nada escrito, nada no diário");
+        let j = Journal::load(&p);
+        assert_eq!(j.entries.len(), 1, "só o ajuste assumido entra no diário");
+        assert_eq!(j.entries[0].tweak_id, "done");
     }
 
     #[test]
@@ -1334,6 +1389,20 @@ mod tests {
         let r = apply_choice("a", &c, &b, &p);
         assert!(r.results[0].ok && !r.results[0].changed);
         assert_eq!(r.results[0].message, "já estava aplicada");
+    }
+
+    #[test]
+    fn external_applied_tweak_is_adopted_and_undo_removes_value() {
+        let d = tempfile::tempdir().unwrap();
+        let p = jpath(&d);
+        let b = MemoryBackend::new();
+        let c = cat(vec![tweak("x", Effect::Immediate, vec![reg("X", 1)])]);
+        b.set(&reg("X", 1), target_of(&reg("X", 1)));
+        let r = apply(&ids(&["x"]), &c, &b, &p);
+        assert!(r.results[0].ok && r.results[0].message.starts_with("assumida"));
+        let u = undo(&ids(&["x"]), &b, &p);
+        assert!(u.results[0].ok, "{:?}", u.results);
+        assert_eq!(b.get(&reg("X", 1)), Snapshot::Registry { value: None });
     }
 
     #[test]

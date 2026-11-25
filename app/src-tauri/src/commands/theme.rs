@@ -213,7 +213,9 @@ pub async fn theme_apply(toml: String, state: State<'_, TweaksState>) -> Result<
     if let Some(cfg) = shell {
         // A barra e o Iniciar dependem do mod no Explorer; erro aqui não desfaz o resto.
         if let Err(e) = apply_shell(cfg).await {
-            log(&format!("Estilo da barra/Iniciar do tema não aplicado: {e}"));
+            log(&format!(
+                "Estilo da barra/Iniciar do tema não aplicado: {e}"
+            ));
         }
     }
     Ok(applied)
@@ -228,7 +230,10 @@ pub async fn theme_undo(state: State<'_, TweaksState>) -> Result<Undone, String>
         Ok(undone)
     })
     .await?;
-    let (cur, prev) = (cfg_dir().join("xaml-barra.cfg"), cfg_dir().join("xaml-barra.cfg.prev"));
+    let (cur, prev) = (
+        cfg_dir().join("xaml-barra.cfg"),
+        cfg_dir().join("xaml-barra.cfg.prev"),
+    );
     if let Ok(old) = std::fs::read_to_string(&prev) {
         let _ = std::fs::write(&cur, old);
         let _ = std::fs::remove_file(&prev);

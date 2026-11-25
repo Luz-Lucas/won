@@ -193,7 +193,7 @@ describe("Personalizar", () => {
     for (const r of within(group).getAllByRole("radio")) expect(r).not.toBeChecked();
   });
 
-  it("external_value_disables_toggle", async () => {
+  it("external_value_can_be_toggled_and_is_explained", async () => {
     vi.mocked(api.tweaksList).mockResolvedValue(
       page([item("a", { view: { status: "applied" }, in_journal: false })]),
     );
@@ -201,8 +201,8 @@ describe("Personalizar", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     const sw = await screen.findByRole("switch", { name: "Título a" });
     expect(sw).toBeChecked();
-    expect(sw).toBeDisabled();
-    expect(screen.getByText("Configurado fora do Sentinela.")).toBeInTheDocument();
+    expect(sw).toBeEnabled();
+    expect(screen.getByText(/Ligado fora do Sentinela/)).toBeInTheDocument();
   });
 
   it("explorer_notice_and_restart_confirmation", async () => {

@@ -106,9 +106,11 @@ pub fn enable_shell_mod(
     let safe_mode = dir.join("shell-safemode").exists();
     // Recuperação gravada antes de qualquer coisa.
     recovery::write(exe, dir)?;
-    let target = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| "C:/Windows".into()))
-        .join("System32")
-        .join(target_dll);
+    let target = std::path::PathBuf::from(
+        std::env::var("SystemRoot").unwrap_or_else(|_| "C:/Windows".into()),
+    )
+    .join("System32")
+    .join(target_dll);
     let rva = symbols::resolve_module(dir, &target, &[symbol])
         .ok()
         .and_then(|m| m.get(symbol).copied());

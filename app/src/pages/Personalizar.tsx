@@ -43,7 +43,8 @@ const EFFECT_NOTICE: Partial<Record<TweakEffect, string>> = {
 };
 
 const EXPLORER_NOTICE = "Reinicie o Explorer para ver a mudança.";
-const EXTERNAL = "Configurado fora do Sentinela.";
+const EXTERNAL_NOTE =
+  "Ligado fora do Sentinela. Ao desligar aqui, volta ao padrão do Windows.";
 const ADMIN = "requer administrador";
 
 const OTHER_ACCOUNT =
@@ -164,6 +165,12 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
     setStarted({ effect: p.item.tweak.effect });
     setRestartState({ kind: "idle" });
     if (p.kind === "on") void job.start(() => tweaksApply([id]));
+    else if (p.kind === "off" && !p.item.in_journal)
+      void job.start(async () => {
+        // Ajuste ligado fora do app: primeiro assume no diário, depois desfaz.
+        await tweaksApply([id]);
+        return tweaksUndo([id]);
+      });
     else if (p.kind === "off") void job.start(() => tweaksUndo([id]));
     else void job.start(() => tweaksApplyChoice(id));
   };
@@ -200,7 +207,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
   const renderSwitch = (i: TweakItem) => {
     const t = i.tweak;
     const external = applied(i) && !i.in_journal;
-    const disabled = running || !usable(i) || external;
+    const disabled = running || !usable(i);
     return (
       <li
         key={t.id}
@@ -226,7 +233,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
           {applied(i) && <span className="tweak-badge">Aplicado</span>}
           {badges(i)}
         </div>
-        {external && <p className="muted clean-warning">{EXTERNAL}</p>}
+        {external && <p className="muted clean-warning">{EXTERNAL_NOTE}</p>}
         {blockedNote(i)}
       </li>
     );

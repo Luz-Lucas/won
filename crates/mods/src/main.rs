@@ -90,28 +90,56 @@ fn main() -> Result<()> {
             let build = sysinfo::System::kernel_version()
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            let done = sentinela_mods::enable_shell_labels(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            let done = sentinela_mods::enable_shell_labels(
+                &dir,
+                &std::env::current_exe()?,
+                &dll,
+                build,
+                &[],
+                experimental,
+            )?;
             println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::ShellIcons { dll, experimental } => {
             let build = sysinfo::System::kernel_version()
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            let done = sentinela_mods::enable_shell_icons(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            let done = sentinela_mods::enable_shell_icons(
+                &dir,
+                &std::env::current_exe()?,
+                &dll,
+                build,
+                &[],
+                experimental,
+            )?;
             println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::ShellThemeSession { dll, experimental } => {
             let build = sysinfo::System::kernel_version()
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            let done = sentinela_mods::enable_shell_theme_session(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            let done = sentinela_mods::enable_shell_theme_session(
+                &dir,
+                &std::env::current_exe()?,
+                &dll,
+                build,
+                &[],
+                experimental,
+            )?;
             println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::ShellXaml { dll, experimental } => {
             let build = sysinfo::System::kernel_version()
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            let done = sentinela_mods::enable_shell_xaml(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            let done = sentinela_mods::enable_shell_xaml(
+                &dir,
+                &std::env::current_exe()?,
+                &dll,
+                build,
+                &[],
+                experimental,
+            )?;
             println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::Recovery => println!(
