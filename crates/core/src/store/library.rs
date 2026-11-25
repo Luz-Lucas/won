@@ -1109,15 +1109,27 @@ mod tests {
     #[test]
     fn every_online_pack_in_the_repo_checks_out_and_installs() {
         let (_d, l) = lib();
+        // Os itens do catálogo online também vão embutidos (tools/loja/embutir_remoto.py);
+        // o online soma o que aparecer depois.
         let c = Catalog::bundled()
             .unwrap()
             .with_remote(&RepoFetch, crate::store::catalog::REMOTE_URL)
             .unwrap();
-        let remotos: Vec<_> = c.items.iter().filter(|i| i.remote).collect();
-        assert!(
-            remotos.len() >= 21,
-            "catálogo online sem os itens esperados"
-        );
+        let remoto: serde_json::Value = serde_json::from_slice(
+            &RepoFetch
+                .get(crate::store::catalog::REMOTE_URL, u64::MAX)
+                .unwrap(),
+        )
+        .unwrap();
+        let ids: Vec<&str> = remoto["itens"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["id"].as_str().unwrap())
+            .collect();
+        assert!(ids.len() >= 21, "catálogo online sem os itens esperados");
+        let remotos: Vec<_> = c.items.iter().filter(|i| ids.contains(&i.id.as_str())).collect();
+        assert_eq!(remotos.len(), ids.len(), "itens online fora do embutido");
         for i in remotos {
             l.install(i, &RepoFetch)
                 .unwrap_or_else(|e| panic!("{}: {e}", i.id));
