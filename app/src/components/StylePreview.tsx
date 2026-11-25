@@ -231,10 +231,12 @@ export default function StylePreview({
     case "loja":
       return (
         <Frame label="Prévia da Loja">
-          <div className="sp-tiles">
-            <span />
-            <span />
-            <span />
+          <div className="sp-shop">
+            {ICONS.map((c) => (
+              <span key={c}>
+                <i style={{ background: c }} />
+              </span>
+            ))}
           </div>
           <Taskbar on={new Set()} light={false} />
         </Frame>

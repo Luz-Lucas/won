@@ -1215,6 +1215,29 @@ body {
   grid-row: 1 / 3;
 }
 
+/* Miniatura da Loja: grade de cartões com prévia colorida. */
+.sp-shop {
+  position: absolute;
+  inset: 8% 8% 18%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 5px;
+}
+.sp-shop span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(20, 22, 30, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.sp-shop i {
+  width: 38%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
 /* Perfis personalizados da Otimização */
 .user-profile {
   display: inline-flex;
