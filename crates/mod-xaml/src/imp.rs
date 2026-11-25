@@ -549,7 +549,16 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         lo = lo.min(cx);
         hi = hi.max(cx + cw);
     }
-    let (x, w) = if hi > lo { (lo, hi - lo) } else { (rep_x, w) };
+    if hi <= lo {
+        // Nenhum botão visível (zero apps e Iniciar oculto): sem ilha. Left < 0 sinaliza "esconder".
+        return Some(Thickness {
+            Left: -1.0,
+            Top: 0.0,
+            Right: 0.0,
+            Bottom: 0.0,
+        });
+    }
+    let (x, w) = (lo, hi - lo);
     let left = (x - st.island_pad).max(0.0);
     let right = (total - x - w - st.island_pad).max(0.0);
     Some(Thickness {
@@ -664,6 +673,11 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
             t.rect.SetRadiusY(st.radius)?;
             ui.SetOpacity(1.0)?;
             if let Some(m) = island_margins(&fe, t.is_border, st) {
+                if m.Left < 0.0 {
+                    ui.SetOpacity(0.0)?;
+                    return Ok(());
+                }
+                ui.SetOpacity(1.0)?;
                 let key = (
                     t.is_border,
                     m.Left as i32,
