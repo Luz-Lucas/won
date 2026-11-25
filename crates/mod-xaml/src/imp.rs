@@ -489,6 +489,37 @@ fn root_and_x(el: &UIElement) -> Option<(windows_core::IUnknown, f64)> {
     None
 }
 
+/// Ancestrais dos itens escondidos da barra (Iniciar, widgets, brilho): o botão fica com largura
+/// (só some o desenho), então o contêiner dele no repetidor não pode contar para a ilha.
+fn hidden_ancestors() -> Vec<windows_core::IUnknown> {
+    let items: Vec<FrameworkElement> = HIDE
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|t| t.kind != 0 && t.orig.is_some())
+        .map(|t| t.fe.clone())
+        .collect();
+    let mut out = Vec::new();
+    for fe in items {
+        let Ok(mut cur) = fe.cast::<UIElement>() else {
+            continue;
+        };
+        for _ in 0..10 {
+            let Ok(p) = VisualTreeHelper::GetParent(&cur) else {
+                break;
+            };
+            if let Ok(u) = p.cast::<windows_core::IUnknown>() {
+                out.push(u);
+            }
+            match p.cast::<UIElement>() {
+                Ok(pu) => cur = pu,
+                Err(_) => break,
+            }
+        }
+    }
+    out
+}
+
 fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Thickness> {
     let total = bar_width(fe);
     if total <= 0.0 {
@@ -528,6 +559,7 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
     // O ItemsRepeater costuma ocupar a barra inteira: a ilha acompanha só os botões dentro dele.
     let (mut lo, mut hi) = (f64::MAX, f64::MIN);
     let n = VisualTreeHelper::GetChildrenCount(&rep).unwrap_or(0);
+    let hidden = hidden_ancestors();
     for i in 0..n {
         let Ok(c) = VisualTreeHelper::GetChild(&rep, i) else {
             continue;
@@ -537,6 +569,11 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
         };
         let cw = width_of(&cf);
         if cw <= 0.0 {
+            continue;
+        }
+        if let Ok(cuk) = c.cast::<windows_core::IUnknown>()
+            && hidden.iter().any(|h| *h == cuk)
+        {
             continue;
         }
         let off = f64::from(cu.ActualOffset().ok()?.X);
