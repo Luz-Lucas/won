@@ -10,10 +10,10 @@ use std::os::windows::ffi::OsStrExt;
 use windows_sys::Win32::Foundation::{FILETIME, HWND, LPARAM, LRESULT, RECT, SYSTEMTIME, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::DwmGetWindowAttribute;
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, CreateCompatibleDC, CreateFontW, CreateSolidBrush, DeleteDC, DeleteObject,
-    EndPaint, FillRect, GetDeviceCaps, GetStockObject, GetTextExtentPoint32W, InvalidateRect,
-    LOGPIXELSY, NULL_PEN, PAINTSTRUCT, RoundRect, SelectObject, SetBkMode, SetTextColor,
-    TRANSPARENT, TextOutW,
+    BeginPaint, CreateCompatibleDC, CreateFontW, CreatePen, CreateSolidBrush, DeleteDC,
+    DeleteObject, EndPaint, FillRect, GetDeviceCaps, GetStockObject, GetTextExtentPoint32W,
+    InvalidateRect, LOGPIXELSY, NULL_BRUSH, NULL_PEN, PAINTSTRUCT, PS_SOLID, RoundRect,
+    SelectObject, SetBkMode, SetTextColor, TRANSPARENT, TextOutW,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::SystemInformation::{
@@ -383,38 +383,25 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                     right: x + iw,
                     bottom: m + ih - 4,
                 };
-                if a.hwnd == fg && icons_only {
-                    // Brilho suave em volta do ícone ativo: três camadas, da mais fraca à mais forte.
-                    for (grow, pct) in [(4, 7u32), (2, 12), (0, 18)] {
-                        let br = CreateSolidBrush(colorref(mix(
-                            b.cfg.background,
-                            b.cfg.foreground,
-                            pct,
-                        )));
-                        SelectObject(hdc, br);
-                        RoundRect(
-                            hdc,
-                            cell.left - grow,
-                            cell.top - grow,
-                            cell.right + grow,
-                            cell.bottom + grow,
-                            r / 2 + 2 + grow,
-                            r / 2 + 2 + grow,
-                        );
-                        SelectObject(hdc, sel);
-                        DeleteObject(br);
-                    }
-                } else if a.hwnd == fg {
-                    SelectObject(hdc, sel);
+                if a.hwnd == fg {
+                    // Destaque do app ativo: contorno suave, sem bloco de fundo.
+                    let ring = mix(b.cfg.background, b.cfg.foreground, 60);
+                    let pen = CreatePen(PS_SOLID, 2, colorref(ring));
+                    let old_p = SelectObject(hdc, pen);
+                    let old_b = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+                    let g = if icons_only { 2 } else { 0 };
                     RoundRect(
                         hdc,
-                        cell.left,
-                        cell.top,
-                        cell.right,
-                        cell.bottom,
-                        r / 2 + 2,
-                        r / 2 + 2,
+                        cell.left - g,
+                        cell.top - g,
+                        cell.right + g,
+                        cell.bottom + g,
+                        r / 2 + 2 + g,
+                        r / 2 + 2 + g,
                     );
+                    SelectObject(hdc, old_b);
+                    SelectObject(hdc, old_p);
+                    DeleteObject(pen);
                 }
                 let col = if IsIconic(a.hwnd as HWND) != 0 {
                     mix(b.cfg.background, b.cfg.foreground, 55)
