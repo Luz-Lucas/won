@@ -22,7 +22,7 @@ export function effectiveOn(items: TweakItem[], hover: string | null): Set<strin
   return on;
 }
 
-export type PreviewArea = TweakArea | "temas" | "wallpaper" | "terminal" | "desktop";
+export type PreviewArea = TweakArea | "temas" | "wallpaper" | "terminal" | "desktop" | "loja";
 
 const ICONS = ["#5b9cf5", "#f5a35b", "#6bd18a", "#c78bf0"];
 
@@ -224,6 +224,17 @@ export default function StylePreview({
         <Frame label="Prévia de temas">
           <div className="sp-window sp-window-small">
             <div className="sp-titlebar">Tema</div>
+          </div>
+          <Taskbar on={new Set()} light={false} />
+        </Frame>
+      );
+    case "loja":
+      return (
+        <Frame label="Prévia da Loja">
+          <div className="sp-tiles">
+            <span />
+            <span />
+            <span />
           </div>
           <Taskbar on={new Set()} light={false} />
         </Frame>
