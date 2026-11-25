@@ -84,7 +84,7 @@ describe("GpuPerGame", () => {
     );
     render(<GpuPerGame />);
     expect(await screen.findByRole("switch", { name: /Alto desempenho/ })).toBeDisabled();
-    expect(screen.getByText("Configurado fora do Sentinela.")).toBeInTheDocument();
+    expect(screen.getByText("Configurado fora do WON.")).toBeInTheDocument();
   });
 
   it("add_game_uses_file_picker", async () => {
@@ -181,7 +181,7 @@ describe("GpuPerGame", () => {
     expect(
       await screen.findByRole("switch", { name: "Prioridade de rede: Jogo a (a.exe)" }),
     ).toBeDisabled();
-    expect(screen.getByText(/exige abrir o Sentinela como administrador/)).toBeInTheDocument();
+    expect(screen.getByText(/exige abrir o WON como administrador/)).toBeInTheDocument();
   });
 
   it("missing_qos_undoes_with_the_qos_command", async () => {

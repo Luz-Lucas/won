@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use sentinela_mods::{eject, inject_mod, recovery, registry};
 
 #[derive(Parser)]
-#[command(name = "sentinela-mods", about = "Motor de mods do Sentinela")]
+#[command(name = "sentinela-mods", about = "Motor de mods do WON")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,

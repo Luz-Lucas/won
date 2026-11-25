@@ -1,9 +1,9 @@
 //! Escrita dos arquivos do terminal com backup e desfazer. Antes de gravar,
 //! o conteúdo anterior vai para `%LOCALAPPDATA%\Sentinela\backups\terminal\`
-//! (e, na primeira vez que o Sentinela toca num arquivo, uma cópia
+//! (e, na primeira vez que o WON toca num arquivo, uma cópia
 //! `.original.bak` que nunca é sobrescrita). Cada mudança vira um item do
 //! histórico; desfazer devolve os bytes de antes, e só sem perguntar se o
-//! arquivo ainda está como o Sentinela o deixou.
+//! arquivo ainda está como o WON o deixou.
 
 use std::path::{Path, PathBuf};
 
@@ -40,7 +40,7 @@ pub struct Record {
     /// Cópia de antes desta mudança; `None` se o arquivo não existia.
     #[serde(default, with = "path_str_opt")]
     pub before: Option<PathBuf>,
-    /// SHA-256 do que o Sentinela gravou.
+    /// SHA-256 do que o WON gravou.
     pub after_sha256: String,
 }
 
@@ -76,7 +76,7 @@ struct History {
 #[derive(Debug, PartialEq, Eq)]
 pub enum UndoError {
     NothingToUndo,
-    /// O arquivo mudou depois do Sentinela; precisa de confirmação.
+    /// O arquivo mudou depois do WON; precisa de confirmação.
     ChangedAfter(PathBuf),
     Failed(String),
 }
@@ -87,7 +87,7 @@ impl std::fmt::Display for UndoError {
             UndoError::NothingToUndo => f.write_str("nada para desfazer"),
             UndoError::ChangedAfter(p) => write!(
                 f,
-                "{} foi alterado depois do Sentinela; desfazer apagaria essas mudanças",
+                "{} foi alterado depois do WON; desfazer apagaria essas mudanças",
                 p.display()
             ),
             UndoError::Failed(m) => f.write_str(m),
@@ -204,7 +204,7 @@ pub fn history(store: &Store) -> Vec<Record> {
     load(&store.history).records
 }
 
-/// Desfaz a última mudança. Se o arquivo foi alterado depois do Sentinela,
+/// Desfaz a última mudança. Se o arquivo foi alterado depois do WON,
 /// devolve `ChangedAfter` e só segue com `force`.
 pub fn undo_last(store: &Store, force: bool) -> Result<Record, UndoError> {
     let mut h = load(&store.history);

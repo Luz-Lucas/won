@@ -229,11 +229,11 @@ describe("App", () => {
     render(<App />);
     expect(await screen.findByText(/Banco atualizado em/)).toBeInTheDocument();
     expect(screen.getByText("2 na quarentena")).toBeInTheDocument();
-    expect(screen.getByText("Sentinela 0.3.0")).toBeInTheDocument();
+    expect(screen.getByText("WON 0.3.0")).toBeInTheDocument();
     expect(screen.getByText("Limpeza concluída")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "O Sentinela não substitui um antivírus completo. Mantenha o Microsoft Defender ativo.",
+        "O WON não substitui um antivírus completo. Mantenha o Microsoft Defender ativo.",
       ),
     ).toBeInTheDocument();
   });

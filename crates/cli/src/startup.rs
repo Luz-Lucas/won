@@ -65,7 +65,7 @@ fn notes(e: &StartupEntry) -> String {
         n.push("requer administrador");
     }
     if is_sentinela(e) {
-        n.push("este é o Sentinela");
+        n.push("este é o WON");
     }
     if n.is_empty() {
         String::new()

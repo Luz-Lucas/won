@@ -52,6 +52,8 @@ pub enum RegValue {
     Dword(u32),
     Qword(u64),
     String(String),
+    /// REG_EXPAND_SZ (ex.: cursores do Windows com `%SystemRoot%`): preserva o tipo ao restaurar.
+    ExpandString(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

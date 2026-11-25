@@ -2,8 +2,8 @@
 //!
 //! Troca o início de `TrayUI::ShouldUseSmallIcons` (Taskbar.dll) por `mov eax,1; ret`, o que devolve
 //! "usar ícones pequenos" (1). Falha fechada: só aplica se os bytes originais forem exatamente os
-//! esperados no endereço informado pelo Sentinela; ao descarregar, restaura os bytes originais.
-//! O endereço (RVA) vem de `<dados>/icons.rva`, escrito pelo Sentinela a partir do PDB oficial.
+//! esperados no endereço informado pelo WON; ao descarregar, restaura os bytes originais.
+//! O endereço (RVA) vem de `<dados>/icons.rva`, escrito pelo WON a partir do PDB oficial.
 #![allow(non_snake_case)]
 
 use std::ffi::c_void;

@@ -74,7 +74,7 @@ export default function Sidebar({ current, onNavigate, elevated }: SidebarProps)
     <nav className="sidebar" aria-label="Principal">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true" />
-        <span className="brand-name">Sentinela</span>
+        <span className="brand-name">WON</span>
       </div>
       <div className="nav-groups">
         {GROUPS.map((g) => (

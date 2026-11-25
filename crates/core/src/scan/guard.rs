@@ -105,7 +105,7 @@ fn in_use(e: &anyhow::Error) -> bool {
 }
 
 const ACCESS_DENIED: &str = "Acesso negado: o arquivo está em uso por um programa aberto ou \
-                             exige o Sentinela como administrador.";
+                             exige o WON como administrador.";
 
 /// Põe cada pedido em quarentena, um por um. Nunca apaga: move conferindo o hash.
 pub fn quarantine_requests(dir: &Path, reqs: &[Request]) -> Vec<Done> {
@@ -146,7 +146,7 @@ pub fn end_processes(pids: &[u32]) -> Vec<u32> {
     };
     let mut failed = Vec::new();
     for &pid in pids {
-        // Nunca o próprio Sentinela.
+        // Nunca o próprio WON.
         if pid == std::process::id() || pid == 0 {
             failed.push(pid);
             continue;

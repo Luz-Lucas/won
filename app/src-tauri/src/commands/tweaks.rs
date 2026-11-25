@@ -23,7 +23,7 @@ pub const FOR_SID_ARG: &str = "--for-sid=";
 /// SID enviado quando o processo de origem não conseguiu ler o próprio.
 pub const SID_UNKNOWN: &str = "desconhecido";
 
-const RESTORE_POINT_DESCRIPTION: &str = "Sentinela: otimizações";
+const RESTORE_POINT_DESCRIPTION: &str = "WON: otimizações";
 const RESTORE_POINT_REQUESTED: &str =
     "solicitado (o Windows pode reaproveitar um ponto das últimas 24 h)";
 
@@ -326,7 +326,7 @@ pub fn tweaks_apply(
 }
 
 /// Aplica uma opção de lista; o motor desfaz antes a outra opção do mesmo grupo
-/// que o Sentinela tiver aplicado (`apply` roteia ids com `choice` por `apply_choice`).
+/// que o WON tiver aplicado (`apply` roteia ids com `choice` por `apply_choice`).
 #[tauri::command]
 pub fn tweaks_apply_choice(
     id: String,

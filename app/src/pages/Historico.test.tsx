@@ -84,7 +84,7 @@ describe("Historico", () => {
     vi.mocked(api.tweaksJournal).mockResolvedValue(hist([]));
     render(<Historico />);
     expect(
-      await screen.findByText("Nenhuma otimização aplicada pelo Sentinela."),
+      await screen.findByText("Nenhuma otimização aplicada pelo WON."),
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: "Desfazer tudo" })).toBeNull();
   });

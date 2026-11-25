@@ -1,5 +1,5 @@
 //! Definições do Defender em dia enquanto o Windows Update está bloqueado ou
-//! pausado (§6.5): o Sentinela pede a atualização direto da Microsoft
+//! pausado (§6.5): o WON pede a atualização direto da Microsoft
 //! (`MpCmdRun -SignatureUpdate -MMPC`, que não passa pelo Windows Update), no
 //! máximo uma vez por dia.
 

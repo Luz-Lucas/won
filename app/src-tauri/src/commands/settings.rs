@@ -224,7 +224,7 @@ pub fn sync_autostart(app: &AppHandle) {
     let _ = write_autostart(app, want);
 }
 
-/// "Verificar com o Sentinela" no clique direito: só o app instalado e sem
+/// "Verificar com o WON" no clique direito: só o app instalado e sem
 /// elevação grava no registro (como o início automático).
 pub fn sync_explorer_menu(app: &AppHandle) {
     if autostart_mode() != AutostartMode::Register {
@@ -253,7 +253,7 @@ fn explorer_view(enabled: bool, mode: AutostartMode) -> ExplorerMenuView {
         note: match mode {
             AutostartMode::Register => None,
             AutostartMode::SkipElevated => {
-                Some("Abra o Sentinela sem administrador para mudar o menu do Explorador.".into())
+                Some("Abra o WON sem administrador para mudar o menu do Explorador.".into())
             }
             AutostartMode::SkipNotInstalled => {
                 Some("O menu do Explorador só é registrado pela versão instalada.".into())
@@ -275,14 +275,14 @@ pub fn explorer_menu_set(
     let mode = autostart_mode();
     if mode == AutostartMode::Register {
         let exe = std::env::current_exe()
-            .map_err(|_| "Não foi possível localizar o Sentinela.".to_string())?;
+            .map_err(|_| "Não foi possível localizar o WON.".to_string())?;
         scan_explorer::set_enabled(on, &exe)?;
     }
     let saved = state.update(|s| s.explorer_menu = on)?;
     Ok(explorer_view(saved.explorer_menu, mode))
 }
 
-/// Procura uma versão nova do Sentinela no GitHub (só avisa; não instala).
+/// Procura uma versão nova do WON no GitHub (só avisa; não instala).
 #[tauri::command]
 pub async fn app_update_check() -> Result<sentinela_core::appupdate::AppUpdate, String> {
     tauri::async_runtime::spawn_blocking(|| {

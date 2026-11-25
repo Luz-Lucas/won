@@ -100,8 +100,8 @@ impl Rule {
     }
 }
 
-/// Janelas que o Sentinela nunca toca: a área de trabalho (onde o Wallpaper
-/// Engine desenha), a barra do Windows e o próprio Sentinela.
+/// Janelas que o WON nunca toca: a área de trabalho (onde o Wallpaper
+/// Engine desenha), a barra do Windows e o próprio WON.
 pub fn is_protected(w: &WindowInfo) -> bool {
     const CLASSES: &[&str] = &[
         "Progman",

@@ -14,7 +14,7 @@ const MODES: { id: UpdateMode; title: string; text: string }[] = [
   {
     id: "default",
     title: "Padrão",
-    text: "O Windows decide, como antes do Sentinela.",
+    text: "O Windows decide, como antes do WON.",
   },
   {
     id: "security",
@@ -185,8 +185,8 @@ export default function WindowsUpdates() {
       {data && (current === "blocked" || current === "paused") && (
         <p className="muted">
           {data.defender.last_ok
-            ? `Definições do Defender atualizadas pelo Sentinela em ${dateText(data.defender.last_ok)}.`
-            : "O Sentinela atualiza as definições do Defender uma vez por dia enquanto este modo durar."}
+            ? `Definições do Defender atualizadas pelo WON em ${dateText(data.defender.last_ok)}.`
+            : "O WON atualiza as definições do Defender uma vez por dia enquanto este modo durar."}
           {data.defender.last_error && ` Última tentativa falhou: ${data.defender.last_error}`}
         </p>
       )}
@@ -221,7 +221,7 @@ export default function WindowsUpdates() {
             </ul>
           )}
           {choice === "blocked" && <p>{BLOCKED_WARNING}</p>}
-          {choice === "default" && <p>Volta tudo ao que era antes do Sentinela.</p>}
+          {choice === "default" && <p>Volta tudo ao que era antes do WON.</p>}
         </ConfirmDialog>
       )}
     </div>

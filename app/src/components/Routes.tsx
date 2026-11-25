@@ -84,7 +84,7 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
       <h2 id="routes-title">Rotas alternativas</h2>
       <p className="muted">
         A rota até o servidor do jogo é do provedor. O Cloudflare WARP e um túnel WireGuard seu
-        mandam o tráfego por outro caminho, que às vezes é melhor e às vezes pior: o Sentinela
+        mandam o tráfego por outro caminho, que às vezes é melhor e às vezes pior: o WON
         compara e só recomenda quando a diferença passa da variação medida.
       </p>
       {error && (
@@ -98,7 +98,7 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
           {page.routes.length === 0 ? (
             <p className="muted">
               Nenhuma alternativa instalada. Instale o Cloudflare WARP ou o WireGuard pela página
-              Aplicativos; o Sentinela cuida do resto.
+              Aplicativos; o WON cuida do resto.
             </p>
           ) : (
             <ul className="clean-list">
@@ -166,7 +166,7 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
 
           <h3>Comparar</h3>
           {controllable.length === 0 ? (
-            <p className="muted">Nenhuma rota que o Sentinela possa ligar para comparar.</p>
+            <p className="muted">Nenhuma rota que o WON possa ligar para comparar.</p>
           ) : (
             <>
               <label>
@@ -245,8 +245,8 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
 
           <h3>Rota por jogo</h3>
           <p className="muted">
-            Ao abrir o jogo, o Sentinela liga a rota escolhida; ao fechar, desliga (se foi ele que
-            ligou). Túnel WireGuard exige o Sentinela aberto como administrador.
+            Ao abrir o jogo, o WON liga a rota escolhida; ao fechar, desliga (se foi ele que
+            ligou). Túnel WireGuard exige o WON aberto como administrador.
           </p>
           {page.games.length === 0 ? (
             <p className="muted">Nenhum jogo encontrado.</p>
@@ -291,7 +291,7 @@ export default function Routes({ targets }: { targets: NetTargetItem[] }) {
           </label>
           <p className="muted">
             Situacional: evita picos de atraso quando o Windows procura outras redes. O Windows
-            volta ao normal sozinho quando o jogo ou o Sentinela fecham.
+            volta ao normal sozinho quando o jogo ou o WON fecham.
           </p>
         </>
       )}

@@ -10,7 +10,7 @@ const EXE: &str = "sentinela-desktop.exe";
 
 #[derive(Debug, Serialize)]
 pub struct DesktopStatus {
-    /// O programa existe ao lado do Sentinela.
+    /// O programa existe ao lado do WON.
     pub installed: bool,
     pub running: bool,
     pub config_path: String,
@@ -75,7 +75,7 @@ pub async fn desktop_status() -> Result<DesktopStatus, String> {
 pub async fn desktop_start() -> Result<(), String> {
     blocking(|| {
         let exe =
-            exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do Sentinela.")?;
+            exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do WON.")?;
         if running() {
             return Ok(());
         }
@@ -92,7 +92,7 @@ pub async fn desktop_start() -> Result<(), String> {
 pub async fn desktop_stop() -> Result<(), String> {
     blocking(|| {
         let exe =
-            exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do Sentinela.")?;
+            exe_path().ok_or("O sentinela-desktop não foi encontrado ao lado do WON.")?;
         std::process::Command::new(exe)
             .arg("--stop")
             .status()

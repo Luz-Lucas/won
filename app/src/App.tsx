@@ -77,7 +77,7 @@ function Shell() {
     };
   }, []);
 
-  // "Verificar com o Sentinela" no Explorador: abre a Segurança e verifica o item.
+  // "Verificar com o WON" no Explorador: abre a Segurança e verifica o item.
   const [explorerRequest, setExplorerRequest] = useState<ExplorerRequest | null>(null);
   const requestId = useRef(0);
   useEffect(() => {
@@ -144,7 +144,7 @@ function Shell() {
       </main>
       {askQuit && (
         <ConfirmDialog
-          title="Sair do Sentinela?"
+          title="Sair do WON?"
           confirmLabel="Sair"
           cancelLabel="Continuar"
           onConfirm={() => {

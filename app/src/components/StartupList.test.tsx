@@ -111,7 +111,7 @@ describe("StartupList", () => {
     render(<StartupList />);
     expect(
       await screen.findByText(
-        "Este é o Sentinela. Para desligar, use Ajustes → Inicialização.",
+        "Este é o WON. Para desligar, use Ajustes → Inicialização.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();

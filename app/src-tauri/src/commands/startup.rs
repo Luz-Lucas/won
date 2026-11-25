@@ -1,6 +1,6 @@
 //! Programas que iniciam com o Windows. A lógica vive em
 //! `sentinela_core::startup`; aqui ficam os bloqueios (administrador, outra
-//! conta, a entrada do próprio Sentinela) e a atividade.
+//! conta, a entrada do próprio WON) e a atividade.
 
 use crate::commands::tweaks::TweaksState;
 use sentinela_core::activity::{self, ActivityKind};
@@ -17,7 +17,7 @@ const LOAD_ERR: &str = "Não foi possível ler os programas de inicialização."
 pub struct StartupItem {
     #[serde(flatten)]
     pub entry: StartupEntry,
-    /// A entrada do próprio Sentinela (sem interruptor).
+    /// A entrada do próprio WON (sem interruptor).
     pub sentinela: bool,
     /// Por que o interruptor está travado nesta janela, se estiver.
     pub locked: Option<String>,

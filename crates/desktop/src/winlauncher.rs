@@ -154,7 +154,7 @@ fn open_windows() -> Vec<Entry> {
 fn builtins() -> Vec<Entry> {
     vec![
         Entry {
-            label: "Abrir o Sentinela".into(),
+            label: "Abrir o WON".into(),
             target: Target::Builtin(Builtin::OpenSentinela),
         },
         Entry {
@@ -189,7 +189,7 @@ fn ensure_window(l: &mut Launcher) -> bool {
         l.hwnd = CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             class.as_ptr(),
-            wide("Sentinela").as_ptr(),
+            wide("WON").as_ptr(),
             WS_POPUP,
             0,
             0,

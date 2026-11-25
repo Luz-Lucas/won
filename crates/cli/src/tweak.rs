@@ -34,7 +34,7 @@ pub enum TweakCommand {
         #[arg(long)]
         json: bool,
     },
-    /// Desfaz otimizações aplicadas pelo Sentinela
+    /// Desfaz otimizações aplicadas pelo WON
     Undo {
         /// Ids a desfazer
         #[arg(
@@ -208,7 +208,7 @@ fn cmd_apply(ids: Vec<String>, yes: bool, json: bool) -> Result<i32> {
 
     let mut restore_point = None;
     if will_write > 0 && platform::is_elevated() {
-        match create_restore_point("Sentinela: otimizações") {
+        match create_restore_point("WON: otimizações") {
             Ok(()) => {
                 let msg = "Ponto de restauração solicitado (o Windows pode reaproveitar um ponto das últimas 24 h).";
                 eprintln!("{msg}");
@@ -279,7 +279,7 @@ fn cmd_undo(ids: Vec<String>, all: bool, yes: bool, json: bool) -> Result<i32> {
         let mut count = 0usize;
         for id in &wanted {
             let Some(e) = journal.entries.iter().find(|e| e.tweak_id == *id) else {
-                eprintln!("{id}: não foi aplicada pelo Sentinela");
+                eprintln!("{id}: não foi aplicada pelo WON");
                 continue;
             };
             count += 1;

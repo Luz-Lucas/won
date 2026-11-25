@@ -17,7 +17,7 @@ const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 const PAUSE_OPTIONS: { mode: WallpaperPauseMode; label: string; hint: string }[] = [
   { mode: "pause", label: "Pausar", hint: "congela a imagem e mantém a memória" },
   { mode: "stop", label: "Parar", hint: "libera também a memória de vídeo" },
-  { mode: "off", label: "Não mexer", hint: "o Sentinela não toca no Wallpaper Engine" },
+  { mode: "off", label: "Não mexer", hint: "o WON não toca no Wallpaper Engine" },
 ];
 
 const monitorLabel = (m: WallpaperMonitor) =>
@@ -92,7 +92,7 @@ export default function WallpaperGallery({ status }: { status: WallpaperStatus }
             <span>{`${o.label} (${o.hint})`}</span>
           </label>
         ))}
-        <p className="muted">O wallpaper volta sozinho quando o jogo fechar ou o Sentinela for fechado.</p>
+        <p className="muted">O wallpaper volta sozinho quando o jogo fechar ou o WON for fechado.</p>
       </fieldset>
       {monitors.length > 1 && (
         <fieldset className="choice-group">
