@@ -261,6 +261,7 @@ pub fn enable_shell_xaml(
     }
     let mut state = registry::load_state(dir);
     let mut done = Vec::new();
+    let mut failures: Vec<String> = Vec::new();
     for p in sys.processes().values() {
         let name = p.name().to_string_lossy().into_owned();
         if !(name.eq_ignore_ascii_case("explorer.exe")
@@ -270,7 +271,12 @@ pub fn enable_shell_xaml(
             continue;
         }
         let pid = p.pid().as_u32();
-        inject::load(pid, dll)?;
+        // Cada processo é independente: o Iniciar ou a pesquisa podem recusar a DLL (política de
+        // segurança do pacote) sem impedir o estilo da barra no Explorer.
+        if let Err(e) = inject::load(pid, dll) {
+            failures.push(format!("{name} (pid {pid}): {e:#}"));
+            continue;
+        }
         let inj = Injection {
             mod_name: XAML_MOD_NAME.into(),
             pid,
@@ -280,6 +286,12 @@ pub fn enable_shell_xaml(
         state.push(inj.clone());
         registry::save_state(dir, &state)?;
         done.push(inj);
+    }
+    if !failures.is_empty() {
+        let _ = std::fs::write(dir.join("xaml-barra.injecao.log"), failures.join("\n"));
+    }
+    if done.is_empty() && !failures.is_empty() {
+        bail!("nenhum processo aceitou a DLL: {}", failures.join(" | "));
     }
     Ok(done)
 }
