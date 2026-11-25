@@ -45,8 +45,12 @@ CC BY 4.0 <https://creativecommons.org/licenses/by/4.0/>; CC BY 3.0
 (GPL) e OpenMoji (CC BY-SA), por exigirem a mesma licença nos derivados; logotipos de marcas de
 aplicativos (marca registrada).
 
-Aviso: ícones 100% pretos ficam invisíveis em fundo escuro (barra de tarefas e Explorer no modo
-escuro); foram feitos para o modo claro.
+Os pacotes "preto" usam um **quase preto** (#14161A) com um fio claro em volta do desenho, para
+aparecerem no fundo claro e no escuro. Os pacotes de terceiros agora trazem 20 papéis: os 6 do
+sistema, unidade de disco, 3 tipos de arquivo (texto, zip, scripts) e 10 categorias de aplicativo
+(navegador, terminal, código, chat, música, vídeo, jogo, ferramentas, escritório, genérico).
+Os desenhos de aplicativo são genéricos (globo, terminal, balão...): **não há logotipo de marca** na
+Loja pública.
 
 ## Como a Loja funciona
 
@@ -63,6 +67,16 @@ escuro); foram feitos para o modo claro.
 - **Aplicar ícones** grava `DefaultIcon` em `HKCU\Software\Classes` para: pastas
   (`Directory`), Este Computador, Lixeira (vazia/cheia), pasta do usuário e Rede, e avisa o
   Explorer (`SHCNE_ASSOCCHANGED`). Para ver tudo, reinicie o Explorer (o app oferece).
+- **Aplicar ícones** também grava `DefaultIcon` de unidades (`Drive`) e dos tipos de arquivo
+  `.txt` (`txtfile`), `.zip` (`CompressedFolder`) e `.bat`/`.cmd` (`batfile`, `cmdfile`), quando o
+  pacote traz esses papéis. Pacotes antigos (6 papéis) continuam funcionando.
+- **Aplicar nos atalhos** (botão no card do pacote aplicado, com confirmação): troca o ícone dos
+  atalhos `.lnk` da Área de Trabalho e do Menu Iniciar **do usuário** por um desenho da categoria do
+  programa (decidida pelo nome do atalho e do `.exe` de destino; pastas, páginas da web e apps da
+  Microsoft Store não são tocados). Antes de mexer, o WON copia cada `.lnk` para
+  `%LOCALAPPDATA%\Sentinela\loja\originais\atalhos\`; **Restaurar atalhos** devolve os arquivos
+  originais byte a byte. Atalhos da Área de Trabalho pública e do Menu Iniciar de todos os
+  usuários (exigem administrador) ficam de fora. A troca usa o PowerShell (`WScript.Shell`).
 - **Reverter** devolve exatamente os valores guardados antes da primeira aplicação do tipo e
   apaga as chaves que a Loja criou. Trocar de pacote não perde o original.
 - **Temas** usam o motor de temas existente (prévia, confirmação, um passo de histórico) e,
@@ -74,4 +88,8 @@ escuro); foram feitos para o modo claro.
   Windows). Roteiro de teste: `docs/testes-manuais-loja.md`.
 - O ícone de pasta do Windows 11 usa `Directory\DefaultIcon`; pastas especiais (Documentos,
   Imagens...) e unidades de disco mantêm o ícone próprio.
+- O ícone do `.exe` de cada programa e os tipos de arquivo que dependem do programa associado
+  (imagens, PDF, vídeos) não são trocados: só `.txt`, `.zip`, `.bat`/`.cmd` e as unidades.
+- Ícones de marca (Discord, Spotify, Steam...) não entram na Loja pública (marca registrada);
+  se um dia forem feitos, só para uso local na máquina do usuário.
 - Os ponteiros de espera animados (`Wait`, `AppStarting`) são `.ani` de 12 quadros gerados à mão.

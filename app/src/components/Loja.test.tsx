@@ -12,6 +12,8 @@ vi.mock("../api", () => ({
   lojaRevert: vi.fn(),
   lojaCursorSize: vi.fn(),
   lojaSetCursorSize: vi.fn(),
+  lojaApplyShortcuts: vi.fn(),
+  lojaRevertShortcuts: vi.fn(),
   restartExplorer: vi.fn(),
   themePreview: vi.fn(),
   themeApply: vi.fn(),
@@ -37,7 +39,7 @@ const item = (o: Partial<api.LojaItem>): api.LojaItem => ({
   ...o,
 });
 
-const page = (items: api.LojaItem[]): api.LojaPage => ({ items, online: false, online_error: null });
+const page = (items: api.LojaItem[]): api.LojaPage => ({ items, online: false, online_error: null, shortcuts_active: null });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -68,12 +70,34 @@ describe("Loja", () => {
     await waitFor(() => expect(screen.getByText(/Revertido/)).toBeTruthy());
   });
 
+  it("troca o ícone dos atalhos só depois de confirmar e restaura os originais", async () => {
+    const user = userEvent.setup();
+    const l = vi.mocked(api.lojaList);
+    const pack = item({ id: "i1", kind: "icones", name: "Fluent preto", tags: ["atalhos"], installed: true, applied: true });
+    l.mockResolvedValueOnce(page([pack]));
+    render(<Loja />);
+    await user.click(await screen.findByRole("button", { name: "Aplicar Fluent preto nos atalhos" }));
+    expect(api.lojaApplyShortcuts).not.toHaveBeenCalled();
+
+    vi.mocked(api.lojaApplyShortcuts).mockResolvedValue({ id: "i1", changed: 7, skipped: 2, failed: [], restart_explorer: false });
+    l.mockResolvedValueOnce({ ...page([pack]), shortcuts_active: "i1" });
+    await user.click(await screen.findByRole("button", { name: "Trocar ícones" }));
+    expect(api.lojaApplyShortcuts).toHaveBeenCalledWith("i1", false);
+    await waitFor(() => expect(screen.getByText(/7 atalho\(s\)/)).toBeTruthy());
+
+    vi.mocked(api.lojaRevertShortcuts).mockResolvedValue({ id: "i1", restored: 7, failed: [], restart_explorer: false });
+    l.mockResolvedValueOnce(page([pack]));
+    await user.click(await screen.findByRole("button", { name: "Restaurar atalhos" }));
+    expect(api.lojaRevertShortcuts).toHaveBeenCalled();
+  });
+
   it("filtra por categoria e mostra erro de rede sem esconder o catálogo", async () => {
     const user = userEvent.setup();
     vi.mocked(api.lojaList).mockResolvedValue({
       items: [item({ id: "c1", name: "Noite" }), item({ id: "i1", kind: "icones", name: "Flat" })],
       online: false,
       online_error: "falha de rede",
+      shortcuts_active: null,
     });
     render(<Loja />);
     expect(await screen.findByText("Noite")).toBeTruthy();

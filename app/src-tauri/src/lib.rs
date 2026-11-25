@@ -126,6 +126,8 @@ pub fn run() {
             commands::loja::loja_revert,
             commands::loja::loja_cursor_size,
             commands::loja::loja_set_cursor_size,
+            commands::loja::loja_apply_shortcuts,
+            commands::loja::loja_revert_shortcuts,
             commands::theme::theme_list,
             commands::theme::theme_preview,
             commands::theme::theme_apply,

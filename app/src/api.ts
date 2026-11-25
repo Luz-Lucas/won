@@ -943,6 +943,23 @@ export interface LojaPage {
   items: LojaItem[];
   online: boolean;
   online_error: string | null;
+  /** Pacote cujos ícones estão nos atalhos (.lnk) agora. */
+  shortcuts_active: string | null;
+}
+
+export interface LojaShortcutsApplied {
+  id: string;
+  changed: number;
+  skipped: number;
+  failed: string[];
+  restart_explorer: boolean;
+}
+
+export interface LojaShortcutsReverted {
+  id: string;
+  restored: number;
+  failed: string[];
+  restart_explorer: boolean;
 }
 
 export interface LojaApplied {
@@ -967,6 +984,10 @@ export const lojaCursorSize = () => invoke<number | null>("loja_cursor_size");
 /** `null` devolve o tamanho que havia antes. */
 export const lojaSetCursorSize = (size: number | null) =>
   invoke<void>("loja_set_cursor_size", { size });
+export const lojaApplyShortcuts = (id: string, online: boolean) =>
+  invoke<LojaShortcutsApplied>("loja_apply_shortcuts", { id, online });
+export const lojaRevertShortcuts = () =>
+  invoke<LojaShortcutsReverted>("loja_revert_shortcuts");
 
 export interface TerminalProfile {
   shell: string;
