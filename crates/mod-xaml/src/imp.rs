@@ -442,6 +442,72 @@ unsafe extern "system" {
     fn GetWindowRect(hwnd: isize, rect: *mut WinRect) -> i32;
     fn GetDpiForWindow(hwnd: isize) -> u32;
     fn GetCursorPos(p: *mut [i32; 2]) -> i32;
+    fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
+}
+
+#[repr(C)]
+struct AccentPolicy {
+    state: u32,
+    flags: u32,
+    gradient: u32,
+    animation: u32,
+}
+#[repr(C)]
+struct CompositionAttr {
+    attr: u32,
+    data: *mut AccentPolicy,
+    size: usize,
+}
+
+/// Tira o fundo nativo (acrílico/mica) das barras do Windows, como o TranslucentTB: com as ilhas,
+/// o que aparece atrás delas é uma faixa clara. `clear = false` devolve o estado normal.
+/// Só mexe em barras deste processo (o Explorer).
+fn set_taskbar_backdrop(clear: bool) {
+    type SetWca = unsafe extern "system" fn(isize, *mut CompositionAttr) -> i32;
+    static FUNC: OnceLock<Option<usize>> = OnceLock::new();
+    let f = FUNC.get_or_init(|| unsafe {
+        let user32 = LoadLibraryExW(
+            windows::core::w!("user32.dll"),
+            None,
+            LOAD_LIBRARY_SEARCH_SYSTEM32,
+        )
+        .ok()?;
+        GetProcAddress(user32, windows::core::s!("SetWindowCompositionAttribute"))
+            .map(|p| p as usize)
+    });
+    let Some(f) = *f else { return };
+    // SAFETY: assinatura documentada pela comunidade; ponteiros válidos durante a chamada.
+    let set: SetWca = unsafe { std::mem::transmute(f) };
+    let w = |s: &str| s.encode_utf16().chain(Some(0)).collect::<Vec<u16>>();
+    let pid = unsafe { GetCurrentProcessId() };
+    for class in ["Shell_TrayWnd", "Shell_SecondaryTrayWnd"] {
+        let mut after = 0isize;
+        loop {
+            let hwnd = unsafe { FindWindowExW(0, after, w(class).as_ptr(), std::ptr::null()) };
+            if hwnd == 0 {
+                break;
+            }
+            after = hwnd;
+            let mut owner = 0u32;
+            unsafe { GetWindowThreadProcessId(hwnd, &mut owner) };
+            if owner != pid {
+                continue;
+            }
+            let mut policy = AccentPolicy {
+                // 2 = transparente (ACCENT_ENABLE_TRANSPARENTGRADIENT); 6 = normal.
+                state: if clear { 2 } else { 6 },
+                flags: 2,
+                gradient: 0,
+                animation: 0,
+            };
+            let mut data = CompositionAttr {
+                attr: 19, // WCA_ACCENT_POLICY
+                data: &mut policy,
+                size: std::mem::size_of::<AccentPolicy>(),
+            };
+            unsafe { set(hwnd, &mut data) };
+        }
+    }
 }
 
 /// Largura da área de notificação em DIPs, lida da janela Win32 (sem tocar no XAML).
@@ -1336,6 +1402,12 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                     // Com ilhas, reaplica sempre: elas seguem a largura dos apps abertos.
                     if last.as_ref() != Some(&now) || (now.0 && now.1.islands) {
                         apply_all(now.0, now.1.clone());
+                        // O Explorer repõe o fundo sozinho: com as ilhas, limpa de novo a cada volta.
+                        if now.0 && now.1.islands {
+                            set_taskbar_backdrop(true);
+                        } else if last.as_ref().is_some_and(|l| l.0 && l.1.islands) {
+                            set_taskbar_backdrop(false);
+                        }
                         last = Some(now);
                     }
                 }
