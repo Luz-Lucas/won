@@ -24,6 +24,7 @@ import Quarentena from "./pages/Quarentena";
 import Seguranca, { type ExplorerRequest } from "./pages/Seguranca";
 import "./styles/tokens.css";
 import "./styles/app.css";
+import "./styles/ui.css";
 
 function Shell() {
   const [page, setPage] = useState<Page>("inicio");
