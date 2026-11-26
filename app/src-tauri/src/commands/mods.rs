@@ -277,5 +277,15 @@ pub async fn shell_mod_set(id: String, on: bool) -> Result<usize, String> {
 pub fn xaml_cfg_write(text: String) -> Result<(), String> {
     let dir = registry::data_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("xaml-barra.cfg"), text).map_err(|e| e.to_string())
+    let cfg = dir.join("xaml-barra.cfg");
+    let was_on = std::fs::read_to_string(&cfg)
+        .map(|t| t.lines().any(|l| l.trim() == "enabled=true"))
+        .unwrap_or(false);
+    let now_on = text.lines().any(|l| l.trim() == "enabled=true");
+    std::fs::write(&cfg, text).map_err(|e| e.to_string())?;
+    if was_on && !now_on {
+        // Desligar não pode exigir reiniciar o app: limpa o estado preso no Iniciar/pesquisa.
+        std::thread::spawn(sentinela_mods::reset_start_hosts_now);
+    }
+    Ok(())
 }

@@ -64,6 +64,7 @@ pub fn eject(dir: &Path, filter: Option<&str>) -> Result<usize> {
     let state = registry::load_state(dir);
     let mut keep = Vec::new();
     let mut n = 0;
+    let mut reset_start_hosts = false;
     for i in state {
         if filter.is_some_and(|f| f != i.mod_name) {
             keep.push(i);
@@ -76,9 +77,33 @@ pub fn eject(dir: &Path, filter: Option<&str>) -> Result<usize> {
         // Falhar aqui normalmente significa que o processo já fechou: nada a desfazer.
         let _ = inject::unload(i.pid, &i.dll);
         n += 1;
+        if i.mod_name == XAML_MOD_NAME {
+            reset_start_hosts = true;
+        }
     }
     registry::save_state(dir, &keep)?;
+    if reset_start_hosts {
+        reset_start_hosts_now();
+    }
     Ok(n)
+}
+
+/// O Iniciar e a pesquisa ficam suspensos pelo Windows e guardam o estado XAML alterado (listas
+/// esvaziadas, elementos com opacidade 0): desligar o estilo não os refaz até o processo reiniciar,
+/// e a tecla Windows "parece" parar. Encerra os dois; o Windows os recria limpos na hora.
+pub fn reset_start_hosts_now() {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Dá tempo da DLL restaurar o que puder antes de derrubar o processo.
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+        for exe in ["StartMenuExperienceHost.exe", "SearchHost.exe"] {
+            let _ = std::process::Command::new("taskkill")
+                .args(["/f", "/im", exe])
+                .creation_flags(0x0800_0000)
+                .output();
+        }
+    }
 }
 
 /// Liga o mod 5 (rótulos da barra) no Explorer. Passa por todas as travas de `shell::may_enable`.
