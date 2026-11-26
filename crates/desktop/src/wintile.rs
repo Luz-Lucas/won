@@ -47,6 +47,8 @@ pub struct Tiler {
     /// borda direita, e as outras se organizam no que sobra. Valor = largura.
     reserved: HashMap<isize, i32>,
     seen: usize,
+    /// Última execução de `retile`: eventos em rajada (janela abrindo, tooltips) não refazem tudo.
+    last_run: Option<std::time::Instant>,
 }
 
 impl Tiler {
@@ -66,6 +68,7 @@ impl Tiler {
             saved: HashMap::new(),
             last: Vec::new(),
             placed_at: None,
+            last_run: None,
             strikes: HashMap::new(),
             reserved: HashMap::new(),
             seen: usize::MAX,
@@ -120,6 +123,15 @@ impl Tiler {
         if !self.enabled {
             return;
         }
+        // Rajadas de eventos (cada janela/tooltip que aparece dispara um): no máximo ~4 passadas por
+        // segundo; o relógio de 1 s fecha o que sobrar. Antes cada evento varria todas as janelas.
+        if self
+            .last_run
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(250))
+        {
+            return;
+        }
+        self.last_run = Some(std::time::Instant::now());
         let fg = unsafe { GetForegroundWindow() };
         // Em jogo (janela cobrindo o monitor) ninguém é movido.
         if !fg.is_null() && is_covering(fg) {
@@ -159,10 +171,6 @@ impl Tiler {
             let Some(area) = work_area(*mon as *mut c_void) else {
                 continue;
             };
-            crate::dlog::log(&format!(
-                "tiling: monitor {mon} área {area:?} janelas {}",
-                list.len()
-            ));
             let (resv, norm): (Vec<isize>, Vec<isize>) = list
                 .iter()
                 .copied()
