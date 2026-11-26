@@ -1409,8 +1409,8 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                     let mut cfg = (false, Style::default());
                     let mut n = 0u32;
                     loop {
-                        std::thread::sleep(std::time::Duration::from_millis(40));
-                        if n % 12 == 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(150));
+                        if n % 4 == 0 {
                             cfg = want_on();
                         }
                         n = n.wrapping_add(1);
@@ -1418,7 +1418,8 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                             apply_all_start(true, cfg.1.clone());
                         }
                         // O Iniciar repovoa a lista A-Z sozinho (atualizações): esvazia de novo.
-                        if cfg.0 && (cfg.1.start_hide_all || cfg.1.start_hide_list) {
+                        // (a cada ~600 ms: a cada 40 ms saturava a thread de UI do Explorer)
+                        if n % 4 == 0 && cfg.0 && (cfg.1.start_hide_all || cfg.1.start_hide_list) {
                             apply_all_hide_kind(true, cfg.1.clone(), Some(4));
                         }
                     }

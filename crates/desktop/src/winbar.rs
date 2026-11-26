@@ -59,6 +59,9 @@ struct AppItem {
     title: String,
     /// HICON da janela (0 = ainda não achou; não é nosso, não se destrói).
     icon: isize,
+    /// Quando tentar de novo achar o ícone (ms do relógio do sistema). Sem isso, uma janela
+    /// sem ícone refazia a busca (3 pedidos com espera + leitura do .exe) a cada atualização.
+    next_try: u64,
 }
 
 struct Bar {
@@ -201,6 +204,7 @@ fn visible_windows(own: HWND) -> Vec<AppItem> {
             hwnd: hwnd as isize,
             title: info.title,
             icon: 0,
+            next_try: 0,
         });
         1
     }
@@ -265,14 +269,41 @@ unsafe fn exe_icon(hwnd: HWND) -> isize {
             }
         }
         let Some(path) = path else { return 0 };
+        thread_local! {
+            static CACHE: RefCell<std::collections::HashMap<std::path::PathBuf, isize>> =
+                RefCell::new(std::collections::HashMap::new());
+        }
+        if let Some(h) = CACHE.with(|c| c.borrow().get(&path).copied()) {
+            return h;
+        }
         let w = wide(&path.to_string_lossy());
         let mut small: windows_sys::Win32::UI::WindowsAndMessaging::HICON = std::ptr::null_mut();
         let n = ExtractIconExW(w.as_ptr(), 0, std::ptr::null_mut(), &mut small, 1);
-        if n > 0 && !small.is_null() {
+        let h = if n > 0 && !small.is_null() {
             small as isize
         } else {
             0
-        }
+        };
+        // Guarda (inclusive o 0) para não reler o .exe nem vazar um ícone por tentativa.
+        CACHE.with(|c| c.borrow_mut().insert(path, h));
+        h
+    }
+}
+
+/// Procura o ícone se ainda não tem e a pausa da última tentativa passou (10 s).
+fn retry_icon(a: &mut AppItem) {
+    if a.icon != 0 {
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+    if now < a.next_try {
+        return;
+    }
+    a.icon = app_icon(a.hwnd as HWND);
+    if a.icon == 0 {
+        a.next_try = now + 10_000;
     }
 }
 
@@ -283,14 +314,12 @@ fn merge_apps(old: &mut Vec<AppItem>, fresh: Vec<AppItem>) {
         if let Some(f) = fresh.iter().find(|f| f.hwnd == o.hwnd) {
             o.title.clone_from(&f.title);
         }
-        if o.icon == 0 {
-            o.icon = app_icon(o.hwnd as HWND);
-        }
+        retry_icon(o);
     }
     for f in fresh {
         if !old.iter().any(|o| o.hwnd == f.hwnd) {
             let mut f = f;
-            f.icon = app_icon(f.hwnd as HWND);
+            retry_icon(&mut f);
             old.push(f);
         }
     }
