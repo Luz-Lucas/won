@@ -10,6 +10,7 @@ pub mod net;
 pub mod routes;
 pub mod scan;
 pub mod organize;
+pub mod selfupdate;
 pub mod ram;
 pub mod settings;
 pub mod signatures;

@@ -16,6 +16,7 @@ import {
   type UpdateSummary,
 } from "../api";
 import OrganizeAccount from "../components/OrganizeAccount";
+import SelfUpdate from "../components/SelfUpdate";
 import ScanSettings from "../components/ScanSettings";
 import WindowsUpdates from "../components/WindowsUpdates";
 import { humanDate } from "../format";
@@ -198,6 +199,7 @@ export default function Ajustes() {
         </div>
       )}
 
+      <SelfUpdate />
       <OrganizeAccount />
       <ScanSettings />
 

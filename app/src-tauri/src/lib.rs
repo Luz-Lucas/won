@@ -59,6 +59,7 @@ pub fn run() {
             app.manage(tweaks_state);
             app.manage(SettingsState::load(default_settings_path()));
             commands::ram::spawn_watch();
+            commands::selfupdate::spawn_background();
             if let Err(e) = tray::setup(app.handle()) {
                 eprintln!("WON: sem ícone na bandeja: {e}");
             }
@@ -156,6 +157,10 @@ pub fn run() {
             commands::organize::organize_login,
             commands::organize::organize_refresh,
             commands::organize::organize_logout,
+            commands::selfupdate::update_status,
+            commands::selfupdate::update_check,
+            commands::selfupdate::update_config_set,
+            commands::selfupdate::update_install,
             commands::ram::ram_status,
             commands::ram::ram_config_get,
             commands::ram::ram_config_set,

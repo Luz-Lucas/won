@@ -13,6 +13,10 @@ const render = (ui: React.ReactElement) =>
 vi.mock("../api", () => ({
   systemStatus: vi.fn(),
   organizeStatus: vi.fn().mockResolvedValue({ connected: false, url: "", email: "", fetched_at: 0, events: 0, tasks: 0, error: "" }),
+  updateStatus: vi.fn().mockResolvedValue({ current: "20261126-0428", latest: "", available: false, notes: "", auto_check: true, auto_install: false, manifest_url: "https://x/latest.json", last_check: 0, error: "" }),
+  updateCheck: vi.fn(),
+  updateConfigSet: vi.fn(),
+  updateInstall: vi.fn(),
   organizeLogin: vi.fn(),
   organizeRefresh: vi.fn(),
   organizeLogout: vi.fn(),

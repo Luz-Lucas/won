@@ -1202,3 +1202,20 @@ export const organizeLogin = (url: string, anonKey: string, email: string, passw
   invoke<OrganizeStatus>("organize_login", { url, anonKey, email, password });
 export const organizeRefresh = () => invoke<OrganizeStatus>("organize_refresh");
 export const organizeLogout = () => invoke<OrganizeStatus>("organize_logout");
+
+export interface UpdateStatus {
+  current: string;
+  latest: string;
+  available: boolean;
+  notes: string;
+  auto_check: boolean;
+  auto_install: boolean;
+  manifest_url: string;
+  last_check: number;
+  error: string;
+}
+export const updateStatus = () => invoke<UpdateStatus>("update_status");
+export const updateCheck = () => invoke<UpdateStatus>("update_check");
+export const updateConfigSet = (autoCheck: boolean, autoInstall: boolean, manifestUrl: string) =>
+  invoke<UpdateStatus>("update_config_set", { autoCheck, autoInstall, manifestUrl });
+export const updateInstall = () => invoke<void>("update_install");

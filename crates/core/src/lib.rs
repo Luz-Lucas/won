@@ -12,6 +12,7 @@ pub mod platform_fs;
 pub mod quarantine;
 pub mod ram;
 pub mod scan;
+pub mod selfupdate;
 pub mod secrets;
 pub mod serde_path;
 pub mod settings;
