@@ -5024,8 +5024,10 @@ dependencies = [
  "dirs 7.0.0",
  "embed-resource",
  "serde",
+ "serde_json",
  "tempfile",
  "toml 1.2.2+spec-1.1.0",
+ "ureq",
  "windows",
  "windows-sys 0.61.2",
 ]

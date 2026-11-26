@@ -80,14 +80,15 @@ export interface ClipboardModel {
   replace: { from: string; to: string }[];
 }
 
-export type WidgetKind = "clock" | "cpu" | "ram" | "network" | "media";
-export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "ram", "network", "media"];
+export type WidgetKind = "clock" | "cpu" | "ram" | "network" | "media" | "weather";
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "ram", "network", "media", "weather"];
 export const WIDGET_NAMES: Record<WidgetKind, string> = {
   clock: "Relógio",
   cpu: "CPU",
   ram: "Memória",
   network: "Rede",
   media: "Mídia tocando",
+  weather: "Clima",
 };
 
 export interface WidgetModel {
@@ -105,6 +106,8 @@ export interface WidgetModel {
   opacity: number;
   locked: boolean;
   format: string;
+  /** Só no clima: cidade da previsão. */
+  city: string;
 }
 
 export function newWidget(kind: WidgetKind, existing: WidgetModel[]): WidgetModel {
@@ -124,6 +127,7 @@ export function newWidget(kind: WidgetKind, existing: WidgetModel[]): WidgetMode
     opacity: 100,
     locked: false,
     format: "%H:%M",
+    city: "São Paulo",
   };
 }
 
@@ -223,6 +227,7 @@ export function readSections(text: string): Sections | null {
         opacity: Math.min(100, Math.max(0, num(r.opacity, d.opacity))),
         locked: r.locked === true,
         format: str(r.format, d.format),
+        city: str(r.city, d.city),
       },
     ];
   });
@@ -384,6 +389,7 @@ const widgetToml = (w: WidgetModel) =>
     `opacity = ${Math.round(Math.min(100, Math.max(0, w.opacity)))}`,
     `locked = ${w.locked}`,
     ...(w.kind === "clock" ? [`format = ${q(w.format)}`] : []),
+    ...(w.kind === "weather" ? [`city = ${q(w.city)}`] : []),
   ].join("\n");
 
 const clipboardToml = (c: ClipboardModel) =>

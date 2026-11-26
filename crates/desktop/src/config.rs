@@ -101,6 +101,7 @@ struct RawWidget {
     #[serde(default)]
     locked: bool,
     format: Option<String>,
+    city: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -384,6 +385,7 @@ fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widg
             font_size,
             locked: w.locked,
             format,
+            city: w.city.clone().unwrap_or_else(|| "São Paulo".into()),
         });
     }
     out

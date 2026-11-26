@@ -237,6 +237,7 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
         WidgetKind::Cpu => format!("{cpu}%"),
         WidgetKind::Ram => format!("{}%", crate::winbar::ram_percent()),
         WidgetKind::Network => snap.net,
+        WidgetKind::Weather => crate::weather::text(&cfg.city),
         WidgetKind::Media => {
             if snap.media.is_empty() {
                 "—".to_string()
@@ -250,6 +251,7 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
             let t = crate::winbar::now();
             format!("{:02}/{:02}/{:04}", t.day, t.month, t.year)
         }
+        WidgetKind::Weather if !cfg.city.trim().is_empty() => cfg.city.trim().to_uppercase(),
         k => k.label().to_string(),
     };
     (label, value)

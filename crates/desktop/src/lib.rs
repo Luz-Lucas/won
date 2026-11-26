@@ -14,6 +14,7 @@ pub mod migrate;
 pub mod rules;
 pub mod smartcopy;
 pub mod tiling;
+pub mod weather;
 pub mod widget;
 
 #[cfg(windows)]

@@ -65,6 +65,8 @@ function sample(w: WidgetModel): { label: string; value: string } {
         .replace(/%y/g, p(now.getFullYear() % 100));
       return { label: `${p(now.getDate())}/${p(now.getMonth() + 1)}/${now.getFullYear()}`, value };
     }
+    case "weather":
+      return { label: w.city.toUpperCase() || "CLIMA", value: "21°C · Nublado" };
     case "cpu":
       return { label: "CPU", value: "23%" };
     case "ram":
@@ -352,6 +354,21 @@ export default function WidgetCanvas({
             <button type="button" className="btn" aria-label="Texto menor" onClick={() => patch(selected.id, { fontSize: Math.max(10, selected.fontSize - 4) })}>A−</button>
             <button type="button" className="btn" aria-label="Texto maior" onClick={() => patch(selected.id, { fontSize: Math.min(72, selected.fontSize + 4) })}>A+</button>
           </div>
+          {selected.kind === "weather" && (
+            <div className="wc-row">
+              <label>
+                Cidade{" "}
+                <input
+                  type="text"
+                  aria-label="Cidade do clima"
+                  value={selected.city}
+                  maxLength={60}
+                  onChange={(e) => patch(selected.id, { city: e.target.value })}
+                />
+              </label>
+              <span className="muted">Previsão pela internet (Open-Meteo), atualizada a cada 30 min.</span>
+            </div>
+          )}
           {selected.kind === "clock" && (
             <div className="wc-row">
               <span>Hora</span>

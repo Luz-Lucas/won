@@ -15,6 +15,7 @@ pub enum WidgetKind {
     Ram,
     Network,
     Media,
+    Weather,
 }
 
 impl WidgetKind {
@@ -25,6 +26,7 @@ impl WidgetKind {
             Self::Ram => "RAM",
             Self::Network => "REDE",
             Self::Media => "TOCANDO",
+            Self::Weather => "CLIMA",
         }
     }
 }
@@ -48,6 +50,8 @@ pub struct WidgetConfig {
     pub locked: bool,
     /// Só no relógio: formato da hora (`%H:%M`).
     pub format: String,
+    /// Só no clima: cidade para a previsão.
+    pub city: String,
 }
 
 /// Cor do rótulo: o texto principal misturado com o fundo.
@@ -159,6 +163,7 @@ mod tests {
             foreground: Rgb(1, 1, 1),
             radius: 0,
             opacity: 100,
+            city: String::new(),
             font_size: 20,
             locked: false,
             format: "%H".into(),
