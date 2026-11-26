@@ -60,6 +60,7 @@ pub fn run() {
             app.manage(SettingsState::load(default_settings_path()));
             commands::ram::spawn_watch();
             commands::selfupdate::spawn_background();
+            commands::mods::spawn_xaml_watch();
             if let Err(e) = tray::setup(app.handle()) {
                 eprintln!("WON: sem ícone na bandeja: {e}");
             }

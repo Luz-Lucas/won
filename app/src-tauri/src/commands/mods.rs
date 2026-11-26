@@ -281,3 +281,19 @@ pub fn xaml_cfg_write(text: String) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Vigia o Iniciar e a pesquisa: quando o Windows (ou o WON) reinicia esses processos, a DLL do
+/// estilo é carregada de novo sozinha, sem o usuário religar o efeito.
+pub fn spawn_xaml_watch() {
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(20));
+        loop {
+            let dir = registry::data_dir();
+            let n = sentinela_mods::reinject_xaml(&dir, &mods_dll("sentinela_mod_xaml.dll"));
+            if n > 0 {
+                log(format!("Estilo religado em {n} processo(s) novo(s)"));
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+    });
+}

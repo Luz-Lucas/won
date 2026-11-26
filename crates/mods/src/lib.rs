@@ -305,6 +305,71 @@ pub fn enable_shell_xaml(
     Ok(done)
 }
 
+/// Religa o estilo nos processos novos: o Windows reinicia o Iniciar e a pesquisa por conta
+/// própria (e o WON os reinicia ao desligar estilos), e a DLL só vive até o processo morrer.
+/// Só age se o estilo está ligado (`enabled=true` e sem marcador de eject) e a DLL existe.
+/// Devolve quantos processos receberam a DLL. Tenta cada pid no máximo 3 vezes.
+pub fn reinject_xaml(dir: &Path, dll: &Path) -> usize {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    static TRIES: Mutex<Option<HashMap<u32, u32>>> = Mutex::new(None);
+    if !dll.is_file() || dir.join(XAML_EJECT_MARKER).exists() {
+        return 0;
+    }
+    let on = std::fs::read_to_string(dir.join("xaml-barra.cfg"))
+        .map(|t| t.lines().any(|l| l.trim() == "enabled=true"))
+        .unwrap_or(false);
+    if !on {
+        return 0;
+    }
+    let sys = System::new_all();
+    let mut state = registry::load_state(dir);
+    let alive: std::collections::HashSet<u32> = sys.processes().keys().map(|p| p.as_u32()).collect();
+    let before = state.len();
+    state.retain(|i| alive.contains(&i.pid));
+    let mut changed = state.len() != before;
+    let mut tries = TRIES.lock().unwrap_or_else(|e| e.into_inner());
+    let tries = tries.get_or_insert_with(HashMap::new);
+    tries.retain(|pid, _| alive.contains(pid));
+    let mut n = 0;
+    for p in sys.processes().values() {
+        let name = p.name().to_string_lossy().into_owned();
+        if !(name.eq_ignore_ascii_case("explorer.exe")
+            || name.eq_ignore_ascii_case("StartMenuExperienceHost.exe")
+            || name.eq_ignore_ascii_case("SearchHost.exe"))
+        {
+            continue;
+        }
+        let pid = p.pid().as_u32();
+        if state.iter().any(|i| i.pid == pid && i.mod_name == XAML_MOD_NAME) {
+            continue;
+        }
+        // Processo recém-criado ainda não terminou de subir: espera alguns segundos.
+        if p.run_time() < 3 {
+            continue;
+        }
+        let t = tries.entry(pid).or_insert(0);
+        if *t >= 3 {
+            continue;
+        }
+        *t += 1;
+        if inject::load(pid, dll).is_ok() {
+            state.push(Injection {
+                mod_name: XAML_MOD_NAME.into(),
+                pid,
+                process: name,
+                dll: dll.to_path_buf(),
+            });
+            changed = true;
+            n += 1;
+        }
+    }
+    if changed {
+        let _ = registry::save_state(dir, &state);
+    }
+    n
+}
+
 /// Concede `perm` (RX/M) à pasta para ALL APPLICATION PACKAGES (S-1-15-2-1) e ALL RESTRICTED
 /// APP PACKAGES (S-1-15-2-2), herdado. Falha silenciosa: só ajuda processos em AppContainer.
 fn grant_app_packages(folder: &Path, perm: &str) {
