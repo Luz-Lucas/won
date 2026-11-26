@@ -13,7 +13,7 @@ use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, BeginPaint,
     CreateCompatibleDC, CreateDIBSection, CreateFontW, CreateRoundRectRgn, CreateSolidBrush,
-    DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE, DT_VCENTER, DeleteDC,
+    DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DeleteDC,
     DeleteObject, DrawTextW, EndPaint, FillRect, GetDC, GetDeviceCaps, LOGPIXELSY, PAINTSTRUCT,
     ReleaseDC, SelectObject, SetBkMode, SetTextColor, SetWindowRgn, TRANSPARENT,
 };
@@ -115,6 +115,9 @@ pub fn apply(list: &[WidgetConfig]) {
     if list.is_empty() {
         crate::winsys::set_media_wanted(BAR_MEDIA.load(std::sync::atomic::Ordering::Relaxed), false);
         return;
+    }
+    if list.iter().any(|w| w.kind.is_list()) {
+        crate::organize::start();
     }
     let want_media = list.iter().any(|w| w.kind == WidgetKind::Media);
     WIDGET_MEDIA.store(want_media, std::sync::atomic::Ordering::Relaxed);
@@ -238,6 +241,18 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
         WidgetKind::Ram => format!("{}%", crate::winbar::ram_percent()),
         WidgetKind::Network => snap.net,
         WidgetKind::Weather => crate::weather::text(&cfg.city),
+        WidgetKind::Agenda => {
+            let c = crate::organize::load_cache();
+            crate::organize::agenda_text(&c, crate::organize::now_epoch(), crate::organize::local_offset(), 12)
+        }
+        WidgetKind::Tasks => {
+            let c = crate::organize::load_cache();
+            crate::organize::tasks_text(&c, crate::organize::now_epoch(), crate::organize::local_offset(), 12)
+        }
+        WidgetKind::Calendar => {
+            let c = crate::organize::load_cache();
+            crate::organize::calendar_text(&c, crate::organize::now_epoch(), crate::organize::local_offset()).1
+        }
         WidgetKind::Media => {
             if snap.media.is_empty() {
                 "—".to_string()
@@ -250,6 +265,10 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
         WidgetKind::Clock => {
             let t = crate::winbar::now();
             format!("{:02}/{:02}/{:04}", t.day, t.month, t.year)
+        }
+        WidgetKind::Calendar => {
+            let c = crate::organize::load_cache();
+            crate::organize::calendar_text(&c, crate::organize::now_epoch(), crate::organize::local_offset()).0
         }
         WidgetKind::Weather if !cfg.city.trim().is_empty() => cfg.city.trim().to_uppercase(),
         k => k.label().to_string(),
@@ -269,7 +288,14 @@ unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &Widg
             // Qualidade 4 = ANTIALIASED_QUALITY: sem ClearType, para o alfa do texto ficar limpo.
             CreateFontW(-(pt * dpi / 72), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 4, 0, face.as_ptr())
         };
-        let big = mk(cfg.font_size as i32, 700);
+        let list = cfg.kind.is_list();
+        let big = if list {
+            // Listas: texto corrido à esquerda; o calendário usa fonte monoespaçada para a grade.
+            let f = wide(if cfg.kind == WidgetKind::Calendar { "Consolas" } else { "Segoe UI" });
+            CreateFontW(-(cfg.font_size as i32 * dpi / 72), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 4, 0, f.as_ptr())
+        } else {
+            mk(cfg.font_size as i32, 700)
+        };
         let small = mk((cfg.font_size as i32 / 3).max(8), 400);
         SetBkMode(hdc, TRANSPARENT as i32);
         let (label, value) = texts(cfg);
@@ -301,7 +327,11 @@ unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &Widg
             w.as_ptr(),
             w.len() as i32,
             &mut vr,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
+            if list {
+                DT_LEFT | DT_NOPREFIX | DT_END_ELLIPSIS
+            } else {
+                DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS
+            },
         );
         SelectObject(hdc, old);
         DeleteObject(big);

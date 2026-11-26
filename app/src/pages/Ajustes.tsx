@@ -15,6 +15,7 @@ import {
   type SettingsView,
   type UpdateSummary,
 } from "../api";
+import OrganizeAccount from "../components/OrganizeAccount";
 import ScanSettings from "../components/ScanSettings";
 import WindowsUpdates from "../components/WindowsUpdates";
 import { humanDate } from "../format";
@@ -197,6 +198,7 @@ export default function Ajustes() {
         </div>
       )}
 
+      <OrganizeAccount />
       <ScanSettings />
 
       <h2 className="section-title">Banco de assinaturas</h2>

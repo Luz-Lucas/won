@@ -65,6 +65,12 @@ function sample(w: WidgetModel): { label: string; value: string } {
         .replace(/%y/g, p(now.getFullYear() % 100));
       return { label: `${p(now.getDate())}/${p(now.getMonth() + 1)}/${now.getFullYear()}`, value };
     }
+    case "agenda":
+      return { label: "PRÓXIMOS EVENTOS", value: "Hoje 14:00  Prova de Cálculo\nAmanhã  Entrega do trabalho\nSex 10:00  Dentista" };
+    case "tasks":
+      return { label: "TAREFAS", value: "• Estudar para a prova (hoje)\n• Enviar relatório (28/11)\n• Comprar café" };
+    case "calendar":
+      return { label: "CALENDÁRIO", value: "Dom Seg Ter Qua Qui Sex Sáb\n  1•  2   3   4   5   6   7\n 22  23  24  25 [26] 27  28" };
     case "weather":
       return { label: w.city.toUpperCase() || "CLIMA", value: "21°C · Nublado" };
     case "cpu":
@@ -209,7 +215,10 @@ export default function WidgetCanvas({
               <span className="wc-label" style={{ fontSize: Math.max(8, (w.fontSize / 3) * scale) }}>
                 {s.label}
               </span>
-              <span className="wc-value" style={{ fontSize: Math.max(9, w.fontSize * scale) }}>
+              <span
+                className={["agenda", "tasks", "calendar"].includes(w.kind) ? (w.kind === "calendar" ? "wc-value wc-list wc-mono" : "wc-value wc-list") : "wc-value"}
+                style={{ fontSize: Math.max(9, w.fontSize * scale) }}
+              >
                 {s.value}
               </span>
               {w.id === sel && (

@@ -16,9 +16,17 @@ pub enum WidgetKind {
     Network,
     Media,
     Weather,
+    Agenda,
+    Tasks,
+    Calendar,
 }
 
 impl WidgetKind {
+    /// Widgets de várias linhas (texto alinhado à esquerda).
+    pub fn is_list(self) -> bool {
+        matches!(self, Self::Agenda | Self::Tasks | Self::Calendar)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Clock => "HORA",
@@ -27,6 +35,9 @@ impl WidgetKind {
             Self::Network => "REDE",
             Self::Media => "TOCANDO",
             Self::Weather => "CLIMA",
+            Self::Agenda => "PRÓXIMOS EVENTOS",
+            Self::Tasks => "TAREFAS",
+            Self::Calendar => "CALENDÁRIO",
         }
     }
 }

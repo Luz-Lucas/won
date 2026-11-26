@@ -12,6 +12,10 @@ const render = (ui: React.ReactElement) =>
 
 vi.mock("../api", () => ({
   systemStatus: vi.fn(),
+  organizeStatus: vi.fn().mockResolvedValue({ connected: false, url: "", email: "", fetched_at: 0, events: 0, tasks: 0, error: "" }),
+  organizeLogin: vi.fn(),
+  organizeRefresh: vi.fn(),
+  organizeLogout: vi.fn(),
   appUpdateCheck: vi.fn(),
   signaturesUpdate: vi.fn(),
   abuseKeySet: vi.fn(),

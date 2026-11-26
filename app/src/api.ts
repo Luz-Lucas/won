@@ -1187,3 +1187,18 @@ export const ramStatus = () => invoke<RamStatus>("ram_status");
 export const ramOptimize = () => invoke<RamResult>("ram_optimize");
 export const ramConfigGet = () => invoke<RamConfig>("ram_config_get");
 export const ramConfigSet = (config: RamConfig) => invoke<RamConfig>("ram_config_set", { config });
+
+export interface OrganizeStatus {
+  connected: boolean;
+  url: string;
+  email: string;
+  fetched_at: number;
+  events: number;
+  tasks: number;
+  error: string;
+}
+export const organizeStatus = () => invoke<OrganizeStatus>("organize_status");
+export const organizeLogin = (url: string, anonKey: string, email: string, password: string) =>
+  invoke<OrganizeStatus>("organize_login", { url, anonKey, email, password });
+export const organizeRefresh = () => invoke<OrganizeStatus>("organize_refresh");
+export const organizeLogout = () => invoke<OrganizeStatus>("organize_logout");

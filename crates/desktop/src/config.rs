@@ -348,6 +348,8 @@ fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widg
         let foreground = pick(&w.foreground, Rgb(0xFF, 0xFF, 0xFF));
         let (dw, dh) = match w.kind {
             WidgetKind::Media => (300, 90),
+            WidgetKind::Agenda | WidgetKind::Tasks => (300, 170),
+            WidgetKind::Calendar => (270, 190),
             _ => (170, 100),
         };
         let width = w.width.unwrap_or(dw);
@@ -356,7 +358,7 @@ fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widg
             errors.push(format!("widget \"{id}\": width e height vão de {MIN_SIZE} a {MAX_SIZE}"));
             continue;
         }
-        let font_size = w.font_size.unwrap_or(24);
+        let font_size = w.font_size.unwrap_or(if w.kind.is_list() { 13 } else { 24 });
         if !(8..=96).contains(&font_size) || w.radius.unwrap_or(16) > 60 {
             errors.push(format!("widget \"{id}\": font_size 8 a 96 e radius 0 a 60"));
             continue;

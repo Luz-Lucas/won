@@ -1695,3 +1695,10 @@ body {
 .ram-settings { display: grid; gap: 10px; margin-top: 12px; }
 .ram-exclude ul { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; }
 .ram-add { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Conta do Organize */
+.org-form { display: grid; gap: 10px; max-width: 520px; }
+.org-form label { display: grid; gap: 4px; }
+.org-form input { width: 100%; }
+.wc-value.wc-list { font-weight: 400; white-space: pre; align-self: flex-start; text-align: left; line-height: 1.25; overflow: hidden; }
+.wc-value.wc-mono { font-family: Consolas, "Cascadia Mono", monospace; }

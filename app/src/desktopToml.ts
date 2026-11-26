@@ -80,8 +80,8 @@ export interface ClipboardModel {
   replace: { from: string; to: string }[];
 }
 
-export type WidgetKind = "clock" | "cpu" | "ram" | "network" | "media" | "weather";
-export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "ram", "network", "media", "weather"];
+export type WidgetKind = "clock" | "cpu" | "ram" | "network" | "media" | "weather" | "agenda" | "tasks" | "calendar";
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "ram", "network", "media", "weather", "agenda", "tasks", "calendar"];
 export const WIDGET_NAMES: Record<WidgetKind, string> = {
   clock: "Relógio",
   cpu: "CPU",
@@ -89,6 +89,9 @@ export const WIDGET_NAMES: Record<WidgetKind, string> = {
   network: "Rede",
   media: "Mídia tocando",
   weather: "Clima",
+  agenda: "Próximos eventos (Organize)",
+  tasks: "Tarefas (Organize)",
+  calendar: "Calendário (Organize)",
 };
 
 export interface WidgetModel {
@@ -110,6 +113,12 @@ export interface WidgetModel {
   city: string;
 }
 
+const LIST_SIZES: Partial<Record<WidgetKind, [number, number]>> = {
+  agenda: [300, 170],
+  tasks: [300, 170],
+  calendar: [270, 190],
+};
+
 export function newWidget(kind: WidgetKind, existing: WidgetModel[]): WidgetModel {
   let n = existing.length + 1;
   while (existing.some((w) => w.id === `${kind}${n}`)) n += 1;
@@ -118,11 +127,11 @@ export function newWidget(kind: WidgetKind, existing: WidgetModel[]): WidgetMode
     kind,
     x: 80 + 30 * existing.length,
     y: 80 + 30 * existing.length,
-    width: kind === "media" ? 300 : 170,
-    height: kind === "media" ? 90 : 100,
+    width: LIST_SIZES[kind]?.[0] ?? (kind === "media" ? 300 : 170),
+    height: LIST_SIZES[kind]?.[1] ?? (kind === "media" ? 90 : 100),
     background: "#14161A",
     foreground: "#FFFFFF",
-    fontSize: 24,
+    fontSize: LIST_SIZES[kind] ? 13 : 24,
     radius: 16,
     opacity: 100,
     locked: false,
