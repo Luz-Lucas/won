@@ -23,6 +23,8 @@ export interface BarModel {
   iconsOnlyFrom: number;
   /** Esconde a barra com uma janela maximizada em primeiro plano. */
   hideWhenMaximized: boolean;
+  /** Sem nenhum app aberto, a barra fica sempre visível. */
+  alwaysVisibleWhenEmpty: boolean;
   hideNative: boolean;
   left: Module[];
   center: Module[];
@@ -106,6 +108,7 @@ export const DEFAULT_BAR: BarModel = {
   fontWeight: 700,
   iconsOnlyFrom: 3,
   hideWhenMaximized: true,
+  alwaysVisibleWhenEmpty: true,
   hideNative: false,
   left: ["title"],
   center: [],
@@ -158,6 +161,7 @@ export function readSections(text: string): Sections | null {
       fontWeight: num(b.font_weight, DEFAULT_BAR.fontWeight),
       iconsOnlyFrom: num(b.icons_only_from, DEFAULT_BAR.iconsOnlyFrom),
       hideWhenMaximized: b.hide_when_maximized !== false,
+      alwaysVisibleWhenEmpty: b.always_visible_when_empty !== false,
       hideNative: b.hide_native_taskbar === true,
       left: mods(b.left, DEFAULT_BAR.left),
       center: mods(b.center, DEFAULT_BAR.center),
@@ -240,6 +244,7 @@ function barToml(b: BarModel): string {
     `font_weight = ${Math.round(b.fontWeight)}`,
     `icons_only_from = ${Math.round(b.iconsOnlyFrom)}`,
     `hide_when_maximized = ${b.hideWhenMaximized}`,
+    `always_visible_when_empty = ${b.alwaysVisibleWhenEmpty}`,
     `hide_native_taskbar = ${b.hideNative}`,
     `left = ${list(b.left)}`,
     `center = ${list(b.center)}`,

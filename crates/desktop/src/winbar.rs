@@ -957,7 +957,26 @@ pub fn tick(fullscreen_foreground: bool) {
                 && IsWindowVisible(fg) != 0
                 && IsIconic(fg) == 0
                 && IsZoomed(fg) != 0;
-            let fullscreen_foreground = fullscreen_foreground || maximized;
+            let mut fullscreen_foreground = fullscreen_foreground || maximized;
+            // Sem nenhum app aberto, a área de trabalho em primeiro plano ocupa a tela toda e
+            // contava como tela cheia: a barra sumia. Com a opção ligada, ela fica visível.
+            if fullscreen_foreground && b.cfg.always_visible_when_empty {
+                let apps_open = if b.cfg.islands {
+                    !b.apps.is_empty()
+                } else {
+                    !visible_windows(b.hwnd).is_empty()
+                };
+                let shell_fg = fg.is_null()
+                    || crate::win::window_info(fg).is_some_and(|i| {
+                        matches!(
+                            i.class.as_str(),
+                            "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
+                        )
+                    });
+                if !apps_open && shell_fg {
+                    fullscreen_foreground = false;
+                }
+            }
             if fullscreen_foreground && b.reserved {
                 release(b.hwnd);
                 b.reserved = false;

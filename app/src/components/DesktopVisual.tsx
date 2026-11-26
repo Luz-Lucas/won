@@ -294,6 +294,14 @@ export default function DesktopVisual({
                 />
                 <span>Esconder a barra com janela maximizada</span>
               </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.alwaysVisibleWhenEmpty}
+                  onChange={(e) => setBar({ alwaysVisibleWhenEmpty: e.target.checked })}
+                />
+                <span>Barra sempre visível quando não há nenhum app aberto</span>
+              </label>
               <Range label="Só ícones a partir de" value={bar.iconsOnlyFrom} min={0} max={12} onChange={(v) => setBar({ iconsOnlyFrom: v })} format={(v) => (v === 0 ? "nunca" : `${v} janelas`)} />
               <div className="dv-colors">
                 <label>

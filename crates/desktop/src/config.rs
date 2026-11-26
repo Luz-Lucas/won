@@ -263,6 +263,7 @@ struct RawBar {
     font_weight: Option<u32>,
     icons_only_from: Option<u32>,
     hide_when_maximized: Option<bool>,
+    always_visible_when_empty: Option<bool>,
     #[serde(default)]
     hide_native_taskbar: bool,
     left: Option<Vec<Module>>,
@@ -521,6 +522,7 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
         font_weight,
         icons_only_from,
         hide_when_maximized: b.hide_when_maximized.unwrap_or(true),
+        always_visible_when_empty: b.always_visible_when_empty.unwrap_or(true),
         hide_native_taskbar: b.hide_native_taskbar,
         left,
         center,
@@ -800,6 +802,7 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # font_size = 12
 # font_weight = 700            # 100 a 900 (400 normal, 700 negrito)
 # hide_when_maximized = true  # some enquanto uma janela estiver maximizada
+# always_visible_when_empty = true  # sem nenhum app aberto, a barra fica sempre visível
 # icons_only_from = 3          # com 3 ou mais janelas, a ilha mostra só ícones (0 = nunca)
 # left = ["title"]             # módulos: title, clock, cpu, ram
 # center = []
