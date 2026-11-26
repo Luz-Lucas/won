@@ -624,7 +624,7 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
         hide_when_maximized: b.hide_when_maximized.unwrap_or(true),
         always_visible_when_empty: b.always_visible_when_empty.unwrap_or(true),
         visible_on_desktop: b.visible_on_desktop.unwrap_or(true),
-        active_outline: b.active_outline.unwrap_or(true),
+        active_outline: b.active_outline.unwrap_or(false),
         hide_native_taskbar: b.hide_native_taskbar,
         left,
         center,
@@ -916,7 +916,7 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # hide_when_maximized = true  # some enquanto uma janela estiver maximizada
 # always_visible_when_empty = true  # sem nenhum app aberto, a barra fica sempre visível
 # visible_on_desktop = true  # clicar na área de trabalho não esconde a barra
-# active_outline = true  # contorno em volta do ícone do app ativo
+# active_outline = false # contorno em volta do ícone do app ativo
 # icons_only_from = 3          # com 3 ou mais janelas, a ilha mostra só ícones (0 = nunca)
 # left = ["title"]             # módulos: title, clock, cpu, ram
 # center = []
