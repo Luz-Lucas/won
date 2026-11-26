@@ -23,7 +23,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     RegisterClassExW, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
     SM_YVIRTUALSCREEN, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SendMessageW,
     SetWindowLongPtrW, SetWindowPos, ShowWindow, WM_ERASEBKGND, WM_EXITSIZEMOVE,
-    WM_LBUTTONDOWN, WM_NCLBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
+    WM_LBUTTONDOWN, WM_MOVING, WM_NCLBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
     WS_POPUP,
 };
 
@@ -66,7 +66,7 @@ fn pos_path() -> PathBuf {
         .join("widgets.pos")
 }
 
-fn saved_positions() -> Vec<(String, i32, i32)> {
+fn saved_positions() -> Vec<widget::Saved> {
     std::fs::read_to_string(pos_path())
         .map(|t| widget::parse_positions(&t))
         .unwrap_or_default()
@@ -136,10 +136,10 @@ pub fn apply(list: &[WidgetConfig]) {
         let host = desktop_host();
         let mut items = Vec::new();
         for (i, cfg) in list.iter().enumerate() {
-            let (x, y) = saved
-                .iter()
-                .find(|(id, x, y)| *id == cfg.id && on_virtual_screen(*x, *y))
-                .map_or((cfg.x, cfg.y), |(_, x, y)| (*x, *y));
+            let (mut x, mut y) = widget::start_position(cfg, &saved);
+            if !on_virtual_screen(x, y) {
+                (x, y) = (cfg.x, cfg.y);
+            }
             let hwnd = CreateWindowExW(
                 WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                 class.as_ptr(),
@@ -205,12 +205,18 @@ pub fn tick() {
 }
 
 fn save_positions() {
-    let list: Vec<(String, i32, i32)> = ITEMS.with(|c| {
+    let list: Vec<widget::Saved> = ITEMS.with(|c| {
         c.borrow()
             .iter()
             .filter_map(|it| unsafe {
                 let mut r: RECT = std::mem::zeroed();
-                (GetWindowRect(it.hwnd, &mut r) != 0).then(|| (it.cfg.id.clone(), r.left, r.top))
+                (GetWindowRect(it.hwnd, &mut r) != 0).then(|| widget::Saved {
+                    id: it.cfg.id.clone(),
+                    x: r.left,
+                    y: r.top,
+                    cx: it.cfg.x,
+                    cy: it.cfg.y,
+                })
             })
             .collect()
     });
@@ -333,6 +339,18 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                 }
             }
             0
+        }
+        WM_MOVING => {
+            // Encaixa numa grade de 20 px enquanto arrasta, mantendo o tamanho.
+            let r = lp as *mut RECT;
+            unsafe {
+                let (w, h) = ((*r).right - (*r).left, (*r).bottom - (*r).top);
+                (*r).left = ((*r).left + 10).div_euclid(20) * 20;
+                (*r).top = ((*r).top + 10).div_euclid(20) * 20;
+                (*r).right = (*r).left + w;
+                (*r).bottom = (*r).top + h;
+            }
+            1
         }
         WM_EXITSIZEMOVE => {
             save_positions();

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   desktopConfigCheck,
   desktopConfigRead,
@@ -72,6 +72,23 @@ export default function Desktop({
       onChanged();
     });
 
+  // Widgets salvam sozinhos (meio segundo depois da última mudança): arrastar e redimensionar
+  // aparece na área de trabalho sem apertar Salvar.
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSave = (t: string) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      desktopConfigWrite(t).then(
+        () => {
+          setSaved(t);
+          setNote("Widgets salvos. Aparecem na área de trabalho com o ambiente de desktop em execução.");
+          onChanged();
+        },
+        (e) => setError(errorText(e)),
+      );
+    }, 500);
+  };
+
   const dirty = text !== null && text !== saved;
 
   return (
@@ -110,7 +127,7 @@ export default function Desktop({
         </div>
       )}
 
-      <DesktopVisual text={text} onChange={edit} />
+      <DesktopVisual text={text} onChange={edit} onWidgets={autoSave} />
       <DesktopRules text={text} onChange={edit} />
 
       <details className="style-reference dv-advanced">

@@ -54,21 +54,48 @@ pub fn dim(fg: Rgb, bg: Rgb) -> Rgb {
     Rgb(mix(fg.0, bg.0), mix(fg.1, bg.1), mix(fg.2, bg.2))
 }
 
-/// Posições guardadas: uma linha por widget, `id x y`.
-pub fn parse_positions(text: &str) -> Vec<(String, i32, i32)> {
+/// Posição guardada de um widget: onde ele foi parar (`x`, `y`) e a posição que o arquivo de
+/// configuração tinha na hora (`cx`, `cy`). Se o arquivo mudar a posição (editor visual), a
+/// guardada perde a validade.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Saved {
+    pub id: String,
+    pub x: i32,
+    pub y: i32,
+    pub cx: i32,
+    pub cy: i32,
+}
+
+/// Uma linha por widget: `id x y cx cy`.
+pub fn parse_positions(text: &str) -> Vec<Saved> {
     text.lines()
         .filter_map(|l| {
             let mut p = l.split_whitespace();
             let id = p.next()?.to_string();
-            let x = p.next()?.parse().ok()?;
-            let y = p.next()?.parse().ok()?;
-            Some((id, x, y))
+            let mut n = || p.next()?.parse().ok();
+            Some(Saved {
+                id,
+                x: n()?,
+                y: n()?,
+                cx: n()?,
+                cy: n()?,
+            })
         })
         .collect()
 }
 
-pub fn format_positions(list: &[(String, i32, i32)]) -> String {
-    list.iter().map(|(i, x, y)| format!("{i} {x} {y}\n")).collect()
+pub fn format_positions(list: &[Saved]) -> String {
+    list.iter()
+        .map(|s| format!("{} {} {} {} {}\n", s.id, s.x, s.y, s.cx, s.cy))
+        .collect()
+}
+
+/// Posição em que o widget deve abrir: a guardada, se ainda vale para a configuração.
+pub fn start_position(cfg: &WidgetConfig, saved: &[Saved]) -> (i32, i32) {
+    saved
+        .iter()
+        .find(|s| s.id == cfg.id && s.cx == cfg.x && s.cy == cfg.y)
+        .map_or((cfg.x, cfg.y), |s| (s.x, s.y))
 }
 
 #[cfg(test)]
@@ -77,9 +104,34 @@ mod tests {
 
     #[test]
     fn positions_round_trip() {
-        let v = vec![("a".to_string(), 10, -20), ("b".to_string(), 0, 5)];
+        let v = vec![
+            Saved { id: "a".into(), x: 10, y: -20, cx: 1, cy: 2 },
+            Saved { id: "b".into(), x: 0, y: 5, cx: 80, cy: 80 },
+        ];
         assert_eq!(parse_positions(&format_positions(&v)), v);
         assert!(parse_positions("lixo\nx 1\n").is_empty());
+    }
+
+    #[test]
+    fn saved_position_expires_when_config_moves() {
+        let cfg = WidgetConfig {
+            id: "a".into(),
+            kind: WidgetKind::Clock,
+            x: 100,
+            y: 100,
+            width: 100,
+            height: 100,
+            background: Rgb(0, 0, 0),
+            foreground: Rgb(1, 1, 1),
+            radius: 0,
+            font_size: 20,
+            locked: false,
+            format: "%H".into(),
+        };
+        let saved = vec![Saved { id: "a".into(), x: 500, y: 300, cx: 100, cy: 100 }];
+        assert_eq!(start_position(&cfg, &saved), (500, 300));
+        let moved = WidgetConfig { x: 120, ..cfg };
+        assert_eq!(start_position(&moved, &saved), (120, 100));
     }
 
     #[test]

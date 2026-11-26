@@ -6,6 +6,49 @@ import type { XamlStyle } from "../xamlCfg";
 import { PRESETS_UNAVAILABLE, STYLE_PRESETS } from "../stylePresets";
 import ConfirmDialog from "./ConfirmDialog";
 
+type Tab = "barra" | "iniciar" | "pesquisa";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "barra", label: "Barra do Windows" },
+  { id: "iniciar", label: "Menu Iniciar" },
+  { id: "pesquisa", label: "Pesquisa" },
+];
+
+function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="est-group">
+      <h4>{title}</h4>
+      {hint && <p className="muted">{hint}</p>}
+      <div className="est-items">{children}</div>
+    </section>
+  );
+}
+
+function Check({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
+  return (
+    <label className="est-check">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> <span>{children}</span>
+    </label>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="est-field">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Slide({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void }) {
+  return (
+    <label className="est-field">
+      <span>{`${label}: ${value}`}</span>
+      <input type="range" aria-label={label} min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </label>
+  );
+}
+
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
 
 const INFO: Record<ShellModItem["id"], { title: string; text: string }> = {
@@ -30,6 +73,7 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
   const [ask, setAsk] = useState<ShellModItem["id"] | null>(null);
   const [style, setStyle] = useState<XamlStyle | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("barra");
 
   const load = useCallback(() => {
     Promise.resolve(shellModsStatus()).then(
@@ -108,289 +152,198 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
         ))}
       </ul>
       {xaml && style && (
-        <fieldset disabled={busy}>
-          <legend>Aparência da barra e do Iniciar</legend>
-          <div className="row">
-            <label>
-              Estilos prontos{" "}
-              <select
-                aria-label="Estilos prontos"
-                value=""
-                onChange={(e) => {
-                  const p = STYLE_PRESETS.find((x) => x.id === e.target.value);
-                  if (p) {
-                    set({ startFill: null, startRadius: null, islands: false, ...p.style });
-                    setPicked(p.id);
-                  }
-                }}
-              >
-                <option value="">Escolher…</option>
-                {STYLE_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {`${p.name} (${p.repo})`}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {picked && (
-            <p className="muted">
-              {(() => {
-                const p = STYLE_PRESETS.find((x) => x.id === picked)!;
-                return `${p.name}: origem ${p.repo}, ${p.credit}.${p.approx ? " Aproximado: " : " "}${p.note} Clique em Aplicar estilo para valer.`;
-              })()}
+        <section className="est" aria-labelledby="est-title">
+          <h3 id="est-title">Aparência da barra e do Iniciar</h3>
+          {!xaml.active && (
+            <p className="est-warn">
+              Ligue “Estilo da barra e do Iniciar” na lista acima para o estilo valer.
             </p>
           )}
-          <details>
-            <summary>Estilos dos repositórios que não dá para aplicar</summary>
-            <ul>
-              {PRESETS_UNAVAILABLE.map((u) => (
-                <li key={u.what}>
-                  <strong>{u.what}:</strong> {u.why}
-                </li>
+          <fieldset disabled={busy} className="est-box">
+            <legend className="sr-only">Aparência da barra e do Iniciar</legend>
+            <div className="est-presets">
+              <label>
+                Estilos prontos{" "}
+                <select
+                  aria-label="Estilos prontos"
+                  value=""
+                  onChange={(e) => {
+                    const p = STYLE_PRESETS.find((x) => x.id === e.target.value);
+                    if (p) {
+                      set({ startFill: null, startRadius: null, islands: false, ...p.style });
+                      setPicked(p.id);
+                    }
+                  }}
+                >
+                  <option value="">Escolher…</option>
+                  {STYLE_PRESETS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {`${p.name} (${p.repo})`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {picked && (
+                <p className="muted">
+                  {(() => {
+                    const p = STYLE_PRESETS.find((x) => x.id === picked)!;
+                    return `${p.name}: origem ${p.repo}, ${p.credit}.${p.approx ? " Aproximado: " : " "}${p.note} Clique em Aplicar estilo para valer.`;
+                  })()}
+                </p>
+              )}
+              <details>
+                <summary>Estilos dos repositórios que não dá para aplicar</summary>
+                <ul>
+                  {PRESETS_UNAVAILABLE.map((u) => (
+                    <li key={u.what}>
+                      <strong>{u.what}:</strong> {u.why}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </div>
+
+            <div role="tablist" aria-label="Seções da aparência" className="est-tabs">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  id={`est-tab-${t.id}`}
+                  aria-selected={tab === t.id}
+                  aria-controls={`est-panel-${t.id}`}
+                  className={tab === t.id ? "est-tab active" : "est-tab"}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
+                </button>
               ))}
-            </ul>
-          </details>
-          <div className="row">
-            <label>
-              Cor da barra{" "}
-              <input type="color" value={style.fill} onChange={(e) => set({ fill: e.target.value })} />
-            </label>
-            <label>
-              Opacidade{" "}
-              <input
-                type="range"
-                min={0}
-                max={255}
-                value={style.alpha}
-                onChange={(e) => set({ alpha: Number(e.target.value) })}
-              />
-            </label>
-            <label>
-              Cantos{" "}
-              <input
-                type="range"
-                min={0}
-                max={40}
-                value={style.radius}
-                onChange={(e) => set({ radius: Number(e.target.value) })}
-              />
-            </label>
-            <label>
-              Barra flutuante (margem){" "}
-              <input
-                type="range"
-                min={0}
-                max={40}
-                value={style.margin[0]}
-                onChange={(e) => {
-                  const m = Number(e.target.value);
-                  set({ margin: [m, m, m, m] });
-                }}
-              />
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={style.hideBorder}
-                onChange={(e) => set({ hideBorder: e.target.checked })}
-              />{" "}
-              Esconder a borda de cima
-            </label>
-          </div>
-          <div className="row">
-            <label>
-              <input
-                type="checkbox"
-                checked={style.islands}
-                onChange={(e) => set({ islands: e.target.checked })}
-              />{" "}
-              Duas ilhas na barra do Windows (apps e bandeja separados)
-            </label>
-            {style.islands && (
-              <>
-                <label>
-                  Folga dos apps{" "}
-                  <input
-                    type="range"
+            </div>
+
+            {tab === "barra" && (
+              <div role="tabpanel" id="est-panel-barra" aria-labelledby="est-tab-barra" className="est-panel">
+                <Group title="Cores e formato" hint="Como a barra de tarefas do Windows aparece.">
+                  <Field label="Cor da barra">
+                    <input type="color" value={style.fill} onChange={(e) => set({ fill: e.target.value })} />
+                  </Field>
+                  <Slide label="Opacidade" value={style.alpha} min={0} max={255} onChange={(v) => set({ alpha: v })} />
+                  <Slide label="Cantos" value={style.radius} min={0} max={40} onChange={(v) => set({ radius: v })} />
+                  <Slide
+                    label="Barra flutuante (margem)"
+                    value={style.margin[0]}
                     min={0}
                     max={40}
-                    value={style.islandPad}
-                    onChange={(e) => set({ islandPad: Number(e.target.value) })}
+                    onChange={(v) => set({ margin: [v, v, v, v] })}
                   />
-                </label>
-                <label>
-                  Folga da bandeja{" "}
-                  <input
-                    type="range"
-                    min={0}
-                    max={40}
-                    value={style.islandTrayPad}
-                    onChange={(e) => set({ islandTrayPad: Number(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  Flutuar{" "}
-                  <input
-                    type="range"
-                    min={0}
-                    max={20}
-                    value={style.islandV}
-                    onChange={(e) => set({ islandV: Number(e.target.value) })}
-                  />
-                </label>
-              </>
+                  <Check checked={style.hideBorder} onChange={(v) => set({ hideBorder: v })}>
+                    Esconder a borda de cima
+                  </Check>
+                </Group>
+                <Group title="Ilhas" hint="Separa a barra em duas pílulas: apps abertos e bandeja.">
+                  <Check checked={style.islands} onChange={(v) => set({ islands: v })}>
+                    Duas ilhas na barra do Windows (apps e bandeja separados)
+                  </Check>
+                  {style.islands && (
+                    <>
+                      <Slide label="Folga dos apps" value={style.islandPad} min={0} max={40} onChange={(v) => set({ islandPad: v })} />
+                      <Slide label="Folga da bandeja" value={style.islandTrayPad} min={0} max={40} onChange={(v) => set({ islandTrayPad: v })} />
+                      <Slide label="Flutuar" value={style.islandV} min={0} max={20} onChange={(v) => set({ islandV: v })} />
+                    </>
+                  )}
+                </Group>
+                <Group title="Botões da barra" hint="O que aparece ou some na barra do Windows.">
+                  <Check checked={style.hideStartButton} onChange={(v) => set({ hideStartButton: v })}>
+                    Esconder o botão Iniciar da barra
+                  </Check>
+                  <Check checked={style.hideWidgets} onChange={(v) => set({ hideWidgets: v })}>
+                    Esconder o botão de widgets
+                  </Check>
+                  <Check checked={style.hideSearchGleam} onChange={(v) => set({ hideSearchGleam: v })}>
+                    Esconder o brilho da caixa de pesquisa
+                  </Check>
+                </Group>
+                <Group title="Experimental" hint="Podem falhar em outras versões do Windows.">
+                  <Check checked={style.startLeft} onChange={(v) => set({ startLeft: v })}>
+                    Botão Iniciar sempre à esquerda
+                  </Check>
+                  <Check checked={style.dock} onChange={(v) => set({ dock: v })}>
+                    Animação de dock nos ícones
+                  </Check>
+                </Group>
+              </div>
             )}
-          </div>
-          <div className="row">
-            <label>
-              <input
-                type="checkbox"
-                checked={style.startHideAll}
-                onChange={(e) => set({ startHideAll: e.target.checked })}
-              />{" "}
-              Iniciar só com os apps fixados (esconder "Todos os aplicativos")
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={style.startHideList}
-                onChange={(e) => set({ startHideList: e.target.checked })}
-              />{" "}
-              Esconder a lista A-Z inteira (experimental, pode esvaziar o Iniciar)
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={style.searchDark}
-                onChange={(e) => set({ searchDark: e.target.checked })}
-              />{" "}
-              Forçar modo escuro na tela de resultados da pesquisa (experimental; vale depois de reiniciar a pesquisa)
-            </label>
-          </div>
-          <div className="row">
-            <label>
-              <input
-                type="checkbox"
-                checked={style.startW !== null || style.startH !== null}
-                onChange={(e) =>
-                  set({ startW: e.target.checked ? 700 : null, startH: e.target.checked ? 800 : null })
-                }
-              />{" "}
-              Tamanho do menu Iniciar <em>(experimental)</em>
-            </label>
-            {style.startW !== null && (
-              <>
-                <label>
-                  Largura{" "}
-                  <input
-                    type="number"
-                    min={300}
-                    max={2400}
-                    value={style.startW}
-                    onChange={(e) => set({ startW: Number(e.target.value) })}
-                  />
-                </label>
-                <label>
-                  Altura{" "}
-                  <input
-                    type="number"
-                    min={300}
-                    max={1600}
-                    value={style.startH ?? 800}
-                    onChange={(e) => set({ startH: Number(e.target.value) })}
-                  />
-                </label>
-              </>
+
+            {tab === "iniciar" && (
+              <div role="tabpanel" id="est-panel-iniciar" aria-labelledby="est-tab-iniciar" className="est-panel">
+                <Group title="Aparência do menu" hint="Cor, transparência e cantos do menu Iniciar.">
+                  <Check
+                    checked={style.startFill !== null}
+                    onChange={(v) => set({ startFill: v ? "#1C1C24" : null, startRadius: v ? 14 : null })}
+                  >
+                    Estilizar o menu Iniciar
+                  </Check>
+                  {style.startFill !== null && (
+                    <>
+                      <Field label="Cor do Iniciar">
+                        <input
+                          type="color"
+                          aria-label="Cor do Iniciar"
+                          value={style.startFill}
+                          onChange={(e) => set({ startFill: e.target.value })}
+                        />
+                      </Field>
+                      <Slide label="Opacidade do Iniciar" value={style.startAlpha} min={0} max={255} onChange={(v) => set({ startAlpha: v })} />
+                      <Slide label="Cantos do Iniciar" value={style.startRadius ?? 14} min={0} max={40} onChange={(v) => set({ startRadius: v })} />
+                    </>
+                  )}
+                </Group>
+                <Group title="Conteúdo" hint="O que o menu Iniciar mostra.">
+                  <Check checked={style.startHideAll} onChange={(v) => set({ startHideAll: v })}>
+                    Iniciar só com os apps fixados (esconder "Todos os aplicativos")
+                  </Check>
+                  <Check checked={style.startHideList} onChange={(v) => set({ startHideList: v })}>
+                    Esconder a lista A-Z inteira (experimental, pode esvaziar o Iniciar)
+                  </Check>
+                </Group>
+                <Group title="Tamanho" hint="Experimental: muda a largura e a altura do menu.">
+                  <Check
+                    checked={style.startW !== null || style.startH !== null}
+                    onChange={(v) => set({ startW: v ? 700 : null, startH: v ? 800 : null })}
+                  >
+                    Tamanho do menu Iniciar
+                  </Check>
+                  {style.startW !== null && (
+                    <>
+                      <Field label="Largura">
+                        <input type="number" min={300} max={2400} value={style.startW} onChange={(e) => set({ startW: Number(e.target.value) })} />
+                      </Field>
+                      <Field label="Altura">
+                        <input type="number" min={300} max={1600} value={style.startH ?? 800} onChange={(e) => set({ startH: Number(e.target.value) })} />
+                      </Field>
+                    </>
+                  )}
+                </Group>
+              </div>
             )}
-          </div>
-          <div className="row">
-            <label>
-              <input
-                type="checkbox"
-                checked={style.hideStartButton}
-                onChange={(e) => set({ hideStartButton: e.target.checked })}
-              />{" "}
-              Esconder o botão Iniciar da barra
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={style.hideWidgets}
-                onChange={(e) => set({ hideWidgets: e.target.checked })}
-              />{" "}
-              Esconder o botão de widgets
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={style.hideSearchGleam}
-                onChange={(e) => set({ hideSearchGleam: e.target.checked })}
-              />{" "}
-              Esconder o brilho da caixa de pesquisa
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={style.startLeft}
-                onChange={(e) => set({ startLeft: e.target.checked })}
-              />{" "}
-              Botão Iniciar sempre à esquerda (experimental)
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={style.dock}
-                onChange={(e) => set({ dock: e.target.checked })}
-              />{" "}
-              Animação de dock nos ícones (experimental)
-            </label>
-          </div>
-          <div className="row">
-            <label>
-              <input
-                type="checkbox"
-                checked={style.startFill !== null}
-                onChange={(e) =>
-                  set({ startFill: e.target.checked ? "#1C1C24" : null, startRadius: e.target.checked ? 14 : null })
-                }
-              />{" "}
-              Estilizar o menu Iniciar
-            </label>
-            {style.startFill !== null && (
-              <>
-                <input
-                  type="color"
-                  aria-label="Cor do Iniciar"
-                  value={style.startFill}
-                  onChange={(e) => set({ startFill: e.target.value })}
-                />
-                <input
-                  type="range"
-                  aria-label="Opacidade do Iniciar"
-                  min={0}
-                  max={255}
-                  value={style.startAlpha}
-                  onChange={(e) => set({ startAlpha: Number(e.target.value) })}
-                />
-                <input
-                  type="range"
-                  aria-label="Cantos do Iniciar"
-                  min={0}
-                  max={40}
-                  value={style.startRadius ?? 14}
-                  onChange={(e) => set({ startRadius: Number(e.target.value) })}
-                />
-              </>
+
+            {tab === "pesquisa" && (
+              <div role="tabpanel" id="est-panel-pesquisa" aria-labelledby="est-tab-pesquisa" className="est-panel">
+                <Group title="Pesquisa do Windows" hint="Vale depois de reiniciar a pesquisa.">
+                  <Check checked={style.searchDark} onChange={(v) => set({ searchDark: v })}>
+                    Forçar modo escuro na tela de resultados da pesquisa (experimental)
+                  </Check>
+                </Group>
+              </div>
             )}
-          </div>
-          <button type="button" className="btn" onClick={() => void save()}>
-            Aplicar estilo
-          </button>
-          {!xaml.active && (
-            <p className="muted">Ligue “Estilo da barra e do Iniciar” acima para o estilo valer.</p>
-          )}
-        </fieldset>
+
+            <div className="est-actions">
+              <button type="button" className="btn" onClick={() => void save()}>
+                Aplicar estilo
+              </button>
+              <span className="muted">As mudanças só valem depois de aplicar.</span>
+            </div>
+          </fieldset>
+        </section>
       )}
       {ask && (
         <ConfirmDialog
