@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { WIDGET_KINDS, WIDGET_NAMES, newWidget } from "../desktopToml";
 import type { WidgetKind, WidgetModel } from "../desktopToml";
+import { alignBoxes, distributeBoxes, snapToOthers } from "../widgetAlign";
+import type { AlignMode } from "../widgetAlign";
 
 /** Grade de encaixe (px reais da tela) para mover e redimensionar. */
 export const MOVE_GRID = 20;
@@ -74,7 +76,10 @@ export default function WidgetCanvas({
   const screenH = Math.max(450, Math.round(window.screen.height * (window.devicePixelRatio || 1)));
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxW, setBoxW] = useState(720);
-  const [sel, setSel] = useState<string | null>(widgets[0]?.id ?? null);
+  const [selIds, setSelIds] = useState<string[]>(widgets[0] ? [widgets[0].id] : []);
+  const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
+  const sel = selIds[selIds.length - 1] ?? null;
+  const setSel = (id: string | null) => setSelIds(id ? [id] : []);
   const drag = useRef<Drag | null>(null);
 
   useEffect(() => {
@@ -97,10 +102,18 @@ export default function WidgetCanvas({
     const dx = (e.clientX - d.px) / scale;
     const dy = (e.clientY - d.py) / scale;
     if (d.mode === "move") {
-      patch(d.id, {
-        x: Math.max(0, Math.min(screenW - 60, snap(d.x + dx, MOVE_GRID))),
-        y: Math.max(0, Math.min(screenH - 60, snap(d.y + dy, MOVE_GRID))),
-      });
+      const me = widgets.find((w) => w.id === d.id);
+      if (!me) return;
+      const gx = Math.max(0, Math.min(screenW - 60, snap(d.x + dx, MOVE_GRID)));
+      const gy = Math.max(0, Math.min(screenH - 60, snap(d.y + dy, MOVE_GRID)));
+      // Vizinhos mandam mais que a grade: bordas e centros alinham com os outros widgets.
+      const s = snapToOthers(
+        { id: me.id, x: gx, y: gy, width: me.width, height: me.height },
+        widgets.filter((w) => w.id !== me.id),
+        { w: screenW, h: screenH },
+      );
+      setGuides({ x: s.guidesX, y: s.guidesY });
+      patch(d.id, { x: Math.max(0, s.x), y: Math.max(0, s.y) });
     } else {
       patch(d.id, {
         width: Math.max(60, Math.min(800, snap(d.w + dx, SIZE_GRID))),
@@ -110,7 +123,10 @@ export default function WidgetCanvas({
   };
   const end = () => {
     drag.current = null;
+    setGuides({ x: [], y: [] });
   };
+  const align = (m: AlignMode) => onChange(alignBoxes(widgets, selIds, m));
+  const spread = (axis: "x" | "y") => onChange(distributeBoxes(widgets, selIds, axis));
 
   return (
     <div className="wc">
@@ -150,7 +166,7 @@ export default function WidgetCanvas({
           return (
             <div
               key={w.id}
-              className={w.id === sel ? "wc-block selected" : "wc-block"}
+              className={selIds.includes(w.id) ? (w.id === sel ? "wc-block selected" : "wc-block selected multi") : "wc-block"}
               data-testid={`widget-${w.id}`}
               style={{
                 left: w.x * scale,
@@ -162,6 +178,11 @@ export default function WidgetCanvas({
                 borderRadius: w.radius * scale,
               }}
               onPointerDown={(e) => {
+                if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                  // Seleção múltipla: Shift ou Ctrl liga e desliga o bloco.
+                  setSelIds((cur) => (cur.includes(w.id) ? cur.filter((i) => i !== w.id) : [...cur, w.id]));
+                  return;
+                }
                 setSel(w.id);
                 (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
                 drag.current = { mode: "move", id: w.id, px: e.clientX, py: e.clientY, x: w.x, y: w.y };
@@ -187,11 +208,51 @@ export default function WidgetCanvas({
             </div>
           );
         })}
+        {guides.x.map((g) => (
+          <span key={`gx${g}`} className="wc-guide wc-guide-v" style={{ left: g * scale }} />
+        ))}
+        {guides.y.map((g) => (
+          <span key={`gy${g}`} className="wc-guide wc-guide-h" style={{ top: g * scale }} />
+        ))}
       </div>
       <p className="muted">
         Arraste o bloco para mover (encaixa numa grade) e puxe o canto azul para mudar o tamanho.
-        A miniatura mostra como fica na sua tela.
+        A miniatura mostra como fica na sua tela. Linhas azuis mostram quando o bloco alinha com
+        outro. Segure Shift para escolher vários e alinhar.
       </p>
+
+      {selIds.length >= 2 && (
+        <div className="wc-panel" role="group" aria-label="Alinhar widgets selecionados">
+          <h3>{selIds.length} widgets selecionados</h3>
+          <div className="wc-row">
+            <span>Alinhar</span>
+            {(
+              [
+                ["left", "Esquerda"],
+                ["center", "Centro"],
+                ["right", "Direita"],
+                ["top", "Topo"],
+                ["middle", "Meio"],
+                ["bottom", "Base"],
+              ] as [AlignMode, string][]
+            ).map(([m, n]) => (
+              <button key={m} type="button" className="btn" onClick={() => align(m)}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <div className="wc-row">
+            <span>Distribuir</span>
+            <button type="button" className="btn" disabled={selIds.length < 3} onClick={() => spread("x")}>
+              Espaço igual na horizontal
+            </button>
+            <button type="button" className="btn" disabled={selIds.length < 3} onClick={() => spread("y")}>
+              Espaço igual na vertical
+            </button>
+          </div>
+          {selIds.length < 3 && <p className="muted">Para distribuir, escolha 3 ou mais.</p>}
+        </div>
+      )}
 
       {selected && (
         <div className="wc-panel" aria-label={`Editar ${WIDGET_NAMES[selected.kind]}`}>

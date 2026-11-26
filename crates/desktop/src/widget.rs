@@ -98,8 +98,40 @@ pub fn start_position(cfg: &WidgetConfig, saved: &[Saved]) -> (i32, i32) {
         .map_or((cfg.x, cfg.y), |s| (s.x, s.y))
 }
 
+/// Retângulo simples (esquerda, topo, largura, altura).
+pub type R = (i32, i32, i32, i32);
+
+/// Encaixa `m` nas bordas e no centro dos outros widgets (até `near` px). Devolve a nova
+/// esquerda e o novo topo.
+pub fn snap_to_others(m: R, others: &[R], near: i32) -> (i32, i32) {
+    let axis = |pos: i32, size: i32, targets: Vec<i32>| {
+        let marks = [pos, pos + size / 2, pos + size];
+        let mut best: Option<i32> = None;
+        for mk in marks {
+            for t in &targets {
+                let d = t - mk;
+                if d.abs() <= near && best.is_none_or(|b| d.abs() < b.abs()) {
+                    best = Some(d);
+                }
+            }
+        }
+        pos + best.unwrap_or(0)
+    };
+    let xs = others.iter().flat_map(|o| [o.0, o.0 + o.2 / 2, o.0 + o.2]).collect();
+    let ys = others.iter().flat_map(|o| [o.1, o.1 + o.3 / 2, o.1 + o.3]).collect();
+    (axis(m.0, m.2, xs), axis(m.1, m.3, ys))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn snaps_edges_to_neighbours() {
+        use super::snap_to_others;
+        // a borda direita de (205,400,100,100) fica a 5 px da esquerda do vizinho (300)
+        assert_eq!(snap_to_others((205, 400, 100, 100), &[(300, 100, 100, 100)], 12), (200, 400));
+        assert_eq!(snap_to_others((600, 400, 100, 100), &[(300, 100, 100, 100)], 12), (600, 400));
+    }
+
     use super::*;
 
     #[test]

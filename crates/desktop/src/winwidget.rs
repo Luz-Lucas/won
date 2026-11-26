@@ -345,10 +345,28 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             let r = lp as *mut RECT;
             unsafe {
                 let (w, h) = ((*r).right - (*r).left, (*r).bottom - (*r).top);
-                (*r).left = ((*r).left + 10).div_euclid(20) * 20;
-                (*r).top = ((*r).top + 10).div_euclid(20) * 20;
-                (*r).right = (*r).left + w;
-                (*r).bottom = (*r).top + h;
+                let gx = ((*r).left + 10).div_euclid(20) * 20;
+                let gy = ((*r).top + 10).div_euclid(20) * 20;
+                // Depois da grade, bordas e centro dos outros widgets mandam (alinhamento).
+                let others: Vec<widget::R> = ITEMS.with(|c| {
+                    c.try_borrow()
+                        .map(|v| {
+                            v.iter()
+                                .filter(|it| it.hwnd != hwnd)
+                                .filter_map(|it| {
+                                    let mut o: RECT = std::mem::zeroed();
+                                    (GetWindowRect(it.hwnd, &mut o) != 0)
+                                        .then(|| (o.left, o.top, o.right - o.left, o.bottom - o.top))
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                });
+                let (x, y) = widget::snap_to_others((gx, gy, w, h), &others, 12);
+                (*r).left = x;
+                (*r).top = y;
+                (*r).right = x + w;
+                (*r).bottom = y + h;
             }
             1
         }

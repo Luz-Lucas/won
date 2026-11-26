@@ -1668,3 +1668,22 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
+.wc-block.multi {
+  outline: 2px dashed var(--accent-light);
+}
+.wc-guide {
+  position: absolute;
+  background: var(--accent-light);
+  pointer-events: none;
+  opacity: 0.9;
+}
+.wc-guide-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.wc-guide-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}

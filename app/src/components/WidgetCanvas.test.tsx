@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import WidgetCanvas, { SIZES, snap } from "./WidgetCanvas";
@@ -36,5 +36,16 @@ describe("WidgetCanvas", () => {
     render(<WidgetCanvas widgets={[newWidget("ram", [])]} onChange={onChange} />);
     await userEvent.click(screen.getByRole("button", { name: "Remover" }));
     expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  it("alinha dois widgets selecionados com Shift", async () => {
+    const a = { ...newWidget("cpu", []), x: 40, y: 40 };
+    const b = { ...newWidget("ram", [a]), id: "ram2", x: 300, y: 200 };
+    const onChange = vi.fn();
+    render(<WidgetCanvas widgets={[a, b]} onChange={onChange} />);
+    fireEvent.pointerDown(screen.getByTestId("widget-ram2"), { shiftKey: true, pointerId: 1 });
+    await userEvent.click(screen.getByRole("button", { name: "Esquerda" }));
+    const out = onChange.mock.calls[onChange.mock.calls.length - 1]![0];
+    expect(out.map((w: { x: number }) => w.x)).toEqual([40, 40]);
   });
 });
