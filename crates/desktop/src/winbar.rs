@@ -833,6 +833,14 @@ unsafe fn release(hwnd: HWND) {
 
 /// Cria (ou recria) a barra conforme a configuração; `None` remove.
 pub fn apply(cfg: Option<&BarConfig>) {
+    // Mesma configuração (o arquivo foi regravado sem mudar a barra): não recria. Recriar solta e
+    // registra a área reservada de novo, o que faz o Explorer refazer a barra nativa e o Iniciar.
+    if let Some(new) = cfg {
+        let same = BAR.with(|c| c.borrow().as_ref().is_some_and(|b| b.cfg == *new));
+        if same {
+            return;
+        }
+    }
     destroy();
     let Some(cfg) = cfg else { return };
     unsafe {
