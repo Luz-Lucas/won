@@ -58,6 +58,7 @@ pub fn run() {
             commands::updates::spawn_defender_watch(tweaks_state.clone());
             app.manage(tweaks_state);
             app.manage(SettingsState::load(default_settings_path()));
+            commands::ram::spawn_watch();
             if let Err(e) = tray::setup(app.handle()) {
                 eprintln!("WON: sem ícone na bandeja: {e}");
             }
@@ -151,6 +152,10 @@ pub fn run() {
             commands::terminal::terminal_status,
             commands::terminal::terminal_install_omp,
             commands::terminal::terminal_install_font,
+            commands::ram::ram_status,
+            commands::ram::ram_config_get,
+            commands::ram::ram_config_set,
+            commands::ram::ram_optimize,
             commands::terminal::terminal_themes,
             commands::terminal::terminal_theme_preview,
             commands::terminal::terminal_timing,

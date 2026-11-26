@@ -1687,3 +1687,11 @@ body {
   right: 0;
   height: 1px;
 }
+
+/* Otimização de RAM */
+.ram-bar { height: 10px; border-radius: 999px; background: var(--surface-2, rgba(255,255,255,.08)); overflow: hidden; margin: 8px 0; }
+.ram-bar > span { display: block; height: 100%; background: var(--accent, #2f7bff); transition: width .3s; }
+.ram-actions { display: flex; gap: 8px; margin: 8px 0; }
+.ram-settings { display: grid; gap: 10px; margin-top: 12px; }
+.ram-exclude ul { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; }
+.ram-add { display: flex; gap: 8px; flex-wrap: wrap; }

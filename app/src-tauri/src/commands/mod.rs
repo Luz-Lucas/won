@@ -9,6 +9,7 @@ pub mod mods;
 pub mod net;
 pub mod routes;
 pub mod scan;
+pub mod ram;
 pub mod settings;
 pub mod signatures;
 pub mod startup;

@@ -1161,3 +1161,29 @@ export interface SystemFontStatus {
 }
 export const systemFontStatus = () => invoke<SystemFontStatus>("system_font_status");
 export const systemFontSet = (on: boolean) => invoke<void>("system_font_set", { on });
+
+export interface RamStatus {
+  total_mb: number;
+  used_mb: number;
+  available_mb: number;
+  percent: number;
+}
+export interface RamResult {
+  used_before_mb: number;
+  used_after_mb: number;
+  freed_mb: number;
+  trimmed: number;
+  skipped: number;
+  standby_cleared: boolean;
+  standby_note: string | null;
+}
+export interface RamConfig {
+  auto: boolean;
+  threshold: number;
+  clear_standby: boolean;
+  exclude: string[];
+}
+export const ramStatus = () => invoke<RamStatus>("ram_status");
+export const ramOptimize = () => invoke<RamResult>("ram_optimize");
+export const ramConfigGet = () => invoke<RamConfig>("ram_config_get");
+export const ramConfigSet = (config: RamConfig) => invoke<RamConfig>("ram_config_set", { config });
