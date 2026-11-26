@@ -984,6 +984,72 @@ fn apply_one(t: &mut Tracked, on: bool, st: &Style) -> Result<()> {
     Ok(())
 }
 
+/// Retângulos da barra vistos antes de ligados ao `TaskbarFrame`; reavaliados pelo vigia.
+struct Pending {
+    handle: u64,
+    is_border: bool,
+    rect: Rectangle,
+    tries: u32,
+}
+unsafe impl Send for Pending {}
+static PENDING: Mutex<Vec<Pending>> = Mutex::new(Vec::new());
+
+/// Tenta de novo os retângulos pendentes, cada um na thread de UI do seu elemento. Idempotente:
+/// um handle já rastreado não entra duas vezes.
+fn retry_pending() {
+    let items: Vec<(u64, Rectangle)> = {
+        let g = PENDING.lock().unwrap();
+        g.iter().map(|p| (p.handle, p.rect.clone())).collect()
+    };
+    for (handle, rect) in items {
+        let Ok(ui) = rect.cast::<UIElement>() else {
+            continue;
+        };
+        let Ok(disp) = ui.Dispatcher() else { continue };
+        let h = DispatchedHandler::new(move || {
+            let mut pend = PENDING.lock().unwrap();
+            let Some(i) = pend.iter().position(|p| p.handle == handle) else {
+                return Ok(());
+            };
+            let attached = pend[i]
+                .rect
+                .cast::<FrameworkElement>()
+                .map(|fe| find_parent_named(fe, "TaskbarFrame"))
+                .unwrap_or(false);
+            if !attached {
+                pend[i].tries += 1;
+                if pend[i].tries > 40 {
+                    pend.remove(i);
+                }
+                return Ok(());
+            }
+            let p = pend.remove(i);
+            drop(pend);
+            let mut tr = TRACKED.lock().unwrap();
+            if tr.iter().any(|t| t.handle == p.handle) {
+                return Ok(());
+            }
+            let (on, st) = want_on();
+            let mut t = Tracked {
+                handle: p.handle,
+                is_border: p.is_border,
+                rect: p.rect,
+                orig: None,
+            };
+            if on {
+                log(&format!(
+                    "aplicar (tardio) {}: {:?}",
+                    if t.is_border { "BackgroundStroke" } else { "BackgroundFill" },
+                    apply_one(&mut t, true, &st)
+                ));
+            }
+            tr.push(t);
+            Ok(())
+        });
+        let _ = disp.RunAsync(CoreDispatcherPriority::Normal, &h);
+    }
+}
+
 /// Reaplica (ou restaura) em todos os elementos guardados, cada um na sua thread de UI.
 fn apply_all(on: bool, st: Style) {
     apply_all_start(on, st.clone());
@@ -1333,7 +1399,22 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             return S_OK;
         };
         if !find_parent_named(fe.clone(), "TaskbarFrame") {
-            log("sem TaskbarFrame acima");
+            // Quando o Explorer refaz a barra (ex.: a área útil mudou porque o desktop do WON
+            // reservou uma borda), o retângulo chega antes de estar ligado ao TaskbarFrame.
+            // Descartar aqui deixava a barra sem estilo para sempre: guarda e tenta de novo.
+            log("sem TaskbarFrame acima (tentará de novo)");
+            let mut g = PENDING.lock().unwrap();
+            if !g.iter().any(|p| p.handle == element.handle) {
+                g.push(Pending {
+                    handle: element.handle,
+                    is_border: name == "BackgroundStroke",
+                    rect,
+                    tries: 0,
+                });
+                if g.len() > 32 {
+                    g.remove(0);
+                }
+            }
             return S_OK;
         }
         let (on, st) = want_on();
@@ -1428,6 +1509,7 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                 let mut last: Option<(bool, Style)> = None;
                 loop {
                     std::thread::sleep(std::time::Duration::from_millis(500));
+                    retry_pending();
                     let now = want_on();
                     // Com ilhas, reaplica sempre: elas seguem a largura dos apps abertos.
                     if last.as_ref() != Some(&now) || (now.0 && now.1.islands) {
