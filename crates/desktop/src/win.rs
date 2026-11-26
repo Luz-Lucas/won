@@ -671,6 +671,11 @@ pub fn run() {
         request_stop();
         return;
     }
+    // Só sobe quando o usuário liga no WON (o botão passa `--iniciar`): nenhum atalho antigo,
+    // tarefa ou reabertura do Windows o liga sozinho.
+    if !std::env::args().any(|a| a == "--iniciar") {
+        return;
+    }
     unsafe {
         // Sem isto o Windows "virtualiza" as coordenadas (escala de 125%/150%): a área
         // de trabalho sai menor e as janelas do tiling ficam maiores que a tela.

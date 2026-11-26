@@ -79,6 +79,7 @@ pub async fn desktop_start() -> Result<(), String> {
             return Ok(());
         }
         std::process::Command::new(exe)
+            .arg("--iniciar")
             .spawn()
             .map(|_| ())
             .map_err(|e| format!("Não foi possível iniciar: {e}"))
