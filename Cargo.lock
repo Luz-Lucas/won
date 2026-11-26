@@ -4978,6 +4978,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "ctrlc",
+ "embed-resource",
  "globset",
  "hex",
  "predicates",
@@ -5021,6 +5022,7 @@ name = "sentinela-desktop"
 version = "0.1.0"
 dependencies = [
  "dirs 7.0.0",
+ "embed-resource",
  "serde",
  "tempfile",
  "toml 1.2.2+spec-1.1.0",
@@ -5088,6 +5090,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dirs 7.0.0",
+ "embed-resource",
  "goblin",
  "pdb",
  "serde",
