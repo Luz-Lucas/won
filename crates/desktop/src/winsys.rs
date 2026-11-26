@@ -128,3 +128,60 @@ pub fn media_text() -> String {
     };
     get().unwrap_or_default()
 }
+
+/// Últimos valores medidos pela thread de coleta.
+#[derive(Clone, Default)]
+pub struct Snapshot {
+    pub vol: String,
+    pub net: String,
+    pub media: String,
+}
+
+static SNAP: std::sync::Mutex<Option<Snapshot>> = std::sync::Mutex::new(None);
+static WANT_MEDIA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static STARTED: std::sync::Once = std::sync::Once::new();
+
+pub fn snapshot() -> Snapshot {
+    SNAP.lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .unwrap_or_default()
+}
+
+/// Liga (uma vez) a thread que mede volume, rede e mídia sem prender a barra.
+pub fn start_sampler(want_media: bool) {
+    WANT_MEDIA.store(want_media, std::sync::atomic::Ordering::Relaxed);
+    STARTED.call_once(|| {
+        std::thread::spawn(|| {
+            // Sem fila de mensagens aqui: apartamento multithread, para as chamadas WinRT
+            // não dependerem de uma bomba de mensagens.
+            let _ = unsafe {
+                windows::Win32::System::Com::CoInitializeEx(
+                    None,
+                    windows::Win32::System::Com::COINIT_MULTITHREADED,
+                )
+            };
+            let mut n = 0u32;
+            loop {
+                let vol = volume_text();
+                let mut cur = snapshot();
+                cur.vol = vol;
+                if n % 5 == 0 {
+                    cur.net = network_text();
+                }
+                if n % 2 == 0 {
+                    cur.media = if WANT_MEDIA.load(std::sync::atomic::Ordering::Relaxed) {
+                        media_text()
+                    } else {
+                        String::new()
+                    };
+                }
+                if let Ok(mut g) = SNAP.lock() {
+                    *g = Some(cur);
+                }
+                n = n.wrapping_add(1);
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+            }
+        });
+    });
+}

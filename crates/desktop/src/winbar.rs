@@ -929,19 +929,20 @@ pub fn tick(fullscreen_foreground: bool) {
         let cur = cpu_sample();
         b.cpu = bar::cpu_percent(b.cpu_prev, cur);
         b.cpu_prev = cur;
-        b.vol = crate::winsys::volume_text();
-        if b.ticks % 5 == 0 {
-            b.net = crate::winsys::network_text();
-            if b.cfg
-                .left
-                .iter()
-                .chain(&b.cfg.center)
-                .chain(&b.cfg.right)
-                .any(|m| *m == Module::Media)
-            {
-                b.media = crate::winsys::media_text();
-            }
-        }
+        // Volume, rede e mídia vêm de uma thread própria: a mídia (WinRT) espera resposta de
+        // outro processo e, na thread da janela, travava a barra inteira ("Não responde").
+        let want_media = b
+            .cfg
+            .left
+            .iter()
+            .chain(&b.cfg.center)
+            .chain(&b.cfg.right)
+            .any(|m| *m == Module::Media);
+        crate::winsys::start_sampler(want_media);
+        let snap = crate::winsys::snapshot();
+        b.vol = snap.vol;
+        b.net = snap.net;
+        b.media = snap.media;
         b.ticks = b.ticks.wrapping_add(1);
         if b.cfg.islands {
             let fresh = visible_windows(b.hwnd);
