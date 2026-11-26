@@ -77,16 +77,25 @@ impl Sys for WinSys {
     }
 
     fn refresh_icons(&self) {
-        use windows_sys::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
+        use std::os::windows::process::CommandExt;
+        use windows_sys::Win32::UI::Shell::{
+            SHCNE_ASSOCCHANGED, SHCNF_FLUSH, SHCNF_IDLIST, SHChangeNotify,
+        };
         // SAFETY: os dois ponteiros são nulos, como a API permite para ASSOCCHANGED.
         unsafe {
             SHChangeNotify(
                 SHCNE_ASSOCCHANGED as i32,
-                SHCNF_IDLIST,
+                SHCNF_IDLIST | SHCNF_FLUSH,
                 std::ptr::null(),
                 std::ptr::null(),
             );
         }
+        // So o aviso nao basta no Windows 11: o cache de icones guarda os antigos.
+        // `ie4uinit -show` refaz o cache do usuario atual sem reiniciar nada.
+        let _ = std::process::Command::new("ie4uinit.exe")
+            .arg("-show")
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .status();
     }
 
     fn delete_key(&self, path: &str) {
