@@ -25,6 +25,10 @@ export interface BarModel {
   hideWhenMaximized: boolean;
   /** Sem nenhum app aberto, a barra fica sempre visível. */
   alwaysVisibleWhenEmpty: boolean;
+  /** Clicar na área de trabalho não esconde a barra. */
+  visibleOnDesktop: boolean;
+  /** Contorno em volta do ícone do app ativo. */
+  activeOutline: boolean;
   hideNative: boolean;
   left: Module[];
   center: Module[];
@@ -157,6 +161,8 @@ export const DEFAULT_BAR: BarModel = {
   iconsOnlyFrom: 3,
   hideWhenMaximized: true,
   alwaysVisibleWhenEmpty: true,
+  visibleOnDesktop: true,
+  activeOutline: true,
   hideNative: false,
   left: ["title"],
   center: [],
@@ -234,6 +240,8 @@ export function readSections(text: string): Sections | null {
       iconsOnlyFrom: num(b.icons_only_from, DEFAULT_BAR.iconsOnlyFrom),
       hideWhenMaximized: b.hide_when_maximized !== false,
       alwaysVisibleWhenEmpty: b.always_visible_when_empty !== false,
+      visibleOnDesktop: b.visible_on_desktop !== false,
+      activeOutline: b.active_outline !== false,
       hideNative: b.hide_native_taskbar === true,
       left: mods(b.left, DEFAULT_BAR.left),
       center: mods(b.center, DEFAULT_BAR.center),
@@ -317,6 +325,8 @@ function barToml(b: BarModel): string {
     `icons_only_from = ${Math.round(b.iconsOnlyFrom)}`,
     `hide_when_maximized = ${b.hideWhenMaximized}`,
     `always_visible_when_empty = ${b.alwaysVisibleWhenEmpty}`,
+    `visible_on_desktop = ${b.visibleOnDesktop}`,
+    `active_outline = ${b.activeOutline}`,
     `hide_native_taskbar = ${b.hideNative}`,
     `left = ${list(b.left)}`,
     `center = ${list(b.center)}`,

@@ -307,6 +307,22 @@ export default function DesktopVisual({
                 />
                 <span>Barra sempre visível quando não há nenhum app aberto</span>
               </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.visibleOnDesktop}
+                  onChange={(e) => setBar({ visibleOnDesktop: e.target.checked })}
+                />
+                <span>Manter a barra visível ao clicar na área de trabalho</span>
+              </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.activeOutline}
+                  onChange={(e) => setBar({ activeOutline: e.target.checked })}
+                />
+                <span>Contorno em volta do ícone do app em uso</span>
+              </label>
               <Range label="Só ícones a partir de" value={bar.iconsOnlyFrom} min={0} max={12} onChange={(v) => setBar({ iconsOnlyFrom: v })} format={(v) => (v === 0 ? "nunca" : `${v} janelas`)} />
               <div className="dv-colors">
                 <label>

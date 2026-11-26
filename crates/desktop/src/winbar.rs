@@ -455,7 +455,7 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
                     right: x + iw,
                     bottom: m + ih - 4,
                 };
-                if a.hwnd == fg {
+                if a.hwnd == fg && b.cfg.active_outline {
                     // Destaque do app ativo: contorno suave, sem bloco de fundo.
                     let ring = mix(b.cfg.background, b.cfg.foreground, 60);
                     let pen = CreatePen(PS_SOLID, 2, colorref(ring));
@@ -961,6 +961,20 @@ pub fn tick(fullscreen_foreground: bool) {
             let mut fullscreen_foreground = fullscreen_foreground || maximized;
             // Sem nenhum app aberto, a área de trabalho em primeiro plano ocupa a tela toda e
             // contava como tela cheia: a barra sumia. Com a opção ligada, ela fica visível.
+            // Clicar na área de trabalho (ela cobre o monitor) não conta como tela cheia: com a
+            // opção ligada a barra fica visível mesmo com apps abertos atrás.
+            if fullscreen_foreground && b.cfg.visible_on_desktop {
+                let on_desktop = !fg.is_null()
+                    && crate::win::window_info(fg).is_some_and(|i| {
+                        matches!(
+                            i.class.as_str(),
+                            "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
+                        )
+                    });
+                if on_desktop && !maximized {
+                    fullscreen_foreground = false;
+                }
+            }
             if fullscreen_foreground && b.cfg.always_visible_when_empty {
                 let apps_open = if b.cfg.islands {
                     !b.apps.is_empty()

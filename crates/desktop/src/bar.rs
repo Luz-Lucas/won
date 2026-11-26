@@ -51,6 +51,10 @@ pub struct BarConfig {
     pub hide_when_maximized: bool,
     /// Sem nenhum app aberto, a barra fica sempre visível (mesmo com a área de trabalho em primeiro plano).
     pub always_visible_when_empty: bool,
+    /// Com a área de trabalho em primeiro plano (clicou no desktop), a barra continua visível.
+    pub visible_on_desktop: bool,
+    /// Contorno suave em volta do ícone do app ativo.
+    pub active_outline: bool,
     pub hide_native_taskbar: bool,
     pub left: Vec<Module>,
     pub center: Vec<Module>,

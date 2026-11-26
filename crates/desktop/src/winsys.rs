@@ -100,33 +100,62 @@ pub fn network_text() -> String {
 }
 
 /// "♪ Artista - Título" da mídia que está tocando (Spotify, navegador...), ou vazio.
+/// Procura em TODAS as sessões (a "atual" do Windows pode ser um player pausado) e registra no
+/// desktop.log o motivo quando não consegue ler, para o diagnóstico não depender de adivinhar.
 pub fn media_text() -> String {
     use windows::Media::Control::{
         GlobalSystemMediaTransportControlsSessionManager as Manager,
         GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
     };
-    let get = || -> windows::core::Result<String> {
-        let _ = unsafe {
-            windows::Win32::System::Com::CoInitializeEx(
-                None,
-                windows::Win32::System::Com::COINIT_APARTMENTTHREADED,
-            )
-        };
-        let mgr = Manager::RequestAsync()?.join()?;
-        let session = mgr.GetCurrentSession()?;
-        if session.GetPlaybackInfo()?.PlaybackStatus()? != Status::Playing {
-            return Ok(String::new());
+    static LAST: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+    let note = |m: String| {
+        if let Ok(mut l) = LAST.lock() {
+            if *l != m {
+                crate::dlog::log(&format!("mídia: {m}"));
+                *l = m;
+            }
         }
+    };
+    let get = || -> windows::core::Result<(String, usize)> {
+        let mgr = Manager::RequestAsync()?.join()?;
+        let sessions = mgr.GetSessions()?;
+        let total = sessions.Size()? as usize;
+        let mut chosen = None;
+        for s in &sessions {
+            if s.GetPlaybackInfo()?.PlaybackStatus()? == Status::Playing {
+                chosen = Some(s);
+                break;
+            }
+        }
+        let Some(session) = chosen else {
+            return Ok((String::new(), total));
+        };
         let props = session.TryGetMediaPropertiesAsync()?.join()?;
         let title = props.Title()?.to_string();
         let artist = props.Artist()?.to_string();
-        Ok(match (artist.is_empty(), title.is_empty()) {
-            (_, true) => String::new(),
-            (true, false) => format!("\u{266a} {title}"),
-            (false, false) => format!("\u{266a} {artist} - {title}"),
-        })
+        Ok((
+            match (artist.is_empty(), title.is_empty()) {
+                (_, true) => String::new(),
+                (true, false) => format!("\u{266a} {title}"),
+                (false, false) => format!("\u{266a} {artist} - {title}"),
+            },
+            total,
+        ))
     };
-    get().unwrap_or_default()
+    match get() {
+        Ok((t, total)) => {
+            note(if t.is_empty() {
+                format!("{total} sessão(ões), nenhuma tocando")
+            } else {
+                format!("lendo ({total} sessão(ões))")
+            });
+            t
+        }
+        Err(e) => {
+            note(format!("erro ao ler as sessões: {e}"));
+            String::new()
+        }
+    }
 }
 
 /// Últimos valores medidos pela thread de coleta.
