@@ -123,7 +123,7 @@ pub async fn update_install() -> Result<(), String> {
         .map_err(|_| "A tarefa foi interrompida.".to_string())?
 }
 
-/// Busca periódica (a cada 6 h) com o programa aberto. Só instala sozinho se o usuário ligou.
+/// Busca periódica (a cada 30 min) com o programa aberto. Só instala sozinho se o usuário ligou.
 pub fn spawn_background() {
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(45));
@@ -135,7 +135,7 @@ pub fn spawn_background() {
                     let _ = install_latest();
                 }
             }
-            std::thread::sleep(std::time::Duration::from_secs(6 * 3600));
+            std::thread::sleep(std::time::Duration::from_secs(30 * 60));
         }
     });
 }

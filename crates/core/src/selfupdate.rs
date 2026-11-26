@@ -30,6 +30,9 @@ pub struct Config {
     pub last_check: i64,
     #[serde(default)]
     pub last_error: String,
+    /// Versão do formato; arquivos antigos (0) passam a instalar sozinhos uma vez.
+    #[serde(default)]
+    pub schema: u32,
 }
 
 fn yes() -> bool {
@@ -43,10 +46,11 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             auto_check: true,
-            auto_install: false,
+            auto_install: true,
             manifest_url: default_url(),
             last_check: 0,
             last_error: String::new(),
+            schema: 2,
         }
     }
 }
@@ -71,10 +75,18 @@ fn config_path() -> PathBuf {
 }
 
 pub fn load_config() -> Config {
-    std::fs::read(config_path())
+    let mut c: Config = std::fs::read(config_path())
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if c.schema < 2 {
+        // A primeira versão deixava a instalação automática desligada; o combinado agora é
+        // "tudo automático", então liga uma vez (o usuário pode desligar depois).
+        c.auto_install = c.auto_check;
+        c.schema = 2;
+        let _ = save_config(&c);
+    }
+    c
 }
 
 pub fn save_config(c: &Config) -> anyhow::Result<()> {

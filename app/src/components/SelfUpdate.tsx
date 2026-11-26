@@ -93,7 +93,7 @@ export default function SelfUpdate() {
           disabled={busy || !st}
           onChange={(e) => void save(e.target.checked, st?.auto_install ?? false)}
         />
-        Procurar atualizações automaticamente (a cada 6 horas)
+        Procurar atualizações automaticamente (a cada 30 minutos)
       </label>
       <label className="check">
         <input
