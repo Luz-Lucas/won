@@ -11,20 +11,21 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, CreateFontW, CreateRoundRectRgn, CreateSolidBrush, DT_CENTER, DT_END_ELLIPSIS,
-    DT_LEFT, DT_SINGLELINE, DT_VCENTER, DeleteObject, DrawTextW, EndPaint, FillRect,
-    GetDeviceCaps, InvalidateRect, LOGPIXELSY, PAINTSTRUCT, SelectObject, SetBkMode,
-    SetTextColor, SetWindowRgn, TRANSPARENT,
+    AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, BeginPaint,
+    CreateCompatibleDC, CreateDIBSection, CreateFontW, CreateRoundRectRgn, CreateSolidBrush,
+    DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE, DT_VCENTER, DeleteDC,
+    DeleteObject, DrawTextW, EndPaint, FillRect, GetDC, GetDeviceCaps, LOGPIXELSY, PAINTSTRUCT,
+    ReleaseDC, SelectObject, SetBkMode, SetTextColor, SetWindowRgn, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowExW, FindWindowW,
-    GWLP_USERDATA, GetClientRect, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, HTCAPTION,
+    GWLP_USERDATA, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, HTCAPTION,
     RegisterClassExW, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
     SM_YVIRTUALSCREEN, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SendMessageW,
-    SetWindowLongPtrW, SetWindowPos, ShowWindow, WM_ERASEBKGND, WM_EXITSIZEMOVE,
-    WM_LBUTTONDOWN, WM_MOVING, WM_NCLBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_POPUP,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WM_ERASEBKGND, WM_EXITSIZEMOVE,
+    WM_LBUTTONDOWN, WM_MOVING, WM_NCLBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
 const CLASS: &str = "SentinelaDesktopWidget";
@@ -141,7 +142,7 @@ pub fn apply(list: &[WidgetConfig]) {
                 (x, y) = (cfg.x, cfg.y);
             }
             let hwnd = CreateWindowExW(
-                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
                 class.as_ptr(),
                 wide(&format!("WON widget {}", cfg.id)).as_ptr(),
                 WS_POPUP,
@@ -165,6 +166,7 @@ pub fn apply(list: &[WidgetConfig]) {
                 SetWindowPos(hwnd, host, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             }
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            render(hwnd, cfg);
             items.push(Item {
                 hwnd,
                 cfg: cfg.clone(),
@@ -198,7 +200,7 @@ pub fn tick() {
                 if !host.is_null() {
                     SetWindowPos(it.hwnd, host, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                 }
-                InvalidateRect(it.hwnd, std::ptr::null(), 0);
+                render(it.hwnd, &it.cfg);
             }
         }
     });
@@ -253,19 +255,17 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
     (label, value)
 }
 
-unsafe fn paint(hwnd: HWND, cfg: &WidgetConfig) {
+/// Desenha o widget (fundo sólido + textos) no `hdc`, no retângulo `rc`.
+unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &WidgetConfig) {
     unsafe {
-        let mut ps: PAINTSTRUCT = std::mem::zeroed();
-        let hdc = BeginPaint(hwnd, &mut ps);
-        let mut rc: RECT = std::mem::zeroed();
-        GetClientRect(hwnd, &mut rc);
         let brush = CreateSolidBrush(colorref(cfg.background));
         FillRect(hdc, &rc, brush);
         DeleteObject(brush);
         let dpi = GetDeviceCaps(hdc, LOGPIXELSY as i32);
         let face = wide("Segoe UI");
         let mk = |pt: i32, weight: i32| {
-            CreateFontW(-(pt * dpi / 72), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 5, 0, face.as_ptr())
+            // Qualidade 4 = ANTIALIASED_QUALITY: sem ClearType, para o alfa do texto ficar limpo.
+            CreateFontW(-(pt * dpi / 72), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 4, 0, face.as_ptr())
         };
         let big = mk(cfg.font_size as i32, 700);
         let small = mk((cfg.font_size as i32 / 3).max(8), 400);
@@ -304,8 +304,90 @@ unsafe fn paint(hwnd: HWND, cfg: &WidgetConfig) {
         SelectObject(hdc, old);
         DeleteObject(big);
         DeleteObject(small);
+    }
+}
+
+/// Converte os pixels desenhados (alfa 0 do GDI) em pixels com alfa: o fundo recebe a opacidade
+/// do widget e o texto fica opaco, com a cobertura do suavizado como alfa. Premultiplicado.
+fn apply_alpha(px: &mut [u32], cfg: &WidgetConfig) {
+    let a_bg = (cfg.opacity.min(100) * 255 / 100) as u32;
+    let bg = [cfg.background.2 as i32, cfg.background.1 as i32, cfg.background.0 as i32]; // B,G,R
+    let fg = [cfg.foreground.2 as i32, cfg.foreground.1 as i32, cfg.foreground.0 as i32];
+    let bg32 = (bg[2] as u32) << 16 | (bg[1] as u32) << 8 | bg[0] as u32;
+    // Canal em que texto e fundo mais se afastam: mede a cobertura do texto.
+    let (k, dk) = (0..3)
+        .map(|i| (i, (fg[i] - bg[i]).abs()))
+        .max_by_key(|&(_, d)| d)
+        .unwrap();
+    for p in px.iter_mut() {
+        let rgb = *p & 0x00FF_FFFF;
+        if a_bg == 255 {
+            *p = rgb | 0xFF00_0000;
+            continue;
+        }
+        if rgb == bg32 {
+            let (b, g, r) = (rgb & 0xFF, (rgb >> 8) & 0xFF, (rgb >> 16) & 0xFF);
+            *p = (a_bg << 24) | ((r * a_bg / 255) << 16) | ((g * a_bg / 255) << 8) | (b * a_bg / 255);
+            continue;
+        }
+        let ch = [(rgb & 0xFF) as i32, ((rgb >> 8) & 0xFF) as i32, ((rgb >> 16) & 0xFF) as i32];
+        let cov = if dk < 8 { 1.0 } else { ((ch[k] - bg[k]).abs() as f32 / dk as f32).clamp(0.0, 1.0) };
+        let a = a_bg + ((255 - a_bg) as f32 * cov) as u32;
+        let m = |c: i32| (c as u32 * a / 255).min(255);
+        *p = (a << 24) | (m(fg[2]) << 16) | (m(fg[1]) << 8) | m(fg[0]);
+    }
+}
+
+/// Pinta o widget numa imagem com alfa e entrega ao Windows (janela em camadas). Com opacidade
+/// 0 o fundo some e fica só o texto.
+fn render(hwnd: HWND, cfg: &WidgetConfig) {
+    unsafe {
+        let (w, h) = (cfg.width as i32, cfg.height as i32);
+        let screen = GetDC(std::ptr::null_mut());
+        let mem = CreateCompatibleDC(screen);
+        let mut bi: BITMAPINFO = std::mem::zeroed();
+        bi.bmiHeader = BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: w,
+            biHeight: -h,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB as u32,
+            ..std::mem::zeroed()
+        };
+        let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
+        let dib = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &mut bits, std::ptr::null_mut(), 0);
+        if !dib.is_null() && !bits.is_null() {
+            let old = SelectObject(mem, dib);
+            draw(mem, RECT { left: 0, top: 0, right: w, bottom: h }, cfg);
+            apply_alpha(std::slice::from_raw_parts_mut(bits as *mut u32, (w * h) as usize), cfg);
+            let size = windows_sys::Win32::Foundation::SIZE { cx: w, cy: h };
+            let src = windows_sys::Win32::Foundation::POINT { x: 0, y: 0 };
+            let blend = BLENDFUNCTION {
+                BlendOp: AC_SRC_OVER as u8,
+                BlendFlags: 0,
+                SourceConstantAlpha: 255,
+                AlphaFormat: AC_SRC_ALPHA as u8,
+            };
+            UpdateLayeredWindow(hwnd, screen, std::ptr::null(), &size, mem, &src, 0, &blend, ULW_ALPHA);
+            SelectObject(mem, old);
+        }
+        if !dib.is_null() {
+            DeleteObject(dib);
+        }
+        DeleteDC(mem);
+        ReleaseDC(std::ptr::null_mut(), screen);
+    }
+}
+
+unsafe fn paint(hwnd: HWND, cfg: &WidgetConfig) {
+    // Janela em camadas: quem pinta é `render`; aqui só valida a área.
+    unsafe {
+        let mut ps: PAINTSTRUCT = std::mem::zeroed();
+        BeginPaint(hwnd, &mut ps);
         EndPaint(hwnd, &ps);
     }
+    render(hwnd, cfg);
 }
 
 fn config_of(hwnd: HWND) -> Option<WidgetConfig> {

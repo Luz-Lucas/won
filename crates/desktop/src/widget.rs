@@ -41,6 +41,8 @@ pub struct WidgetConfig {
     pub background: Rgb,
     pub foreground: Rgb,
     pub radius: u32,
+    /// Opacidade do fundo, 0 (só o texto) a 100.
+    pub opacity: u32,
     pub font_size: u32,
     /// Travado: não deixa arrastar.
     pub locked: bool,
@@ -156,6 +158,7 @@ mod tests {
             background: Rgb(0, 0, 0),
             foreground: Rgb(1, 1, 1),
             radius: 0,
+            opacity: 100,
             font_size: 20,
             locked: false,
             format: "%H".into(),

@@ -97,6 +97,8 @@ export interface WidgetModel {
   foreground: string;
   fontSize: number;
   radius: number;
+  /** Opacidade do fundo, 0 (só o texto) a 100. */
+  opacity: number;
   locked: boolean;
   format: string;
 }
@@ -115,6 +117,7 @@ export function newWidget(kind: WidgetKind, existing: WidgetModel[]): WidgetMode
     foreground: "#FFFFFF",
     fontSize: 24,
     radius: 16,
+    opacity: 100,
     locked: false,
     format: "%H:%M",
   };
@@ -211,6 +214,7 @@ export function readSections(text: string): Sections | null {
         foreground: str(r.foreground, d.foreground),
         fontSize: num(r.font_size, d.fontSize),
         radius: num(r.radius, d.radius),
+        opacity: Math.min(100, Math.max(0, num(r.opacity, d.opacity))),
         locked: r.locked === true,
         format: str(r.format, d.format),
       },
@@ -367,6 +371,7 @@ const widgetToml = (w: WidgetModel) =>
     `foreground = ${q(w.foreground)}`,
     `font_size = ${Math.round(w.fontSize)}`,
     `radius = ${Math.round(w.radius)}`,
+    `opacity = ${Math.round(Math.min(100, Math.max(0, w.opacity)))}`,
     `locked = ${w.locked}`,
     ...(w.kind === "clock" ? [`format = ${q(w.format)}`] : []),
   ].join("\n");

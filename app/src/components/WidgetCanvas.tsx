@@ -34,6 +34,22 @@ const RADII: { name: string; v: number }[] = [
   { name: "Redondo", v: 36 },
 ];
 
+const OPACITIES: { name: string; v: number }[] = [
+  { name: "Sólido", v: 100 },
+  { name: "75%", v: 75 },
+  { name: "50%", v: 50 },
+  { name: "25%", v: 25 },
+  { name: "Só o texto", v: 0 },
+];
+
+/** `#RRGGBB` com opacidade 0 a 100 vira `rgba(...)` para a prévia. */
+function withOpacity(hex: string, opacity: number): string {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  const [r, g, b] = [m[1]!, m[2]!, m[3]!].map((x) => parseInt(x, 16));
+  return `rgba(${r}, ${g}, ${b}, ${Math.min(100, Math.max(0, opacity)) / 100})`;
+}
+
 function sample(w: WidgetModel): { label: string; value: string } {
   const now = new Date();
   const p = (n: number, l = 2) => String(n).padStart(l, "0");
@@ -173,7 +189,7 @@ export default function WidgetCanvas({
                 top: w.y * scale,
                 width: w.width * scale,
                 height: w.height * scale,
-                background: w.background,
+                background: withOpacity(w.background, w.opacity),
                 color: w.foreground,
                 borderRadius: w.radius * scale,
               }}
@@ -296,6 +312,33 @@ export default function WidgetCanvas({
             <label>
               Texto{" "}
               <input type="color" aria-label="Texto personalizado" value={selected.foreground} onChange={(e) => patch(selected.id, { foreground: e.target.value.toUpperCase() })} />
+            </label>
+          </div>
+          <div className="wc-row">
+            <span>Fundo</span>
+            {OPACITIES.map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                className={selected.opacity === o.v ? "btn btn-primary" : "btn"}
+                aria-pressed={selected.opacity === o.v}
+                onClick={() => patch(selected.id, { opacity: o.v })}
+              >
+                {o.name}
+              </button>
+            ))}
+            <label>
+              Transparência{" "}
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                aria-label="Opacidade do fundo"
+                value={selected.opacity}
+                onChange={(e) => patch(selected.id, { opacity: Number(e.target.value) })}
+              />{" "}
+              {selected.opacity}%
             </label>
           </div>
           <div className="wc-row">

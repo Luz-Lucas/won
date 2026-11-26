@@ -102,6 +102,7 @@ describe("widgets", () => {
     const back = readSections(text)!;
     expect(back.widgets?.map((x) => x.kind)).toEqual(["clock", "cpu"]);
     expect(back.widgets?.[0]?.format).toBe("%H:%M");
+    expect(back.widgets?.[0]?.opacity).toBe(100);
     // regravar não duplica
     expect(applySections(text, back).match(/\[\[widget\]\]/g)).toHaveLength(2);
   });

@@ -96,6 +96,7 @@ struct RawWidget {
     background: Option<String>,
     foreground: Option<String>,
     radius: Option<u32>,
+    opacity: Option<u32>,
     font_size: Option<u32>,
     #[serde(default)]
     locked: bool,
@@ -357,6 +358,11 @@ fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widg
             errors.push(format!("widget \"{id}\": font_size 8 a 96 e radius 0 a 60"));
             continue;
         }
+        let opacity = w.opacity.unwrap_or(100);
+        if opacity > 100 {
+            errors.push(format!("widget \"{id}\": opacity vai de 0 a 100"));
+            continue;
+        }
         let format = w.format.clone().unwrap_or_else(|| bar::DEFAULT_CLOCK.into());
         if format.len() > 40 {
             errors.push(format!("widget \"{id}\": format longo demais"));
@@ -372,6 +378,7 @@ fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widg
             background,
             foreground,
             radius: w.radius.unwrap_or(16),
+            opacity,
             font_size,
             locked: w.locked,
             format,
@@ -926,6 +933,10 @@ mod tests {
         assert!(ok.widgets[1].locked);
         assert!(parse("[[widget]]\nkind = \"cpu\"\nwidth = 10\n").is_err());
         assert!(parse("[[widget]]\nkind = \"clima\"\n").is_err());
+        assert_eq!(ok.widgets[0].opacity, 100);
+        let t = parse("[[widget]]\nkind = \"clock\"\nopacity = 0\n").unwrap();
+        assert_eq!(t.widgets[0].opacity, 0);
+        assert!(parse("[[widget]]\nkind = \"clock\"\nopacity = 101\n").is_err());
     }
 
     use super::*;
