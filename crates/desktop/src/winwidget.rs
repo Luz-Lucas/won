@@ -277,38 +277,40 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
 }
 
 /// Desenha o widget (fundo sólido + textos) no `hdc`, no retângulo `rc`.
-unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &WidgetConfig) {
+unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &WidgetConfig, sc: i32) {
     unsafe {
         let brush = CreateSolidBrush(colorref(cfg.background));
         FillRect(hdc, &rc, brush);
         DeleteObject(brush);
-        let dpi = GetDeviceCaps(hdc, LOGPIXELSY as i32);
+        let dpi = GetDeviceCaps(hdc, LOGPIXELSY as i32) * sc;
         let face = wide("Segoe UI");
+        // Fundo opaco: ClearType (5), o suavizado mais nítido em fonte pequena. Com transparência
+        // o texto vira alfa e precisa de cinza puro: ANTIALIASED_QUALITY (4).
+        let q: u32 = if cfg.opacity >= 100 { 5 } else { 4 };
         let mk = |pt: i32, weight: i32| {
-            // Qualidade 4 = ANTIALIASED_QUALITY: sem ClearType, para o alfa do texto ficar limpo.
-            CreateFontW(-(pt * dpi / 72), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 4, 0, face.as_ptr())
+            CreateFontW(-(pt * dpi / 72), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, q, 0, face.as_ptr())
         };
         let list = cfg.kind.is_list();
         let big = if list {
             // Listas: texto corrido à esquerda; o calendário usa fonte monoespaçada para a grade.
             let f = wide(if cfg.kind == WidgetKind::Calendar { "Consolas" } else { "Segoe UI" });
-            CreateFontW(-(cfg.font_size as i32 * dpi / 72), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 4, 0, f.as_ptr())
+            CreateFontW(-(cfg.font_size as i32 * dpi / 72), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, q, 0, f.as_ptr())
         } else {
             mk(cfg.font_size as i32, 700)
         };
         let small = mk((cfg.font_size as i32 / 3).max(8), 400);
         SetBkMode(hdc, TRANSPARENT as i32);
         let (label, value) = texts(cfg);
-        let pad = 12;
-        let small_h = (cfg.font_size as i32 / 3).max(8) * dpi / 72 + 6;
+        let pad = 12 * sc;
+        let small_h = (cfg.font_size as i32 / 3).max(8) * dpi / 72 + 6 * sc;
 
         let old = SelectObject(hdc, small);
         SetTextColor(hdc, colorref(widget::dim(cfg.foreground, cfg.background)));
         let mut lr = RECT {
             left: rc.left + pad,
-            top: rc.top + 8,
+            top: rc.top + 8 * sc,
             right: rc.right - pad,
-            bottom: rc.top + 8 + small_h,
+            bottom: rc.top + 8 * sc + small_h,
         };
         let w = label.encode_utf16().collect::<Vec<u16>>();
         DrawTextW(hdc, w.as_ptr(), w.len() as i32, &mut lr, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -317,9 +319,9 @@ unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &Widg
         SetTextColor(hdc, colorref(cfg.foreground));
         let mut vr = RECT {
             left: rc.left + pad,
-            top: rc.top + small_h + 4,
+            top: rc.top + small_h + 4 * sc,
             right: rc.right - pad,
-            bottom: rc.bottom - 6,
+            bottom: rc.bottom - 6 * sc,
         };
         let w = value.encode_utf16().collect::<Vec<u16>>();
         DrawTextW(
@@ -375,13 +377,18 @@ fn apply_alpha(px: &mut [u32], cfg: &WidgetConfig) {
 fn render(hwnd: HWND, cfg: &WidgetConfig) {
     unsafe {
         let (w, h) = (cfg.width as i32, cfg.height as i32);
+        // Transparente: o texto vira alfa, e o suavizado do GDI em fonte pequena fica serrilhado.
+        // Desenha em dobro de tamanho e reduz a média 2x2 (supersampling). Opaco: tamanho normal
+        // com ClearType.
+        let sc: i32 = if cfg.opacity >= 100 { 1 } else { 2 };
+        let (bw, bh) = (w * sc, h * sc);
         let screen = GetDC(std::ptr::null_mut());
         let mem = CreateCompatibleDC(screen);
         let mut bi: BITMAPINFO = std::mem::zeroed();
         bi.bmiHeader = BITMAPINFOHEADER {
             biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: w,
-            biHeight: -h,
+            biWidth: bw,
+            biHeight: -bh,
             biPlanes: 1,
             biBitCount: 32,
             biCompression: BI_RGB as u32,
@@ -389,10 +396,37 @@ fn render(hwnd: HWND, cfg: &WidgetConfig) {
         };
         let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
         let dib = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &mut bits, std::ptr::null_mut(), 0);
-        if !dib.is_null() && !bits.is_null() {
+        // Imagem final (tamanho do widget) entregue ao Windows.
+        let mut out_bits: *mut core::ffi::c_void = std::ptr::null_mut();
+        let mut bo = bi;
+        bo.bmiHeader.biWidth = w;
+        bo.bmiHeader.biHeight = -h;
+        let out = if sc > 1 {
+            CreateDIBSection(mem, &bo, DIB_RGB_COLORS, &mut out_bits, std::ptr::null_mut(), 0)
+        } else {
+            std::ptr::null_mut()
+        };
+        if !dib.is_null() && !bits.is_null() && (sc == 1 || (!out.is_null() && !out_bits.is_null())) {
             let old = SelectObject(mem, dib);
-            draw(mem, RECT { left: 0, top: 0, right: w, bottom: h }, cfg);
-            apply_alpha(std::slice::from_raw_parts_mut(bits as *mut u32, (w * h) as usize), cfg);
+            draw(mem, RECT { left: 0, top: 0, right: bw, bottom: bh }, cfg, sc);
+            apply_alpha(std::slice::from_raw_parts_mut(bits as *mut u32, (bw * bh) as usize), cfg);
+            if sc > 1 {
+                let src = std::slice::from_raw_parts(bits as *const u32, (bw * bh) as usize);
+                let dst = std::slice::from_raw_parts_mut(out_bits as *mut u32, (w * h) as usize);
+                for y in 0..h as usize {
+                    for x in 0..w as usize {
+                        let i = (2 * y) * bw as usize + 2 * x;
+                        let px = [src[i], src[i + 1], src[i + bw as usize], src[i + bw as usize + 1]];
+                        let mut v = 0u32;
+                        for sh in [0u32, 8, 16, 24] {
+                            let sum: u32 = px.iter().map(|p| (p >> sh) & 0xFF).sum();
+                            v |= (sum / 4) << sh;
+                        }
+                        dst[y * w as usize + x] = v;
+                    }
+                }
+                SelectObject(mem, out);
+            }
             let size = windows_sys::Win32::Foundation::SIZE { cx: w, cy: h };
             let src = windows_sys::Win32::Foundation::POINT { x: 0, y: 0 };
             let blend = BLENDFUNCTION {
@@ -406,6 +440,9 @@ fn render(hwnd: HWND, cfg: &WidgetConfig) {
         }
         if !dib.is_null() {
             DeleteObject(dib);
+        }
+        if !out.is_null() {
+            DeleteObject(out);
         }
         DeleteDC(mem);
         ReleaseDC(std::ptr::null_mut(), screen);
