@@ -99,14 +99,100 @@ pub fn network_text() -> String {
     }
 }
 
+/// Lê a mídia pelo SMTC numa thread própria (MTA). Se `RequestAsync`/`join` travar, a barra não
+/// trava junto: a thread fica pendurada, o chamador desiste após o prazo e usa o plano B.
+fn smtc_read() -> Result<(String, usize), String> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    if BUSY.swap(true, Ordering::AcqRel) {
+        return Err("a leitura anterior do SMTC ainda está travada".into());
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        use windows::Media::Control::{
+            GlobalSystemMediaTransportControlsSessionManager as Manager,
+            GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
+        };
+        let _ = unsafe {
+            windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            )
+        };
+        let get = || -> windows::core::Result<(String, usize)> {
+            let mgr = Manager::RequestAsync()?.join()?;
+            let sessions = mgr.GetSessions()?;
+            let total = sessions.Size()? as usize;
+            let mut chosen = None;
+            for s in &sessions {
+                if s.GetPlaybackInfo()?.PlaybackStatus()? == Status::Playing {
+                    chosen = Some(s);
+                    break;
+                }
+            }
+            let Some(session) = chosen else {
+                return Ok((String::new(), total));
+            };
+            let props = session.TryGetMediaPropertiesAsync()?.join()?;
+            let title = props.Title()?.to_string();
+            let artist = props.Artist()?.to_string();
+            Ok((
+                match (artist.is_empty(), title.is_empty()) {
+                    (_, true) => String::new(),
+                    (true, false) => format!("\u{266a} {title}"),
+                    (false, false) => format!("\u{266a} {artist} - {title}"),
+                },
+                total,
+            ))
+        };
+        let r = get().map_err(|e| e.to_string());
+        BUSY.store(false, Ordering::Release);
+        let _ = tx.send(r);
+    });
+    match rx.recv_timeout(std::time::Duration::from_secs(3)) {
+        Ok(r) => r,
+        Err(_) => Err("o Windows não respondeu ao SMTC em 3 s (RequestAsync travou)".into()),
+    }
+}
+
+/// Plano B sem SMTC: o Spotify de desktop põe "Artista - Título" na janela enquanto toca
+/// (pausado, o título é só "Spotify ...").
+fn spotify_window_text() -> String {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowTextW, GetWindowThreadProcessId,
+    };
+    unsafe extern "system" fn cb(hwnd: HWND, lp: LPARAM) -> i32 {
+        let out = unsafe { &mut *(lp as *mut String) };
+        let mut buf = [0u16; 512];
+        let n = unsafe { GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32) };
+        if n <= 0 {
+            return 1;
+        }
+        let title = String::from_utf16_lossy(&buf[..n as usize]);
+        if title.starts_with("Spotify") || !title.contains(" - ") {
+            return 1;
+        }
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+        let is_spotify = crate::win::process_path(pid)
+            .and_then(|p| p.file_name().map(|f| f.to_string_lossy().to_lowercase()))
+            .is_some_and(|f| f == "spotify.exe");
+        if is_spotify {
+            *out = format!("\u{266a} {title}");
+            return 0;
+        }
+        1
+    }
+    let mut found = String::new();
+    unsafe { EnumWindows(Some(cb), (&raw mut found) as LPARAM) };
+    found
+}
+
 /// "♪ Artista - Título" da mídia que está tocando (Spotify, navegador...), ou vazio.
 /// Procura em TODAS as sessões (a "atual" do Windows pode ser um player pausado) e registra no
 /// desktop.log o motivo quando não consegue ler, para o diagnóstico não depender de adivinhar.
 pub fn media_text() -> String {
-    use windows::Media::Control::{
-        GlobalSystemMediaTransportControlsSessionManager as Manager,
-        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
-    };
     static LAST: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
     let note = |m: String| {
         if let Ok(mut l) = LAST.lock() {
@@ -116,44 +202,26 @@ pub fn media_text() -> String {
             }
         }
     };
-    let get = || -> windows::core::Result<(String, usize)> {
-        let mgr = Manager::RequestAsync()?.join()?;
-        let sessions = mgr.GetSessions()?;
-        let total = sessions.Size()? as usize;
-        let mut chosen = None;
-        for s in &sessions {
-            if s.GetPlaybackInfo()?.PlaybackStatus()? == Status::Playing {
-                chosen = Some(s);
-                break;
-            }
-        }
-        let Some(session) = chosen else {
-            return Ok((String::new(), total));
-        };
-        let props = session.TryGetMediaPropertiesAsync()?.join()?;
-        let title = props.Title()?.to_string();
-        let artist = props.Artist()?.to_string();
-        Ok((
-            match (artist.is_empty(), title.is_empty()) {
-                (_, true) => String::new(),
-                (true, false) => format!("\u{266a} {title}"),
-                (false, false) => format!("\u{266a} {artist} - {title}"),
-            },
-            total,
-        ))
-    };
-    match get() {
-        Ok((t, total)) => {
-            note(if t.is_empty() {
-                format!("{total} sessão(ões), nenhuma tocando")
-            } else {
-                format!("lendo ({total} sessão(ões))")
-            });
+    match smtc_read() {
+        Ok((t, total)) if !t.is_empty() => {
+            note(format!("lendo pelo SMTC ({total} sessão(ões))"));
             t
         }
+        Ok((_, total)) => {
+            let w = spotify_window_text();
+            note(format!(
+                "{total} sessão(ões) no SMTC, nenhuma tocando{}",
+                if w.is_empty() { "" } else { "; usando o título da janela do Spotify" }
+            ));
+            w
+        }
         Err(e) => {
-            note(format!("erro ao ler as sessões: {e}"));
-            String::new()
+            let w = spotify_window_text();
+            note(format!(
+                "SMTC indisponível: {e}{}",
+                if w.is_empty() { "" } else { "; usando o título da janela do Spotify" }
+            ));
+            w
         }
     }
 }
