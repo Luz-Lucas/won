@@ -1018,7 +1018,9 @@ fn retry_pending() {
                 .unwrap_or(false);
             if !attached {
                 pend[i].tries += 1;
-                if pend[i].tries > 40 {
+                if pend[i].tries > 480 {
+                    // 4 minutos sem se ligar ao TaskbarFrame: não é da barra (ou ela foi refeita).
+                    log(&format!("desistiu do retângulo {handle} (nunca ligou ao TaskbarFrame)"));
                     pend.remove(i);
                 }
                 return Ok(());
@@ -1137,7 +1139,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
             let mut seen = SEEN.lock().unwrap();
             let k = format!("{ty} #{name}");
             if seen.len() < 120 && !seen.contains(&k) {
-                log(&format!("iniciar novo elemento: {k}"));
+                let _ = &k; // (era um log por elemento: enchia o limite do arquivo)
                 seen.push(k);
             }
         }
@@ -1692,9 +1694,16 @@ fn _unused(_: IUnknown_Vtbl) {}
 pub fn log(msg: &str) {
     use std::io::Write;
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    if N.fetch_add(1, std::sync::atomic::Ordering::Relaxed) > 400 {
+    // Quando passa do limite, só uma linha avisando (antes o log parava calado e escondia as falhas).
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if n > 3000 {
         return;
     }
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let msg = &format!("[{}:{:02}:{:02} p{}] {msg}", (secs / 3600) % 24, (secs / 60) % 60, secs % 60, std::process::id());
     if let Some(d) = mods_dir() {
         if let Ok(mut f) = std::fs::OpenOptions::new()
             .create(true)
