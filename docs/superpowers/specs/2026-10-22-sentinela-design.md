@@ -34,7 +34,7 @@ Proteção em tempo real, quarentena ou remoção de malware, interface gráfica
 | HTTP | crate `ureq` com `rustls` | Cliente síncrono pequeno, TLS sem OpenSSL. |
 | Saída JSON | `serde` + `serde_json` | — |
 | Nome do binário | `sentinela` | — |
-| Repositório | `github.com/Luz-Lucas/sentinela`, público | Escolha do usuário. |
+| Repositório | `github.com/Luz-Lucas/won`, público | Escolha do usuário. |
 
 ## 3. Comandos
 

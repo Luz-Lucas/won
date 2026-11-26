@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Binário: `sentinela`. Repositório: `github.com/Luz-Lucas/sentinela`, **público**. Licença: MIT.
+- Binário: `sentinela`. Repositório: `github.com/Luz-Lucas/won`, **público**. Licença: MIT.
 - Códigos de saída: `0` sucesso/nada encontrado, `1` achados de malware, `2` erro global.
 - Erros por arquivo nunca interrompem a execução; viram entradas em `errors`.
 - Nunca seguir links simbólicos nem junctions/reparse points (atributo `FILE_ATTRIBUTE_REPARSE_POINT = 0x400` no Windows).
@@ -81,7 +81,7 @@ As tarefas de uma mesma onda tocam arquivos disjuntos e podem rodar em paralelo,
 - [ ] **Step 8: Commit e criar o repositório**:
   ```bash
   git add -A && git commit -m "chore: bootstrap crate, module tree and CI"
-  gh repo create Luz-Lucas/sentinela --public --source . --remote origin --push \
+  gh repo create Luz-Lucas/won --public --source . --remote origin --push \
     --description "Antivírus e limpador de arquivos para Windows, em Rust (CLI)"
   ```
   Verificar com `gh run list --limit 1` que o CI disparou.

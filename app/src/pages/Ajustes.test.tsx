@@ -297,7 +297,7 @@ describe("Ajustes", () => {
         current: "0.1.0",
         latest: "0.3.0",
         available: true,
-        url: "https://github.com/Luz-Lucas/sentinela/releases/tag/v0.3.0",
+        url: "https://github.com/Luz-Lucas/won/releases/tag/v0.3.0",
       })
       .mockRejectedValueOnce("falha de rede");
     render(<Ajustes />);
@@ -308,7 +308,7 @@ describe("Ajustes", () => {
     expect(await screen.findByText(/Versão 0\.3\.0 disponível/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Abrir a página da versão" }));
     expect(openUrl).toHaveBeenCalledWith(
-      "https://github.com/Luz-Lucas/sentinela/releases/tag/v0.3.0",
+      "https://github.com/Luz-Lucas/won/releases/tag/v0.3.0",
     );
     await userEvent.click(btn);
     expect(await screen.findByText(/Não foi possível verificar: falha de rede/)).toBeInTheDocument();

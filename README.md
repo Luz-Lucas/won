@@ -10,7 +10,7 @@ Antivírus e limpador de arquivos para Windows, escrito em Rust, com janela (Tau
 
 ## Download
 
-Baixe o instalador `WON_<versão>_x64-setup.exe` mais recente na página de [releases](https://github.com/Luz-Lucas/sentinela/releases). Ele instala para todos os usuários (em `C:\Program Files\Sentinela`, pede permissão de administrador) e coloca lado a lado a janela (`sentinela-gui.exe`) e o `sentinela.exe`. Não há versão portátil. A release também anexa o `sentinela.exe` solto, para quem só quer a linha de comando.
+Baixe o instalador `WON_<versão>_x64-setup.exe` mais recente na página de [releases](https://github.com/Luz-Lucas/won/releases). Ele instala para todos os usuários (em `C:\Program Files\Sentinela`, pede permissão de administrador) e coloca lado a lado a janela (`sentinela-gui.exe`) e o `sentinela.exe`. Não há versão portátil. A release também anexa o `sentinela.exe` solto, para quem só quer a linha de comando.
 
 ### Interface gráfica
 

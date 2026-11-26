@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub const DEFAULT_MANIFEST: &str =
-    "https://raw.githubusercontent.com/Luz-Lucas/sentinela/won-updates/latest.json";
+    "https://raw.githubusercontent.com/Luz-Lucas/won/won-updates/latest.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
