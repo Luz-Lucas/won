@@ -330,7 +330,10 @@ fn set_search_dark(on: bool) {
         c.args(["delete", KEY, "/v", "SearchHost.exe", "/f"]);
     }
     let _ = c.creation_flags(0x0800_0000).status();
-    log(format!("Pesquisa: modo escuro {}", if on { "ligado" } else { "desligado" }));
+    log(format!(
+        "Pesquisa: modo escuro {}",
+        if on { "ligado" } else { "desligado" }
+    ));
     sentinela_mods::reset_start_hosts_now();
 }
 

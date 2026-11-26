@@ -324,7 +324,8 @@ pub fn reinject_xaml(dir: &Path, dll: &Path) -> usize {
     }
     let sys = System::new_all();
     let mut state = registry::load_state(dir);
-    let alive: std::collections::HashSet<u32> = sys.processes().keys().map(|p| p.as_u32()).collect();
+    let alive: std::collections::HashSet<u32> =
+        sys.processes().keys().map(|p| p.as_u32()).collect();
     let before = state.len();
     state.retain(|i| alive.contains(&i.pid));
     let mut changed = state.len() != before;
@@ -341,7 +342,10 @@ pub fn reinject_xaml(dir: &Path, dll: &Path) -> usize {
             continue;
         }
         let pid = p.pid().as_u32();
-        if state.iter().any(|i| i.pid == pid && i.mod_name == XAML_MOD_NAME) {
+        if state
+            .iter()
+            .any(|i| i.pid == pid && i.mod_name == XAML_MOD_NAME)
+        {
             continue;
         }
         // Processo recém-criado ainda não terminou de subir: espera alguns segundos.

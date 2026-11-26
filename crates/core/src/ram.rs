@@ -82,7 +82,8 @@ impl Default for RamConfig {
 impl RamConfig {
     pub fn clamped(mut self) -> Self {
         self.threshold = self.threshold.clamp(50, 98);
-        self.exclude.retain(|e| !e.trim().is_empty() && e.len() <= 80);
+        self.exclude
+            .retain(|e| !e.trim().is_empty() && e.len() <= 80);
         self.exclude.truncate(100);
         self
     }
@@ -127,7 +128,11 @@ pub fn status() -> RamStatus {
         total_mb: total / 1024 / 1024,
         used_mb: used / 1024 / 1024,
         available_mb: avail / 1024 / 1024,
-        percent: if total == 0 { 0 } else { (used * 100 / total) as u8 },
+        percent: if total == 0 {
+            0
+        } else {
+            (used * 100 / total) as u8
+        },
     }
 }
 
@@ -160,7 +165,9 @@ pub fn optimize(exclude: &[String], clear_standby: bool) -> RamResult {
 #[cfg(windows)]
 fn trim_working_sets(exclude: &[String]) -> (usize, usize) {
     use windows_sys::Win32::Foundation::CloseHandle;
-    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA};
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA,
+    };
     #[link(name = "psapi")]
     unsafe extern "system" {
         fn EmptyWorkingSet(h: *mut core::ffi::c_void) -> i32;
@@ -176,7 +183,11 @@ fn trim_working_sets(exclude: &[String]) -> (usize, usize) {
             continue;
         }
         unsafe {
-            let h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION, 0, pid.as_u32());
+            let h = OpenProcess(
+                PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION,
+                0,
+                pid.as_u32(),
+            );
             if h.is_null() {
                 skipped += 1;
                 continue;
@@ -202,25 +213,34 @@ fn trim_working_sets(_exclude: &[String]) -> (usize, usize) {
 fn purge_standby() -> Result<(), String> {
     use windows_sys::Win32::Foundation::{CloseHandle, LUID};
     use windows_sys::Win32::Security::{
-        AdjustTokenPrivileges, LookupPrivilegeValueW, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES,
-        TOKEN_PRIVILEGES, TOKEN_QUERY,
+        AdjustTokenPrivileges, LookupPrivilegeValueW, SE_PRIVILEGE_ENABLED,
+        TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
     };
     use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
     unsafe {
         let mut tok = std::ptr::null_mut();
-        if OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut tok) == 0 {
+        if OpenProcessToken(
+            GetCurrentProcess(),
+            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+            &mut tok,
+        ) == 0
+        {
             return Err("sem acesso ao token do processo".into());
         }
         let name: Vec<u16> = "SeProfileSingleProcessPrivilege\0".encode_utf16().collect();
-        let mut luid = LUID { LowPart: 0, HighPart: 0 };
+        let mut luid = LUID {
+            LowPart: 0,
+            HighPart: 0,
+        };
         let got = LookupPrivilegeValueW(std::ptr::null(), name.as_ptr(), &mut luid);
         let mut tp: TOKEN_PRIVILEGES = std::mem::zeroed();
         tp.PrivilegeCount = 1;
         tp.Privileges[0].Luid = luid;
         tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
         let adj = got != 0
-            && AdjustTokenPrivileges(tok, 0, &tp, 0, std::ptr::null_mut(), std::ptr::null_mut()) != 0
+            && AdjustTokenPrivileges(tok, 0, &tp, 0, std::ptr::null_mut(), std::ptr::null_mut())
+                != 0
             && windows_sys::Win32::Foundation::GetLastError() == 0;
         CloseHandle(tok);
         if !adj {
@@ -262,9 +282,22 @@ mod tests {
 
     #[test]
     fn config_e_limitada() {
-        let c = RamConfig { threshold: 10, exclude: vec!["  ".into(), "a.exe".into()], ..Default::default() }.clamped();
+        let c = RamConfig {
+            threshold: 10,
+            exclude: vec!["  ".into(), "a.exe".into()],
+            ..Default::default()
+        }
+        .clamped();
         assert_eq!(c.threshold, 50);
         assert_eq!(c.exclude, vec!["a.exe".to_string()]);
-        assert_eq!(RamConfig { threshold: 200, ..Default::default() }.clamped().threshold, 98);
+        assert_eq!(
+            RamConfig {
+                threshold: 200,
+                ..Default::default()
+            }
+            .clamped()
+            .threshold,
+            98
+        );
     }
 }

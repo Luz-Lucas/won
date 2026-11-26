@@ -1128,7 +1128,11 @@ mod tests {
             .map(|i| i["id"].as_str().unwrap())
             .collect();
         assert!(ids.len() >= 21, "catálogo online sem os itens esperados");
-        let remotos: Vec<_> = c.items.iter().filter(|i| ids.contains(&i.id.as_str())).collect();
+        let remotos: Vec<_> = c
+            .items
+            .iter()
+            .filter(|i| ids.contains(&i.id.as_str()))
+            .collect();
         assert_eq!(remotos.len(), ids.len(), "itens online fora do embutido");
         for i in remotos {
             l.install(i, &RepoFetch)

@@ -53,20 +53,22 @@ pub async fn ram_optimize() -> Result<RamResult, String> {
 /// Vigia do modo automático: a cada 10 s olha o uso; passou do limiar e faz mais de 3 min da
 /// última vez, otimiza. Lê o arquivo de novo a cada volta, então ligar/desligar vale na hora.
 pub fn spawn_watch() {
-    std::thread::spawn(|| loop {
-        std::thread::sleep(Duration::from_secs(10));
-        let cfg = ram::load_config();
-        if !cfg.auto {
-            continue;
+    std::thread::spawn(|| {
+        loop {
+            std::thread::sleep(Duration::from_secs(10));
+            let cfg = ram::load_config();
+            if !cfg.auto {
+                continue;
+            }
+            let recent = LAST_RUN
+                .lock()
+                .ok()
+                .and_then(|l| *l)
+                .is_some_and(|t| t.elapsed() < MIN_INTERVAL);
+            if recent || ram::status().percent < cfg.threshold {
+                continue;
+            }
+            run_and_log(&cfg, "automático");
         }
-        let recent = LAST_RUN
-            .lock()
-            .ok()
-            .and_then(|l| *l)
-            .is_some_and(|t| t.elapsed() < MIN_INTERVAL);
-        if recent || ram::status().percent < cfg.threshold {
-            continue;
-        }
-        run_and_log(&cfg, "automático");
     });
 }

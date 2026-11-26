@@ -43,7 +43,8 @@ pub async fn organize_login(
 ) -> Result<OrganizeStatus, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let account = organize::login(&url, &anon_key, &email, &password)?;
-        organize::save_account(&account).map_err(|e| format!("Não foi possível salvar a sessão: {e}"))?;
+        organize::save_account(&account)
+            .map_err(|e| format!("Não foi possível salvar a sessão: {e}"))?;
         let cache = organize::refresh()?;
         Ok(status_of(&cache))
     })

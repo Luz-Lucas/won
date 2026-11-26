@@ -131,7 +131,8 @@ pub fn spawn_background() {
             let c = su::load_config();
             if c.auto_check {
                 let (c, m, _) = check_now();
-                if c.auto_install && m.is_some_and(|m| su::is_newer(&su::current_build(), &m.build)) {
+                if c.auto_install && m.is_some_and(|m| su::is_newer(&su::current_build(), &m.build))
+                {
                     let _ = install_latest();
                 }
             }

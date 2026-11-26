@@ -1020,7 +1020,9 @@ fn retry_pending() {
                 pend[i].tries += 1;
                 if pend[i].tries > 480 {
                     // 4 minutos sem se ligar ao TaskbarFrame: não é da barra (ou ela foi refeita).
-                    log(&format!("desistiu do retângulo {handle} (nunca ligou ao TaskbarFrame)"));
+                    log(&format!(
+                        "desistiu do retângulo {handle} (nunca ligou ao TaskbarFrame)"
+                    ));
                     pend.remove(i);
                 }
                 return Ok(());
@@ -1041,7 +1043,11 @@ fn retry_pending() {
             if on {
                 log(&format!(
                     "aplicar (tardio) {}: {:?}",
-                    if t.is_border { "BackgroundStroke" } else { "BackgroundFill" },
+                    if t.is_border {
+                        "BackgroundStroke"
+                    } else {
+                        "BackgroundFill"
+                    },
                     apply_one(&mut t, true, &st)
                 ));
             }
@@ -1114,8 +1120,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
         // As strings pertencem a nós; `BSTR` libera no drop.
         let name = element.name.to_string();
         let ty = element.type_name.to_string();
-        if (is_search_host() || is_start_host() || dump_enabled()) && mutation == 0
-        {
+        if (is_search_host() || is_start_host() || dump_enabled()) && mutation == 0 {
             dump_log(&format!("{ty} #{name}"));
         }
         if mutation == 1 {
@@ -1703,7 +1708,13 @@ pub fn log(msg: &str) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let msg = &format!("[{}:{:02}:{:02} p{}] {msg}", (secs / 3600) % 24, (secs / 60) % 60, secs % 60, std::process::id());
+    let msg = &format!(
+        "[{}:{:02}:{:02} p{}] {msg}",
+        (secs / 3600) % 24,
+        (secs / 60) % 60,
+        secs % 60,
+        std::process::id()
+    );
     if let Some(d) = mods_dir() {
         if let Ok(mut f) = std::fs::OpenOptions::new()
             .create(true)

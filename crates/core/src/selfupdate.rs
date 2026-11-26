@@ -116,7 +116,9 @@ pub fn is_newer(current: &str, latest: &str) -> bool {
 fn valid_stamp(s: &str) -> bool {
     s.len() == 13
         && s.as_bytes()[8] == b'-'
-        && s.bytes().enumerate().all(|(i, b)| i == 8 || b.is_ascii_digit())
+        && s.bytes()
+            .enumerate()
+            .all(|(i, b)| i == 8 || b.is_ascii_digit())
 }
 
 pub fn parse_manifest(bytes: &[u8]) -> anyhow::Result<Manifest> {
@@ -148,7 +150,11 @@ pub fn fetch_manifest(url: &str) -> anyhow::Result<Manifest> {
         .get(url)
         .call()
         .map_err(|e| anyhow::anyhow!("sem conexão com a fonte de atualização ({e})"))?;
-    let bytes = resp.body_mut().with_config().limit(64 * 1024).read_to_vec()?;
+    let bytes = resp
+        .body_mut()
+        .with_config()
+        .limit(64 * 1024)
+        .read_to_vec()?;
     parse_manifest(&bytes)
 }
 
@@ -177,7 +183,11 @@ pub fn download(m: &Manifest, dir: &Path) -> anyhow::Result<PathBuf> {
         .map_err(|e| anyhow::anyhow!("não foi possível baixar a atualização ({e})"))?;
     {
         let mut out = std::fs::File::create(&part)?;
-        let mut body = resp.body_mut().with_config().limit(200 * 1024 * 1024).reader();
+        let mut body = resp
+            .body_mut()
+            .with_config()
+            .limit(200 * 1024 * 1024)
+            .reader();
         std::io::copy(&mut body, &mut out)?;
         out.flush()?;
     }
