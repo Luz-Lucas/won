@@ -29,9 +29,9 @@ describe("SelfUpdate", () => {
     render(<SelfUpdate />);
     await userEvent.click(await screen.findByRole("button", { name: "Verificar atualizações" }));
     expect(await screen.findByText(/20261126-0428/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Instalar agora" }));
+    await userEvent.click(screen.getByRole("button", { name: "Baixar e instalar agora" }));
     await waitFor(() => expect(api.updateInstall).toHaveBeenCalled());
-    expect(await screen.findByText(/Instalando/)).toBeInTheDocument();
+    expect(await screen.findByText(/Baixando e instalando/)).toBeInTheDocument();
   });
 
   it("liga a instalação automática", async () => {

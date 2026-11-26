@@ -17,6 +17,13 @@ export default function SelfUpdate() {
       (s) => {
         setSt(s);
         setUrl(s.manifest_url);
+        // Ao abrir a tela já confere se há versão nova (o botão "Baixar e instalar" aparece sozinho).
+        void Promise.resolve(updateCheck()).then(
+          (r) => {
+            if (r) setSt(r);
+          },
+          () => undefined,
+        );
       },
       (e) => setError(errorText(e)),
     );
@@ -69,7 +76,7 @@ export default function SelfUpdate() {
         <p role="status">Você está na versão mais recente.</p>
       )}
       {installing && (
-        <p role="status">Instalando… o WON fecha e abre de novo sozinho em instantes.</p>
+        <p role="status">Baixando e instalando… o WON fecha, atualiza tudo (barra, widgets, mods) e abre de novo sozinho em instantes.</p>
       )}
       {(error || st?.error) && (
         <p role="alert" className="form-error">
@@ -82,7 +89,7 @@ export default function SelfUpdate() {
         </button>
         {st?.available && (
           <button type="button" className="btn primary" disabled={busy || installing} onClick={() => void install()}>
-            Instalar agora
+            Baixar e instalar agora
           </button>
         )}
       </div>

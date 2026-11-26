@@ -1085,15 +1085,6 @@ export const desktopConfigCheck = (text: string) =>
 export const desktopConfigWrite = (text: string) =>
   invoke<void>("desktop_config_write", { text });
 
-export interface AppUpdate {
-  current: string;
-  latest: string;
-  available: boolean;
-  url: string;
-}
-
-export const appUpdateCheck = () => invoke<AppUpdate>("app_update_check");
-
 export interface GameSession {
   previous_scheme: string;
   started_at: string;
