@@ -8,6 +8,7 @@ pub mod loja;
 pub mod mods;
 pub mod net;
 pub mod organize;
+pub mod perf;
 pub mod ram;
 pub mod routes;
 pub mod scan;

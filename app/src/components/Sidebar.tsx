@@ -14,6 +14,7 @@ export type Page =
   | "disco"
   | "historico"
   | "ajustes"
+  | "desempenho"
   | "mods";
 
 /** Grupos da barra lateral: o que o usuário quer fazer, não o que o programa tem. */
@@ -26,6 +27,7 @@ const GROUPS: { title: string | null; items: { page: Page; label: string }[] }[]
       { page: "limpeza", label: "Limpeza" },
       { page: "disco", label: "Disco" },
       { page: "aplicativos", label: "Aplicativos" },
+      { page: "desempenho", label: "Monitor" },
     ],
   },
   { title: "Conexão", items: [{ page: "rede", label: "Rede" }] },

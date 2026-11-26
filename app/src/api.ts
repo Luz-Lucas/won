@@ -1179,6 +1179,29 @@ export const ramOptimize = () => invoke<RamResult>("ram_optimize");
 export const ramConfigGet = () => invoke<RamConfig>("ram_config_get");
 export const ramConfigSet = (config: RamConfig) => invoke<RamConfig>("ram_config_set", { config });
 
+export interface PerfGroup {
+  id: string;
+  label: string;
+  note: string;
+  procs: number;
+  cpu: number;
+  cpu_avg: number;
+  cpu_peak: number;
+  ram_mb: number;
+  ram_avg_mb: number;
+  ram_peak_mb: number;
+}
+export interface PerfSnapshot {
+  groups: PerfGroup[];
+  total_cpu: number;
+  ram_used_mb: number;
+  ram_total_mb: number;
+  samples: number;
+}
+export const perfSample = () => invoke<PerfSnapshot>("perf_sample");
+export const perfReset = () => invoke<void>("perf_reset");
+export const perfGpu = () => invoke<{ id: string; gpu: number }[]>("perf_gpu");
+
 export interface OrganizeStatus {
   connected: boolean;
   url: string;
