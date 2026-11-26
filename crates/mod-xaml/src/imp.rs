@@ -757,7 +757,39 @@ fn island_margins(fe: &FrameworkElement, is_tray: bool, st: &Style) -> Option<Th
     })
 }
 
+/// Pasta dos mods, calculada uma vez por processo (o callback da árvore visual chama isto para
+/// cada elemento: antes recalculava o caminho e fazia I/O a cada chamada, e a primeira varredura
+/// do Explorer/Iniciar travava).
 fn mods_dir() -> Option<std::path::PathBuf> {
+    static C: OnceLock<std::path::PathBuf> = OnceLock::new();
+    if let Some(p) = C.get() {
+        return Some(p.clone());
+    }
+    let p = mods_dir_uncached()?;
+    let _ = C.set(p.clone());
+    Some(p)
+}
+
+/// `xaml-barra.dump` existe? Consulta o disco no máximo a cada 2 s.
+fn dump_enabled() -> bool {
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    static VAL: AtomicBool = AtomicBool::new(false);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+    let last = LAST.load(Ordering::Relaxed);
+    if last == 0 || now.saturating_sub(last) > 2000 {
+        LAST.store(now, Ordering::Relaxed);
+        VAL.store(
+            mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists()),
+            Ordering::Relaxed,
+        );
+    }
+    VAL.load(Ordering::Relaxed)
+}
+
+fn mods_dir_uncached() -> Option<std::path::PathBuf> {
     if let Some(d) = std::env::var_os("SENTINELA_MODS_DIR") {
         return Some(d.into());
     }
@@ -1014,10 +1046,7 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
         // As strings pertencem a nós; `BSTR` libera no drop.
         let name = element.name.to_string();
         let ty = element.type_name.to_string();
-        if (is_search_host()
-            || is_start_host()
-            || mods_dir().is_some_and(|d| d.join("xaml-barra.dump").exists()))
-            && mutation == 0
+        if (is_search_host() || is_start_host() || dump_enabled()) && mutation == 0
         {
             dump_log(&format!("{ty} #{name}"));
         }
