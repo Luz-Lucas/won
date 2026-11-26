@@ -1,0 +1,187 @@
+/** Leitura e escrita do `xaml-barra.cfg` (linhas `chave=valor`) usado pelos mods 6 e 7. */
+export interface XamlStyle {
+  fill: string; // #RRGGBB
+  alpha: number; // 0 a 255
+  radius: number;
+  /** Margens (esquerda, topo, direita, base): encolher o fundo faz a "ilha". */
+  margin: [number, number, number, number];
+  hideBorder: boolean;
+  startFill: string | null; // #RRGGBB ou null = não mexe
+  startAlpha: number;
+  startRadius: number | null;
+  /** Esconde a área "Todos os aplicativos" do Iniciar (só os fixados). */
+  startHideAll: boolean;
+  /** Experimental: esconde a lista A-Z inteira (pode esvaziar o Iniciar). */
+  startHideList: boolean;
+  /** Experimental: força o modo escuro na tela de resultados da pesquisa. */
+  searchDark: boolean;
+  autoReapply: boolean;
+  /** Duas ilhas na barra nativa (apps + bandeja). Usa a cor e o raio acima. */
+  islands: boolean;
+  islandPad: number;
+  islandTrayPad: number;
+  islandV: number;
+  islandEdge: number;
+  /** Esconde itens da barra nativa. */
+  hideStartButton: boolean;
+  hideWidgets: boolean;
+  hideSearchGleam: boolean;
+  /** Tamanho do menu Iniciar em px; null = não mexe. */
+  startW: number | null;
+  startH: number | null;
+  /** Experimental: botão Iniciar sempre à esquerda. */
+  startLeft: boolean;
+  startLeftEdge: number;
+  /** Experimental: animação de dock (ícones crescem perto do mouse). */
+  dock: boolean;
+  dockMax: number;
+  dockRadius: number;
+}
+
+export const DEFAULT_XAML: XamlStyle = {
+  fill: "#1C1C24",
+  alpha: 200,
+  radius: 14,
+  margin: [0, 0, 0, 0],
+  hideBorder: false,
+  startFill: null,
+  startAlpha: 230,
+  startRadius: null,
+  startHideAll: false,
+  startHideList: false,
+  searchDark: false,
+  autoReapply: true,
+  islands: false,
+  islandPad: 14,
+  islandTrayPad: 10,
+  islandV: 4,
+  islandEdge: 8,
+  hideStartButton: false,
+  hideWidgets: false,
+  hideSearchGleam: false,
+  startW: null,
+  startH: null,
+  startLeft: false,
+  startLeftEdge: 8,
+  dock: false,
+  dockMax: 1.4,
+  dockRadius: 110,
+};
+
+const hex2 = (n: number) =>
+  Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0").toUpperCase();
+
+function parseArgb(v: string): { rgb: string; a: number } | null {
+  const h = v.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$|^[0-9a-fA-F]{8}$/.test(h)) return null;
+  return h.length === 8
+    ? { a: parseInt(h.slice(0, 2), 16), rgb: `#${h.slice(2).toUpperCase()}` }
+    : { a: 255, rgb: `#${h.toUpperCase()}` };
+}
+
+export function parseXamlCfg(text: string): XamlStyle {
+  const s = { ...DEFAULT_XAML };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith("//") || line.startsWith(";")) continue;
+    const i = line.indexOf("=");
+    if (i < 0) continue;
+    const k = line.slice(0, i).trim();
+    const v = line.slice(i + 1).trim();
+    if (k === "fill") {
+      const c = parseArgb(v);
+      if (c) {
+        s.fill = c.rgb;
+        s.alpha = c.a;
+      }
+    } else if (k === "radius") {
+      const n = Number(v);
+      if (Number.isFinite(n)) s.radius = Math.max(0, Math.min(60, n));
+    } else if (k === "margin") {
+      const p = v.split(",").map((x) => Number(x.trim()));
+      const c = (n: number) => Math.max(0, Math.min(200, n));
+      if (p.length > 0 && p.every(Number.isFinite)) {
+        if (p.length === 1) s.margin = [c(p[0]), c(p[0]), c(p[0]), c(p[0])];
+        else if (p.length === 2) s.margin = [c(p[0]), c(p[1]), c(p[0]), c(p[1])];
+        else if (p.length === 4) s.margin = [c(p[0]), c(p[1]), c(p[2]), c(p[3])];
+      }
+    } else if (k === "hide_border") {
+      s.hideBorder = v === "true" || v === "1";
+    } else if (k === "start_fill") {
+      const c = parseArgb(v);
+      if (c) {
+        s.startFill = c.rgb;
+        s.startAlpha = c.a;
+      }
+    } else if (k === "start_hide_all") {
+      s.startHideAll = v === "true" || v === "1";
+    } else if (k === "start_hide_list") {
+      s.startHideList = v === "true" || v === "1";
+    } else if (k === "search_dark") {
+      s.searchDark = v === "true" || v === "1";
+    } else if (k === "auto_reapply") {
+      s.autoReapply = v !== "false" && v !== "0";
+    } else if (k === "islands") {
+      s.islands = v === "true" || v === "1";
+    } else if (k === "island_pad" || k === "island_tray_pad" || k === "island_v" || k === "island_edge") {
+      const n = Number(v);
+      const key = { island_pad: "islandPad", island_tray_pad: "islandTrayPad", island_v: "islandV", island_edge: "islandEdge" }[k] as
+        | "islandPad" | "islandTrayPad" | "islandV" | "islandEdge";
+      if (Number.isFinite(n)) s[key] = Math.max(0, Math.min(200, n));
+    } else if (k === "hide_start_button") {
+      s.hideStartButton = v === "true" || v === "1";
+    } else if (k === "hide_widgets") {
+      s.hideWidgets = v === "true" || v === "1";
+    } else if (k === "hide_search_gleam") {
+      s.hideSearchGleam = v === "true" || v === "1";
+    } else if (k === "start_w" || k === "start_h") {
+      const n = Number(v);
+      if (Number.isFinite(n)) s[k === "start_w" ? "startW" : "startH"] = Math.max(300, Math.min(2400, n));
+    } else if (k === "start_left") {
+      s.startLeft = v === "true" || v === "1";
+    } else if (k === "dock") {
+      s.dock = v === "true" || v === "1";
+    } else if (k === "start_left_edge" || k === "dock_max" || k === "dock_radius") {
+      const n = Number(v);
+      if (Number.isFinite(n)) {
+        if (k === "start_left_edge") s.startLeftEdge = Math.max(0, Math.min(400, n));
+        else if (k === "dock_max") s.dockMax = Math.max(1, Math.min(2, n));
+        else s.dockRadius = Math.max(40, Math.min(400, n));
+      }
+    } else if (k === "start_radius") {
+      const n = Number(v);
+      if (Number.isFinite(n)) s.startRadius = Math.max(0, Math.min(60, n));
+    }
+  }
+  return s;
+}
+
+export function buildXamlCfg(s: XamlStyle): string {
+  const argb = (rgb: string, a: number) => `#${hex2(a)}${rgb.replace("#", "").toUpperCase()}`;
+  const lines = [
+    "# Estilo da barra e do Iniciar (mods 6 e 7). Gerado pelo Sentinela.",
+    "enabled=true",
+    `fill=${argb(s.fill, s.alpha)}`,
+    `radius=${s.radius}`,
+    `margin=${s.margin.join(",")}`,
+    `hide_border=${s.hideBorder}`,
+  ];
+  if (s.islands) {
+    lines.push("islands=true", `island_pad=${s.islandPad}`, `island_tray_pad=${s.islandTrayPad}`);
+    lines.push(`island_v=${s.islandV}`, `island_edge=${s.islandEdge}`);
+  }
+  if (s.startHideAll) lines.push("start_hide_all=true");
+  if (s.startHideList) lines.push("start_hide_list=true");
+  if (s.searchDark) lines.push("search_dark=true");
+  if (!s.autoReapply) lines.push("auto_reapply=false");
+  if (s.hideStartButton) lines.push("hide_start_button=true");
+  if (s.hideWidgets) lines.push("hide_widgets=true");
+  if (s.hideSearchGleam) lines.push("hide_search_gleam=true");
+  if (s.startLeft) lines.push("start_left=true", `start_left_edge=${s.startLeftEdge}`);
+  if (s.dock) lines.push("dock=true", `dock_max=${s.dockMax}`, `dock_radius=${s.dockRadius}`);
+  if (s.startW !== null) lines.push(`start_w=${s.startW}`);
+  if (s.startH !== null) lines.push(`start_h=${s.startH}`);
+  if (s.startFill) lines.push(`start_fill=${argb(s.startFill, s.startAlpha)}`);
+  if (s.startRadius !== null) lines.push(`start_radius=${s.startRadius}`);
+  return lines.join("\n") + "\n";
+}

@@ -92,11 +92,11 @@ pub fn parse_warp_status(out: &str) -> WarpState {
 
 // ---------------------------------------------------------------- WireGuard
 
-/// `%LOCALAPPDATA%\Sentinela\wireguard`: os `.conf` importados.
+/// `%LOCALAPPDATA%\WON\wireguard`: os `.conf` importados.
 pub fn default_tunnels_dir() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("wireguard")
 }
 

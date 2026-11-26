@@ -148,3 +148,194 @@ pub fn mods_recovery_write() -> Result<String, String> {
         .map(|p| p.display().to_string())
         .map_err(|e| format!("{e:#}"))
 }
+
+// ---- Efeitos do Explorer (mods 4, 5, 6/7 e tema de sessão) ligados na Estilização ----
+
+/// (id da interface, nome no estado, DLL ao lado do app em `mods\`).
+const SHELL_MODS: [(&str, &str, &str); 3] = [
+    ("icones", "icones-pequenos", "sentinela_mod_icons.dll"),
+    ("rotulos", "rotulos-barra", "sentinela_mod_labels.dll"),
+    (
+        "xaml",
+        sentinela_mods::XAML_MOD_NAME,
+        "sentinela_mod_xaml.dll",
+    ),
+];
+
+#[derive(Debug, Serialize)]
+pub struct ShellModItem {
+    pub id: String,
+    pub dll_exists: bool,
+    pub active: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ShellModsStatus {
+    pub installed: bool,
+    pub anticheat_running: bool,
+    pub build: u32,
+    pub mods: Vec<ShellModItem>,
+    /// Texto atual do `xaml-barra.cfg` (o padrão, se ainda não existir).
+    pub xaml_cfg: String,
+}
+
+const XAML_CFG_DEFAULT: &str = "# Estilo da barra (mod 6). Cores ARGB hex; margin = esquerda,topo,direita,base.\n\
+enabled=true\nfill=#C81C1C24\nradius=14\nmargin=0,0,0,0\nhide_border=false\n";
+
+fn mods_dll(file: &str) -> PathBuf {
+    engine_exe()
+        .parent()
+        .map(|d| d.join("mods").join(file))
+        .unwrap_or_else(|| PathBuf::from(file))
+}
+
+fn windows_build() -> u32 {
+    sysinfo::System::kernel_version()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0)
+}
+
+fn shell_status() -> ShellModsStatus {
+    let dir = registry::data_dir();
+    let state = registry::load_state(&dir);
+    let sys = sysinfo::System::new_all();
+    ShellModsStatus {
+        installed: engine_exe().is_file(),
+        anticheat_running: policy::anticheat_running(
+            sys.processes()
+                .values()
+                .map(|p| p.name().to_str().unwrap_or("")),
+        ),
+        build: windows_build(),
+        mods: SHELL_MODS
+            .iter()
+            .map(|(id, name, file)| ShellModItem {
+                id: (*id).into(),
+                dll_exists: mods_dll(file).is_file(),
+                active: state.iter().any(|i| i.mod_name == *name),
+            })
+            .collect(),
+        xaml_cfg: std::fs::read_to_string(dir.join("xaml-barra.cfg"))
+            .unwrap_or_else(|_| XAML_CFG_DEFAULT.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn shell_mods_status() -> Result<ShellModsStatus, String> {
+    tauri::async_runtime::spawn_blocking(shell_status)
+        .await
+        .map_err(|_| "A tarefa foi interrompida.".to_string())
+}
+
+/// Liga ou desliga um efeito do Explorer. Ligar passa por todas as travas do motor (build,
+/// anticheat, modo seguro, RVA) e grava o script de recuperação antes; desligar descarrega.
+#[tauri::command]
+pub async fn shell_mod_set(id: String, on: bool) -> Result<usize, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some((_, name, file)) = SHELL_MODS.iter().find(|(i, _, _)| *i == id) else {
+            return Err(format!("Efeito desconhecido: {id}"));
+        };
+        let dir = registry::data_dir();
+        if !on {
+            let n = eject(&dir, Some(name)).map_err(|e| format!("{e:#}"))?;
+            log(format!("Efeito {name} desligado"));
+            return Ok(n);
+        }
+        let exe = engine_exe();
+        if !exe.is_file() {
+            return Err("O motor de mods (sentinela-mods.exe) não está instalado.".to_string());
+        }
+        let dll = mods_dll(file);
+        let build = windows_build();
+        // Builds fora da lista testada exigem o aceite "experimental"; a tela já avisou o usuário.
+        let r = match id.as_str() {
+            "icones" => sentinela_mods::enable_shell_icons(&dir, &exe, &dll, build, &[], true),
+            "rotulos" => sentinela_mods::enable_shell_labels(&dir, &exe, &dll, build, &[], true),
+            _ => sentinela_mods::enable_shell_xaml(&dir, &exe, &dll, build, &[], true),
+        };
+        let done = r.map_err(|e| format!("{e:#}"))?;
+        log(format!(
+            "Efeito {name} ligado em {} processo(s)",
+            done.len()
+        ));
+        Ok(done.len())
+    })
+    .await
+    .map_err(|_| "A tarefa foi interrompida.".to_string())?
+}
+
+/// Grava o `xaml-barra.cfg`; a DLL lê de novo sozinha.
+#[tauri::command]
+pub fn xaml_cfg_write(text: String) -> Result<(), String> {
+    let dir = registry::data_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let cfg = dir.join("xaml-barra.cfg");
+    let was_on = std::fs::read_to_string(&cfg)
+        .map(|t| t.lines().any(|l| l.trim() == "enabled=true"))
+        .unwrap_or(false);
+    let now_on = text.lines().any(|l| l.trim() == "enabled=true");
+    let dark_was = std::fs::read_to_string(&cfg)
+        .map(|t| t.lines().any(|l| l.trim() == "search_dark=true"))
+        .unwrap_or(false);
+    let dark_now = now_on && text.lines().any(|l| l.trim() == "search_dark=true");
+    std::fs::write(&cfg, text).map_err(|e| e.to_string())?;
+    if dark_was != dark_now {
+        std::thread::spawn(move || set_search_dark(dark_now));
+    }
+    if was_on && !now_on {
+        // Desligar não pode exigir reiniciar o app: limpa o estado preso no Iniciar/pesquisa.
+        std::thread::spawn(sentinela_mods::reset_start_hosts_now);
+    }
+    Ok(())
+}
+
+/// Vigia o Iniciar e a pesquisa: quando o Windows (ou o WON) reinicia esses processos, a DLL do
+/// estilo é carregada de novo sozinha, sem o usuário religar o efeito.
+pub fn spawn_xaml_watch() {
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(20));
+        loop {
+            let dir = registry::data_dir();
+            let n = sentinela_mods::reinject_xaml(&dir, &mods_dll("sentinela_mod_xaml.dll"));
+            if n > 0 {
+                log(format!("Estilo religado em {n} processo(s) novo(s)"));
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+        }
+    });
+}
+
+/// Modo escuro da tela de resultados da pesquisa (WebView2). Pelo ambiente do processo não
+/// funciona (o WebView2 já existe quando a DLL entra); o WebView2 lê argumentos extras da
+/// política `Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`, com o
+/// nome do .exe como valor. Experimental: vale depois de reiniciar a pesquisa.
+#[cfg(windows)]
+fn set_search_dark(on: bool) {
+    use std::os::windows::process::CommandExt;
+    const KEY: &str = r"HKCU\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments";
+    let mut c = std::process::Command::new("reg");
+    if on {
+        c.args([
+            "add",
+            KEY,
+            "/v",
+            "SearchHost.exe",
+            "/t",
+            "REG_SZ",
+            "/d",
+            "--force-dark-mode --enable-features=WebContentsForceDark",
+            "/f",
+        ]);
+    } else {
+        c.args(["delete", KEY, "/v", "SearchHost.exe", "/f"]);
+    }
+    let _ = c.creation_flags(0x0800_0000).status();
+    log(format!(
+        "Pesquisa: modo escuro {}",
+        if on { "ligado" } else { "desligado" }
+    ));
+    sentinela_mods::reset_start_hosts_now();
+}
+
+#[cfg(not(windows))]
+fn set_search_dark(_on: bool) {}

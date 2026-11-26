@@ -39,4 +39,4 @@ de automação que o Live Visual Tree usa por baixo) e troca a propriedade pelo 
 em vez de chutar um ponteiro. Isso fecha a fase 13 com segurança.
 
 Veja também [docs/fases-13-14-o-que-falta.md](fases-13-14-o-que-falta.md) para o porquê disso ser
-necessário, e o PR com os mods 4 e 5 já prontos: https://github.com/Luz-Lucas/sentinela/pull/20
+necessário, e o PR com os mods 4 e 5 já prontos: https://github.com/Luz-Lucas/won/pull/20

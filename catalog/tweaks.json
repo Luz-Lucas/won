@@ -922,6 +922,87 @@
       "choice_label": "Disposição do menu Iniciar"
     },
     {
+      "id": "start-allapps-category",
+      "title": "Por categoria",
+      "description": "Agrupa os aplicativos por tipo, como no padrão do Windows 11 recente.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://geekrewind.com/how-to-change-start-menu-all-apps-view-in-windows-11/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Start",
+          "name": "AllAppsViewMode",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "iniciar",
+      "choice": "start-allapps",
+      "choice_label": "Visão de Todos os aplicativos"
+    },
+    {
+      "id": "start-allapps-grid",
+      "title": "Grade",
+      "description": "Mostra os aplicativos em grade, em ordem alfabética.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://geekrewind.com/how-to-change-start-menu-all-apps-view-in-windows-11/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Start",
+          "name": "AllAppsViewMode",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "iniciar",
+      "choice": "start-allapps",
+      "choice_label": "Visão de Todos os aplicativos"
+    },
+    {
+      "id": "start-allapps-list",
+      "title": "Lista",
+      "description": "Mostra os aplicativos em uma lista simples, em ordem alfabética.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://geekrewind.com/how-to-change-start-menu-all-apps-view-in-windows-11/",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Start",
+          "name": "AllAppsViewMode",
+          "value": {
+            "type": "dword",
+            "data": 2
+          }
+        }
+      ],
+      "area": "iniciar",
+      "choice": "start-allapps",
+      "choice_label": "Visão de Todos os aplicativos"
+    },
+    {
       "id": "explorer-classic-menu",
       "title": "Menu de contexto clássico",
       "description": "Volta ao menu de clique direito completo do Windows 10, sem precisar de \"Mostrar mais opções\".",
@@ -1303,6 +1384,234 @@
         }
       ],
       "area": "sistema"
+    },
+    {
+      "id": "ui-transparency-on",
+      "title": "Ligada",
+      "description": "Liga a transparência (acrílico/Mica) em menus, janelas e na barra de tarefas.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "EnableTransparency",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "transparency",
+      "choice_label": "Efeitos de transparência"
+    },
+    {
+      "id": "ui-transparency-off",
+      "title": "Desligada",
+      "description": "Remove a transparência de menus, janelas e da barra de tarefas; o visual fica opaco.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "immediate",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "EnableTransparency",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "transparency",
+      "choice_label": "Efeitos de transparência"
+    },
+    {
+      "id": "ui-animations-on",
+      "title": "Ligadas",
+      "description": "Mantém as animações de minimizar/maximizar e da barra de tarefas.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Desktop\\WindowMetrics",
+          "name": "MinAnimate",
+          "value": {
+            "type": "string",
+            "data": "1"
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAnimations",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "animations",
+      "choice_label": "Animações de janelas e barra"
+    },
+    {
+      "id": "ui-animations-off",
+      "title": "Desligadas",
+      "description": "Remove as animações de minimizar/maximizar e da barra de tarefas. Vale após sair e entrar de novo.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "relogon",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Control Panel\\Desktop\\WindowMetrics",
+          "name": "MinAnimate",
+          "value": {
+            "type": "string",
+            "data": "0"
+          }
+        },
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAnimations",
+          "value": {
+            "type": "dword",
+            "data": 0
+          }
+        }
+      ],
+      "area": "aparencia",
+      "choice": "animations",
+      "choice_label": "Animações de janelas e barra"
+    },
+    {
+      "id": "accent-taskbar",
+      "title": "Cor de destaque na barra e no Iniciar",
+      "description": "Pinta a barra de tarefas e o Iniciar com a cor de destaque do Windows (só aparece com o tema do sistema escuro).",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "ColorPrevalence",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "aparencia"
+    },
+    {
+      "id": "accent-titlebars",
+      "title": "Cor de destaque nas barras de título",
+      "description": "Pinta as barras de título das janelas e as bordas com a cor de destaque.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\DWM",
+          "name": "ColorPrevalence",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "aparencia"
+    },
+    {
+      "id": "explorer-full-path",
+      "title": "Caminho completo na barra de título",
+      "description": "Mostra o caminho completo da pasta na barra de título do Explorador de Arquivos.",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\CabinetState",
+          "name": "FullPath",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "explorador"
+    },
+    {
+      "id": "desktop-icons-hide",
+      "title": "Esconder ícones da área de trabalho",
+      "description": "Esconde todos os ícones da área de trabalho (eles continuam na pasta Desktop).",
+      "group": "personalizacao",
+      "evidence": "comprovado",
+      "effect": "explorer",
+      "needs_admin": false,
+      "laptop_warning": false,
+      "recommended": false,
+      "source": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-experience",
+      "actions": [
+        {
+          "kind": "registry",
+          "hive": "HKCU",
+          "path": "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "HideIcons",
+          "value": {
+            "type": "dword",
+            "data": 1
+          }
+        }
+      ],
+      "area": "explorador"
     }
   ]
 }

@@ -181,13 +181,14 @@ describe("App", () => {
     render(<App />);
     const nav = within(screen.getByRole("navigation", { name: "Principal" }));
     expect(
-      nav.getAllByRole("button").slice(0, 12).map((b) => b.textContent),
+      nav.getAllByRole("button").slice(0, 13).map((b) => b.textContent),
     ).toEqual([
       "Início",
       "Otimização",
       "Limpeza",
       "Disco",
       "Aplicativos",
+      "Monitor",
       "Rede",
       "Segurança",
       "Quarentena",

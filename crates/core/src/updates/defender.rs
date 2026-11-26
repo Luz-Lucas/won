@@ -21,11 +21,11 @@ pub struct DefenderState {
     pub last_error: Option<String>,
 }
 
-/// `%LOCALAPPDATA%\Sentinela\defender-update.json`.
+/// `%LOCALAPPDATA%\WON\defender-update.json`.
 pub fn default_state_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("defender-update.json")
 }
 
@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn defender_update_runs_at_most_daily() {
         let d = tempfile::tempdir().unwrap();
-        let p = d.path().join("Sentinela/defender-update.json");
+        let p = d.path().join("WON/defender-update.json");
         let calls = Cell::new(0);
         let ok = || {
             calls.set(calls.get() + 1);

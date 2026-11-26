@@ -11,6 +11,11 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: () => Promise.resolve(() => {}) }));
 
 vi.mock("../api", () => ({
+  systemFontStatus: vi.fn().mockResolvedValue(undefined),
+  systemFontSet: vi.fn(),
+  shellModsStatus: vi.fn().mockResolvedValue(undefined),
+  shellModSet: vi.fn(),
+  xamlCfgWrite: vi.fn(),
   tweaksList: vi.fn().mockResolvedValue({ tweaks: [], elevated: true, hkcu_allowed: true }),
   tweaksApply: vi.fn(),
   tweaksApplyChoice: vi.fn(),
@@ -94,7 +99,7 @@ describe("Terminal em Personalizar", () => {
     let resolve!: (s: api.TerminalStatus) => void;
     m.terminalStatus.mockReturnValue(new Promise((r) => (resolve = r)));
     render(<Personalizar />);
-    await screen.findByRole("button", { name: "Temas" });
+    await screen.findByRole("button", { name: "Loja" });
     expect(screen.getByRole("button", { name: "Terminal" })).toBeDisabled();
     resolve(status());
     await waitFor(() => expect(screen.getByRole("button", { name: "Terminal" })).toBeEnabled());
@@ -103,7 +108,7 @@ describe("Terminal em Personalizar", () => {
   it("stays hidden without PowerShell or Windows Terminal", async () => {
     m.terminalStatus.mockResolvedValue(status({ profiles: [], windows_terminal: false }));
     render(<Personalizar />);
-    await screen.findByRole("button", { name: "Temas" });
+    await screen.findByRole("button", { name: "Loja" });
     await waitFor(() => expect(m.terminalStatus).toHaveBeenCalled());
     expect(screen.getByRole("button", { name: "Terminal" })).toBeDisabled();
   });

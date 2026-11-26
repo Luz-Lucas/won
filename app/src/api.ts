@@ -908,15 +908,7 @@ export interface ImportedTheme {
   disabled: string[];
 }
 
-export const themeList = () => invoke<ThemesPage>("theme_list");
-export const themePreview = (toml: string) => invoke<ThemePreview>("theme_preview", { toml });
-export const themeApply = (toml: string) => invoke<ThemeApplied>("theme_apply", { toml });
-export const themeUndo = () => invoke<ThemeUndone>("theme_undo");
-export const themeExport = (name: string, path: string) =>
-  invoke<void>("theme_export", { name, path });
-export const themeImport = (path: string) => invoke<ImportedTheme>("theme_import", { path });
-
-export type LojaKind = "cursores" | "icones" | "temas";
+export type LojaKind = "cursores" | "icones";
 
 export interface LojaItem {
   id: string;
@@ -979,6 +971,11 @@ export const lojaRemove = (id: string, online: boolean) =>
 export const lojaApply = (id: string, online: boolean) =>
   invoke<LojaApplied>("loja_apply", { id, online });
 export const lojaRevert = (kind: LojaKind) => invoke<LojaReverted>("loja_revert", { kind });
+/** Tamanho do ponteiro aplicado pela Loja (pixels); `null` = o do Windows. */
+export const lojaCursorSize = () => invoke<number | null>("loja_cursor_size");
+/** `null` devolve o tamanho que havia antes. */
+export const lojaSetCursorSize = (size: number | null) =>
+  invoke<void>("loja_set_cursor_size", { size });
 export const lojaApplyShortcuts = (id: string, online: boolean) =>
   invoke<LojaShortcutsApplied>("loja_apply_shortcuts", { id, online });
 export const lojaRevertShortcuts = () =>
@@ -1088,15 +1085,6 @@ export const desktopConfigCheck = (text: string) =>
 export const desktopConfigWrite = (text: string) =>
   invoke<void>("desktop_config_write", { text });
 
-export interface AppUpdate {
-  current: string;
-  latest: string;
-  available: boolean;
-  url: string;
-}
-
-export const appUpdateCheck = () => invoke<AppUpdate>("app_update_check");
-
 export interface GameSession {
   previous_scheme: string;
   started_at: string;
@@ -1136,3 +1124,112 @@ export const modsInject = (name: string) => invoke<number>("mods_inject", { name
 export const modsEject = (name: string) => invoke<number>("mods_eject", { name });
 export const modsEjectAll = () => invoke<number>("mods_eject_all");
 export const modsRecoveryWrite = () => invoke<string>("mods_recovery_write");
+
+export interface ShellModItem {
+  id: "icones" | "rotulos" | "xaml";
+  dll_exists: boolean;
+  active: boolean;
+}
+
+export interface ShellModsStatus {
+  installed: boolean;
+  anticheat_running: boolean;
+  build: number;
+  mods: ShellModItem[];
+  xaml_cfg: string;
+}
+
+export const shellModsStatus = () => invoke<ShellModsStatus>("shell_mods_status");
+export const shellModSet = (id: ShellModItem["id"], on: boolean) =>
+  invoke<number>("shell_mod_set", { id, on });
+export const xamlCfgWrite = (text: string) => invoke<void>("xaml_cfg_write", { text });
+
+export interface SystemFontStatus {
+  bundled: boolean;
+  active: boolean;
+  elevated: boolean;
+  backup_path: string;
+}
+export const systemFontStatus = () => invoke<SystemFontStatus>("system_font_status");
+export const systemFontSet = (on: boolean) => invoke<void>("system_font_set", { on });
+
+export interface RamStatus {
+  total_mb: number;
+  used_mb: number;
+  available_mb: number;
+  percent: number;
+}
+export interface RamResult {
+  used_before_mb: number;
+  used_after_mb: number;
+  freed_mb: number;
+  trimmed: number;
+  skipped: number;
+  standby_cleared: boolean;
+  standby_note: string | null;
+}
+export interface RamConfig {
+  auto: boolean;
+  threshold: number;
+  clear_standby: boolean;
+  exclude: string[];
+}
+export const ramStatus = () => invoke<RamStatus>("ram_status");
+export const ramOptimize = () => invoke<RamResult>("ram_optimize");
+export const ramConfigGet = () => invoke<RamConfig>("ram_config_get");
+export const ramConfigSet = (config: RamConfig) => invoke<RamConfig>("ram_config_set", { config });
+
+export interface PerfGroup {
+  id: string;
+  label: string;
+  note: string;
+  procs: number;
+  cpu: number;
+  cpu_avg: number;
+  cpu_peak: number;
+  ram_mb: number;
+  ram_avg_mb: number;
+  ram_peak_mb: number;
+}
+export interface PerfSnapshot {
+  groups: PerfGroup[];
+  total_cpu: number;
+  ram_used_mb: number;
+  ram_total_mb: number;
+  samples: number;
+}
+export const perfSample = () => invoke<PerfSnapshot>("perf_sample");
+export const perfReset = () => invoke<void>("perf_reset");
+export const perfGpu = () => invoke<{ id: string; gpu: number }[]>("perf_gpu");
+
+export interface OrganizeStatus {
+  connected: boolean;
+  url: string;
+  email: string;
+  fetched_at: number;
+  events: number;
+  tasks: number;
+  error: string;
+}
+export const organizeStatus = () => invoke<OrganizeStatus>("organize_status");
+export const organizeLogin = (url: string, anonKey: string, email: string, password: string) =>
+  invoke<OrganizeStatus>("organize_login", { url, anonKey, email, password });
+export const organizeRefresh = () => invoke<OrganizeStatus>("organize_refresh");
+export const organizeLogout = () => invoke<OrganizeStatus>("organize_logout");
+
+export interface UpdateStatus {
+  current: string;
+  latest: string;
+  available: boolean;
+  notes: string;
+  auto_check: boolean;
+  auto_install: boolean;
+  manifest_url: string;
+  last_check: number;
+  error: string;
+}
+export const updateStatus = () => invoke<UpdateStatus>("update_status");
+export const updateCheck = () => invoke<UpdateStatus>("update_check");
+export const updateConfigSet = (autoCheck: boolean, autoInstall: boolean, manifestUrl: string) =>
+  invoke<UpdateStatus>("update_config_set", { autoCheck, autoInstall, manifestUrl });
+export const updateInstall = () => invoke<void>("update_install");

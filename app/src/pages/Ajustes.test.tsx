@@ -12,7 +12,14 @@ const render = (ui: React.ReactElement) =>
 
 vi.mock("../api", () => ({
   systemStatus: vi.fn(),
-  appUpdateCheck: vi.fn(),
+  organizeStatus: vi.fn().mockResolvedValue({ connected: false, url: "", email: "", fetched_at: 0, events: 0, tasks: 0, error: "" }),
+  updateStatus: vi.fn().mockResolvedValue({ current: "20261126-0428", latest: "", available: false, notes: "", auto_check: true, auto_install: false, manifest_url: "https://x/latest.json", last_check: 0, error: "" }),
+  updateCheck: vi.fn(),
+  updateConfigSet: vi.fn(),
+  updateInstall: vi.fn(),
+  organizeLogin: vi.fn(),
+  organizeRefresh: vi.fn(),
+  organizeLogout: vi.fn(),
   signaturesUpdate: vi.fn(),
   abuseKeySet: vi.fn(),
   abuseKeyClear: vi.fn(),
@@ -279,30 +286,5 @@ describe("Ajustes", () => {
     render(<Ajustes />);
     await userEvent.click(await screen.findByText("auth.abuse.ch"));
     expect(openUrl).toHaveBeenCalledWith("https://auth.abuse.ch/");
-  });
-
-  it("procura atualização do WON e abre a página da versão", async () => {
-    vi.mocked(api.appUpdateCheck)
-      .mockReset()
-      .mockResolvedValueOnce({ current: "0.1.0", latest: "0.2.0", available: false, url: "" })
-      .mockResolvedValueOnce({
-        current: "0.1.0",
-        latest: "0.3.0",
-        available: true,
-        url: "https://github.com/Luz-Lucas/sentinela/releases/tag/v0.3.0",
-      })
-      .mockRejectedValueOnce("falha de rede");
-    render(<Ajustes />);
-    const btn = await screen.findByRole("button", { name: "Procurar atualização" });
-    await userEvent.click(btn);
-    expect(await screen.findByText(/versão mais recente \(0\.1\.0\)/)).toBeInTheDocument();
-    await userEvent.click(btn);
-    expect(await screen.findByText(/Versão 0\.3\.0 disponível/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Abrir a página da versão" }));
-    expect(openUrl).toHaveBeenCalledWith(
-      "https://github.com/Luz-Lucas/sentinela/releases/tag/v0.3.0",
-    );
-    await userEvent.click(btn);
-    expect(await screen.findByText(/Não foi possível verificar: falha de rede/)).toBeInTheDocument();
   });
 });

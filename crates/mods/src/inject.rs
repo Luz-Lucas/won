@@ -87,6 +87,9 @@ mod imp {
     }
 
     pub fn load(pid: u32, dll: &Path) -> Result<()> {
+        if !dll.is_file() {
+            bail!("a DLL não existe: {}", dll.display());
+        }
         let h = open(pid)?;
         let path = wide(dll);
         let bytes = path.len() * 2;
@@ -109,8 +112,11 @@ mod imp {
                 remote_call(&h, kernel32(b"LoadLibraryW\0")?, mem)
             };
             VirtualFreeEx(h.0, mem, 0, MEM_RELEASE);
-            if result? == 0 {
-                bail!("o processo recusou carregar a DLL (LoadLibraryW devolveu nulo)");
+            // O código de saída da thread é só a metade baixa do HMODULE; confere pela lista de módulos.
+            if result? == 0 && module_base(pid, dll).is_none() {
+                bail!(
+                    "o processo {pid} recusou carregar a DLL (LoadLibraryW devolveu nulo): política de segurança do processo (assinatura obrigatória, AppContainer sem acesso à pasta) ou dependência faltando"
+                );
             }
         }
         Ok(())

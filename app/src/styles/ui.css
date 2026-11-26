@@ -1,0 +1,172 @@
+/* Design system do WON: controles, formulários e layout responsivo.
+   Regras: só tokens de tokens.css (nada de cor solta), controles com 34 px de altura,
+   rótulo acima do campo, grades que quebram em colunas em vez de espremer, foco sempre visível. */
+:root {
+  --ctl-h: 34px;
+  --surface-3: #16213a;
+  --radius-lg: 10px;
+  --focus-ring: 0 0 0 2px rgba(47, 123, 255, 0.55);
+  --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%238b93a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Campos de texto, números e listas: um só visual */
+input:where(:not([type]), [type="text"], [type="number"], [type="url"], [type="email"], [type="password"], [type="search"]),
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: var(--ctl-h);
+  padding: 0 var(--sp-3);
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+textarea {
+  padding: var(--sp-2) var(--sp-3);
+  min-height: 80px;
+}
+select {
+  appearance: none;
+  padding-right: 30px;
+  background-image: var(--arrow);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+select option {
+  background: var(--surface);
+  color: var(--text);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim);
+}
+input:where([type="text"], [type="number"], [type="url"], [type="email"], [type="password"], [type="search"]):hover,
+select:hover,
+textarea:hover {
+  border-color: var(--accent-dark);
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--accent);
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+input[type="color"] {
+  width: 44px;
+  height: var(--ctl-h);
+  padding: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Botões: mesma altura dos campos */
+.btn {
+  min-height: var(--ctl-h);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-light);
+  border-color: var(--accent-light);
+  color: var(--bg);
+}
+
+/* Linha de formulário: campos lado a lado, quebrando em colunas quando falta espaço */
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-3);
+  align-items: end;
+  margin-block: var(--sp-2);
+}
+.row > label,
+.field {
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  min-width: 0;
+}
+.row > label:has(> input[type="checkbox"]),
+.row > label:has(> input[type="radio"]) {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--ctl-h);
+  font-size: var(--fs-md);
+  color: var(--text);
+}
+.row > input,
+.row > select,
+.row > label > input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.row > label > select {
+  width: 100%;
+}
+.row > .btn {
+  justify-self: start;
+}
+
+/* Grupos e cartões */
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3) var(--sp-4);
+  margin: 0;
+  min-width: 0;
+}
+fieldset > legend {
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+.card {
+  border-radius: var(--radius-lg);
+}
+.dv-card {
+  min-width: 0;
+}
+
+/* Telas estreitas: o editor visual vira uma coluna */
+@media (max-width: 920px) {
+  .dv-body {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}

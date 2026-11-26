@@ -23,6 +23,7 @@ impl Sink for TauriSink {
 }
 
 pub fn run() {
+    sentinela_core::migrate::migrate_data_dirs();
     // A instância elevada (`--wait-pid`) nunca registra a instância única.
     let relaunched = commands::system::wait_for_previous_instance();
     let mut builder = tauri::Builder::default();
@@ -57,6 +58,9 @@ pub fn run() {
             commands::updates::spawn_defender_watch(tweaks_state.clone());
             app.manage(tweaks_state);
             app.manage(SettingsState::load(default_settings_path()));
+            commands::ram::spawn_watch();
+            commands::selfupdate::spawn_background();
+            commands::mods::spawn_xaml_watch();
             if let Err(e) = tray::setup(app.handle()) {
                 eprintln!("WON: sem ícone na bandeja: {e}");
             }
@@ -123,14 +127,10 @@ pub fn run() {
             commands::loja::loja_remove,
             commands::loja::loja_apply,
             commands::loja::loja_revert,
+            commands::loja::loja_cursor_size,
+            commands::loja::loja_set_cursor_size,
             commands::loja::loja_apply_shortcuts,
             commands::loja::loja_revert_shortcuts,
-            commands::theme::theme_list,
-            commands::theme::theme_preview,
-            commands::theme::theme_apply,
-            commands::theme::theme_undo,
-            commands::theme::theme_export,
-            commands::theme::theme_import,
             commands::settings::app_update_check,
             commands::games::game_session_status,
             commands::games::game_session_start,
@@ -140,6 +140,11 @@ pub fn run() {
             commands::mods::mods_eject,
             commands::mods::mods_eject_all,
             commands::mods::mods_recovery_write,
+            commands::mods::shell_mods_status,
+            commands::mods::shell_mod_set,
+            commands::mods::xaml_cfg_write,
+            commands::font::system_font_status,
+            commands::font::system_font_set,
             commands::desktop::desktop_status,
             commands::desktop::desktop_start,
             commands::desktop::desktop_stop,
@@ -149,6 +154,21 @@ pub fn run() {
             commands::terminal::terminal_status,
             commands::terminal::terminal_install_omp,
             commands::terminal::terminal_install_font,
+            commands::organize::organize_status,
+            commands::organize::organize_login,
+            commands::organize::organize_refresh,
+            commands::organize::organize_logout,
+            commands::selfupdate::update_status,
+            commands::selfupdate::update_check,
+            commands::selfupdate::update_config_set,
+            commands::selfupdate::update_install,
+            commands::perf::perf_sample,
+            commands::perf::perf_reset,
+            commands::perf::perf_gpu,
+            commands::ram::ram_status,
+            commands::ram::ram_config_get,
+            commands::ram::ram_config_set,
+            commands::ram::ram_optimize,
             commands::terminal::terminal_themes,
             commands::terminal::terminal_theme_preview,
             commands::terminal::terminal_timing,

@@ -595,7 +595,7 @@ mod tests {
     #[test]
     fn own_folder_is_excluded() {
         let dir = tempfile::tempdir().unwrap();
-        let own = dir.path().join("Sentinela");
+        let own = dir.path().join("WON");
         fs::create_dir_all(own.join("db")).unwrap();
         fs::write(own.join("db").join("regras.exe"), MARKER).unwrap();
         fs::write(dir.path().join("fora.exe"), MARKER).unwrap();

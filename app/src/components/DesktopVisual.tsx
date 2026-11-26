@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import {
   DEFAULT_BAR,
+  DEFAULT_CLIPBOARD,
   DEFAULT_LAUNCHER,
+  type ClipboardModel,
   DEFAULT_TILING,
   LAYOUTS,
   MODULES,
@@ -14,26 +16,27 @@ import {
   type Module,
   type Sections,
   type TilingModel,
-  type Zone,
 } from "../desktopToml";
+import WidgetCanvas from "./WidgetCanvas";
 
 const MODULE_LABEL: Record<Module, string> = {
   title: "Título da janela",
   cpu: "CPU",
   ram: "Memória",
+  volume: "Volume",
+  network: "Rede",
+  media: "Mídia tocando",
   clock: "Relógio",
 };
 const MODULE_SAMPLE: Record<Module, string> = {
   title: "Janela em foco",
   cpu: "CPU 12%",
   ram: "RAM 48%",
+  volume: "VOL 45%",
+  network: "Wi-Fi",
+  media: "♪ Artista - Música",
   clock: "14:32",
 };
-const ZONES: { id: Zone; label: string }[] = [
-  { id: "left", label: "Esquerda" },
-  { id: "center", label: "Centro" },
-  { id: "right", label: "Direita" },
-];
 const CLOCKS: [string, string][] = [
   ["%H:%M", "14:32"],
   ["%H:%M:%S", "14:32:07"],
@@ -45,18 +48,18 @@ const LAYOUT_LABEL: Record<Layout, string> = {
   columns: "Colunas",
   grid: "Grade",
   monocle: "Uma janela por vez",
+  rows: "Empilhadas (uma sobre a outra)",
 };
 const HOTKEYS = ["Alt+Space", "Win+Space", "Ctrl+Alt+Space", "Win+Alt+Space", "Ctrl+Space"];
 
-const zoneOf = (b: BarModel, m: Module): Zone | null =>
-  b.left.includes(m) ? "left" : b.center.includes(m) ? "center" : b.right.includes(m) ? "right" : null;
 
 function BarPreview({ bar }: { bar: BarModel }) {
   const clock = CLOCKS.find(([f]) => f === bar.clockFormat)?.[1] ?? "14:32";
   const sample = (m: Module) => (m === "clock" ? clock : MODULE_SAMPLE[m]);
-  const zone = (z: Zone) => (
-    <span className={`dv-zone dv-zone-${z}`}>
-      {bar[z].map((m) => (
+  const order = [...bar.left, ...bar.center, ...bar.right];
+  const zone = () => (
+    <span className="dv-zone dv-zone-left">
+      {order.map((m) => (
         <span key={m}>{sample(m)}</span>
       ))}
     </span>
@@ -74,9 +77,34 @@ function BarPreview({ bar }: { bar: BarModel }) {
           fontSize: `${Math.max(7, bar.fontSize * 0.7)}px`,
         }}
       >
-        {zone("left")}
-        {zone("center")}
-        {zone("right")}
+        {bar.islands ? (
+          <>
+            <span
+              className="dv-zone"
+              style={{
+                background: "rgba(255,255,255,0.12)",
+                borderRadius: bar.islandRadius,
+                padding: "0 6px",
+                margin: "0 auto",
+              }}
+            >
+              <span>Navegador</span>
+              <span>Terminal</span>
+            </span>
+            <span
+              className="dv-zone"
+              style={{ background: "rgba(255,255,255,0.12)", borderRadius: bar.islandRadius, padding: "0 6px" }}
+            >
+              {order.map((m) => (
+                <span key={m}>{sample(m)}</span>
+              ))}
+            </span>
+          </>
+        ) : (
+          <>
+            {zone()}
+          </>
+        )}
       </div>
       {!bar.hideNative && <div className="sp-taskbar dv-native">Barra nativa do Windows</div>}
       <div className="sp-window sp-window-small" style={{ top: bar.edge === "top" ? "24%" : "8%" }}>
@@ -166,9 +194,12 @@ function Range({
 export default function DesktopVisual({
   text,
   onChange,
+  onWidgets,
 }: {
   text: string | null;
   onChange: (text: string) => void;
+  /** Chamado com o texto novo quando os widgets mudam (o pai salva sozinho). */
+  onWidgets?: (text: string) => void;
 }) {
   const sections = useMemo(() => (text === null ? null : readSections(text)), [text]);
   if (text === null) return null;
@@ -187,13 +218,22 @@ export default function DesktopVisual({
   const setTil = (p: Partial<TilingModel>) => til && update({ tiling: { ...til, ...p } });
   const lau = s.launcher;
   const setLau = (p: Partial<LauncherModel>) => lau && update({ launcher: { ...lau, ...p } });
+  const widgets = s.widgets ?? [];
+  const clip = s.clipboard ?? null;
+  const setClip = (p: Partial<ClipboardModel>) => clip && update({ clipboard: { ...clip, ...p } });
 
-  const moveModule = (m: Module, to: Zone | "off") => {
-    if (!bar) return;
-    const strip = (a: Module[]) => a.filter((x) => x !== m);
-    const next = { left: strip(bar.left), center: strip(bar.center), right: strip(bar.right) };
-    if (to !== "off") next[to] = MODULES.filter((x) => x === m || next[to].includes(x));
-    setBar(next);
+  // Os módulos formam uma lista ordenada (da esquerda para a direita; na ilha, na mesma ordem).
+  const order = bar ? [...bar.left, ...bar.center, ...bar.right] : [];
+  const setOrder = (list: Module[]) => setBar({ left: list, center: [], right: [] });
+  const toggleModule = (m: Module, on: boolean) =>
+    setOrder(on ? [...order, m] : order.filter((x) => x !== m));
+  const shiftModule = (m: Module, d: -1 | 1) => {
+    const i = order.indexOf(m);
+    const j = i + d;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    setOrder(next);
   };
 
   return (
@@ -230,6 +270,57 @@ export default function DesktopVisual({
               </fieldset>
               <Range label="Altura da barra" value={bar.height} min={20} max={96} onChange={(v) => setBar({ height: v })} format={(v) => `${v} px`} />
               <Range label="Tamanho da fonte" value={bar.fontSize} min={8} max={32} onChange={(v) => setBar({ fontSize: v })} format={(v) => `${v} pt`} />
+              <label>
+                Fonte{" "}
+                <input
+                  type="text"
+                  aria-label="Nome da fonte"
+                  value={bar.font}
+                  maxLength={31}
+                  onChange={(e) => setBar({ font: e.target.value })}
+                />
+              </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.fontWeight >= 600}
+                  onChange={(e) => setBar({ fontWeight: e.target.checked ? 700 : 400 })}
+                />
+                <span>Fonte em negrito</span>
+              </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.hideWhenMaximized}
+                  onChange={(e) => setBar({ hideWhenMaximized: e.target.checked })}
+                />
+                <span>Esconder a barra com janela maximizada</span>
+              </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.alwaysVisibleWhenEmpty}
+                  onChange={(e) => setBar({ alwaysVisibleWhenEmpty: e.target.checked })}
+                />
+                <span>Barra sempre visível quando não há nenhum app aberto</span>
+              </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.visibleOnDesktop}
+                  onChange={(e) => setBar({ visibleOnDesktop: e.target.checked })}
+                />
+                <span>Manter a barra visível ao clicar na área de trabalho</span>
+              </label>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  checked={bar.activeOutline}
+                  onChange={(e) => setBar({ activeOutline: e.target.checked })}
+                />
+                <span>Contorno em volta do ícone do app em uso</span>
+              </label>
+              <Range label="Só ícones a partir de" value={bar.iconsOnlyFrom} min={0} max={12} onChange={(v) => setBar({ iconsOnlyFrom: v })} format={(v) => (v === 0 ? "nunca" : `${v} janelas`)} />
               <div className="dv-colors">
                 <label>
                   Fundo{" "}
@@ -265,25 +356,78 @@ export default function DesktopVisual({
                 />
                 <span>Ocultar a barra de tarefas do Windows</span>
               </label>
-              <fieldset className="choice-group">
-                <legend>Módulos</legend>
-                {MODULES.map((m) => (
-                  <label key={m} className="dv-field dv-inline">
-                    <span>{MODULE_LABEL[m]}</span>
+              <label className="clean-check">
+                <input
+                  type="checkbox"
+                  aria-label="Duas ilhas"
+                  checked={bar.islands}
+                  onChange={(e) => setBar({ islands: e.target.checked })}
+                />
+                <span>Duas ilhas: janelas abertas à esquerda e relógio e uso à direita</span>
+              </label>
+              {bar.islands && (
+                <>
+                  <p className="muted">
+                    A ilha de janelas ajusta a largura ao número de janelas abertas e cada botão
+                    ativa ou minimiza a janela. A ilha da direita mostra os módulos do centro e da
+                    direita; a bandeja do sistema (rede, som) não é espelhada.
+                  </p>
+                  <Range label="Cantos das ilhas" value={bar.islandRadius} min={0} max={40} onChange={(v) => setBar({ islandRadius: v })} format={(v) => `${v} px`} />
+                  <Range label="Folga em volta das ilhas" value={bar.islandMargin} min={0} max={40} onChange={(v) => setBar({ islandMargin: v })} format={(v) => `${v} px`} />
+                  <label className="dv-field">
+                    <span>Posição da ilha de janelas</span>
                     <select
-                      aria-label={`Posição de ${MODULE_LABEL[m]}`}
-                      value={zoneOf(bar, m) ?? "off"}
-                      onChange={(e) => moveModule(m, e.target.value as Zone | "off")}
+                      aria-label="Posição da ilha de janelas"
+                      value={bar.islandAlign}
+                      onChange={(e) => setBar({ islandAlign: e.target.value as "center" | "left" })}
                     >
-                      <option value="off">Não mostrar</option>
-                      {ZONES.map((z) => (
-                        <option key={z.id} value={z.id}>
-                          {z.label}
-                        </option>
-                      ))}
+                      <option value="center">Centralizada</option>
+                      <option value="left">À esquerda</option>
                     </select>
                   </label>
-                ))}
+                </>
+              )}
+              <fieldset className="choice-group">
+                <legend>Módulos (na ordem em que aparecem)</legend>
+                {[...order, ...MODULES.filter((m) => !order.includes(m))].map((m) => {
+                  const on = order.includes(m);
+                  const i = order.indexOf(m);
+                  return (
+                    <div key={m} className="dv-field dv-inline">
+                      <label className="clean-check">
+                        <input
+                          type="checkbox"
+                          aria-label={`Mostrar ${MODULE_LABEL[m]}`}
+                          checked={on}
+                          onChange={(e) => toggleModule(m, e.target.checked)}
+                        />
+                        <span>{MODULE_LABEL[m]}</span>
+                      </label>
+                      {on && (
+                        <span className="dv-order">
+                          <button
+                            type="button"
+                            className="btn"
+                            aria-label={`Subir ${MODULE_LABEL[m]}`}
+                            disabled={i === 0}
+                            onClick={() => shiftModule(m, -1)}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            className="btn"
+                            aria-label={`Descer ${MODULE_LABEL[m]}`}
+                            disabled={i === order.length - 1}
+                            onClick={() => shiftModule(m, 1)}
+                          >
+                            ▼
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </fieldset>
             </div>
           </div>
@@ -320,6 +464,107 @@ export default function DesktopVisual({
               </fieldset>
               <Range label="Espaço entre janelas" value={til.gap} min={0} max={100} onChange={(v) => setTil({ gap: v })} format={(v) => `${v} px`} />
               <Range label="Espaço na borda da tela" value={til.outerGap} min={0} max={100} onChange={(v) => setTil({ outerGap: v })} format={(v) => `${v} px`} />
+              <fieldset className="choice-group">
+                <legend>Monitores em retrato (na vertical)</legend>
+                <label className="dv-field">
+                  <span>Disposição</span>
+                  <select
+                    aria-label="Disposição dos monitores em retrato"
+                    value={til.portraitLayout}
+                    onChange={(e) => setTil({ portraitLayout: e.target.value as Layout })}
+                  >
+                    {LAYOUTS.map((l) => (
+                      <option key={l} value={l}>
+                        {LAYOUT_LABEL[l]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </fieldset>
+              <fieldset className="choice-group">
+                <legend>Regras por monitor</legend>
+                <p className="muted">
+                  Monitor 1 é o mais à esquerda. Limite as zonas (por exemplo 3, para o segundo monitor na
+                  vertical ter topo, meio e fim); as outras janelas ficam soltas.
+                </p>
+                {til.monitors.map((m, i) => (
+                  <div className="row" key={i}>
+                    <label>
+                      Monitor{" "}
+                      <input
+                        aria-label={`Número do monitor ${i + 1}`}
+                        type="number"
+                        min={1}
+                        max={16}
+                        value={m.index}
+                        onChange={(e) =>
+                          setTil({ monitors: til.monitors.map((x, j) => (j === i ? { ...x, index: Number(e.target.value) } : x)) })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Disposição{" "}
+                      <select
+                        aria-label={`Disposição do monitor ${i + 1}`}
+                        value={m.layout}
+                        onChange={(e) =>
+                          setTil({ monitors: til.monitors.map((x, j) => (j === i ? { ...x, layout: e.target.value as Layout | "" } : x)) })
+                        }
+                      >
+                        <option value="">Automática</option>
+                        {LAYOUTS.map((l) => (
+                          <option key={l} value={l}>
+                            {LAYOUT_LABEL[l]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Zonas (janelas){" "}
+                      <select
+                        aria-label={`Zonas do monitor ${i + 1}`}
+                        value={m.maxWindows ?? ""}
+                        onChange={(e) =>
+                          setTil({
+                            monitors: til.monitors.map((x, j) =>
+                              j === i ? { ...x, maxWindows: e.target.value === "" ? null : Number(e.target.value) } : x,
+                            ),
+                          })
+                        }
+                      >
+                        <option value="">Sem limite</option>
+                        {[2, 3, 4].map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn"
+                      aria-label={`Remover regra do monitor ${i + 1}`}
+                      onClick={() => setTil({ monitors: til.monitors.filter((_, j) => j !== i) })}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    setTil({
+                      monitors: [
+                        ...til.monitors,
+                        { index: (til.monitors[til.monitors.length - 1]?.index ?? 1) + 1, layout: "rows", maxWindows: 3 },
+                      ],
+                    })
+                  }
+                >
+                  Adicionar regra de monitor
+                </button>
+              </fieldset>
               {til.layout === "master-stack" && (
                 <Range
                   label="Largura da janela principal"
@@ -377,6 +622,106 @@ export default function DesktopVisual({
             </div>
           </div>
         )}
+      </article>
+
+      <article className="card dv-card" aria-labelledby="dv-widgets-title">
+        <header className="dv-head">
+          <h2 id="dv-widgets-title">Widgets na área de trabalho</h2>
+        </header>
+        <p className="muted">
+          Pequenos painéis sobre a área de trabalho, abaixo dos seus programas. Monte tudo na
+          miniatura abaixo; vale quando o ambiente de desktop estiver em execução. Você também pode
+          arrastar o widget direto na área de trabalho.
+        </p>
+        <WidgetCanvas
+          widgets={widgets}
+          onChange={(w) => {
+            const t = applySections(text, { ...s, widgets: w });
+            onChange(t);
+            onWidgets?.(t);
+          }}
+        />
+      </article>
+
+      <article className="card dv-card" aria-labelledby="dv-clip-title">
+        <header className="dv-head">
+          <h2 id="dv-clip-title">Copiar e colar inteligente</h2>
+          <label className="clean-check">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Usar copiar e colar inteligente"
+              checked={clip !== null}
+              onChange={(e) => update({ clipboard: e.target.checked ? { ...DEFAULT_CLIPBOARD } : null })}
+            />
+            <span>{clip ? "Ligado" : "Desligado"}</span>
+          </label>
+        </header>
+        <p className="muted">Limpa o texto assim que você copia: tira rastreadores de links, espaços e quebras de linha.</p>
+        {clip && (
+          <div className="dv-body">
+            <div className="dv-controls">
+              <label className="clean-check">
+                <input type="checkbox" checked={clip.stripTracking} onChange={(e) => setClip({ stripTracking: e.target.checked })} />
+                <span>Tirar rastreadores dos links (utm, fbclid, gclid)</span>
+              </label>
+              <label className="clean-check">
+                <input type="checkbox" checked={clip.trim} onChange={(e) => setClip({ trim: e.target.checked })} />
+                <span>Tirar espaços do começo e do fim</span>
+              </label>
+              <label className="clean-check">
+                <input type="checkbox" checked={clip.unwrap} onChange={(e) => setClip({ unwrap: e.target.checked })} />
+                <span>Juntar linhas quebradas (texto de PDF)</span>
+              </label>
+              <label className="dv-field">
+                <span>Maiúsculas e minúsculas</span>
+                <select aria-label="Maiúsculas e minúsculas" value={clip.casing} onChange={(e) => setClip({ casing: e.target.value as ClipboardModel["casing"] })}>
+                  <option value="keep">Manter</option>
+                  <option value="lower">minúsculas</option>
+                  <option value="upper">MAIÚSCULAS</option>
+                  <option value="title">Cada Palavra</option>
+                </select>
+              </label>
+              <label className="dv-field">
+                <span>Caminhos de pasta</span>
+                <select aria-label="Caminhos de pasta" value={clip.paths} onChange={(e) => setClip({ paths: e.target.value as ClipboardModel["paths"] })}>
+                  <option value="keep">Manter</option>
+                  <option value="double_backslash">Barra dupla (C:\\a\\b)</option>
+                  <option value="forward">Barra normal (C:/a/b)</option>
+                </select>
+              </label>
+              <label className="dv-field">
+                <span>Extrair do texto</span>
+                <select aria-label="Extrair do texto" value={clip.extract} onChange={(e) => setClip({ extract: e.target.value as ClipboardModel["extract"] })}>
+                  <option value="off">Nada</option>
+                  <option value="urls">Só os links</option>
+                  <option value="emails">Só os e-mails</option>
+                </select>
+              </label>
+              {clip.replace.length > 0 && <p className="muted">{`${clip.replace.length} troca(s) definidas no arquivo são mantidas.`}</p>}
+            </div>
+          </div>
+        )}
+      </article>
+
+      <article className="card dv-card" aria-labelledby="dv-mid-title">
+        <header className="dv-head">
+          <h2 id="dv-mid-title">Clique do meio na barra</h2>
+          <label className="clean-check">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Fechar com o clique do meio"
+              checked={s.middleClose === true}
+              onChange={(e) => update({ middleClose: e.target.checked })}
+            />
+            <span>{s.middleClose ? "Ligado" : "Desligado"}</span>
+          </label>
+        </header>
+        <p className="muted">
+          Clicar com o botão do meio num programa da barra fecha a janela, em vez de abrir outra. Experimental: só fecha
+          quando tem certeza de qual janela é.
+        </p>
       </article>
     </div>
   );

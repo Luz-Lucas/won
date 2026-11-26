@@ -16,6 +16,11 @@ const render = (ui: React.ReactElement) =>
   rtlRender(<JobsProvider>{ui}</JobsProvider>);
 
 vi.mock("../api", () => ({
+  systemFontStatus: vi.fn().mockResolvedValue(undefined),
+  systemFontSet: vi.fn(),
+  shellModsStatus: vi.fn().mockResolvedValue(undefined),
+  shellModSet: vi.fn(),
+  xamlCfgWrite: vi.fn(),
   tweaksList: vi.fn(),
   tweaksApply: vi.fn(),
   tweaksApplyChoice: vi.fn(),
@@ -188,7 +193,7 @@ describe("Personalizar", () => {
     for (const r of within(group).getAllByRole("radio")) expect(r).not.toBeChecked();
   });
 
-  it("external_value_disables_toggle", async () => {
+  it("external_value_can_be_toggled_and_is_explained", async () => {
     vi.mocked(api.tweaksList).mockResolvedValue(
       page([item("a", { view: { status: "applied" }, in_journal: false })]),
     );
@@ -196,8 +201,8 @@ describe("Personalizar", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Barra de tarefas" }));
     const sw = await screen.findByRole("switch", { name: "Título a" });
     expect(sw).toBeChecked();
-    expect(sw).toBeDisabled();
-    expect(screen.getByText("Configurado fora do WON.")).toBeInTheDocument();
+    expect(sw).toBeEnabled();
+    expect(screen.getByText(/Ligado fora do WON/)).toBeInTheDocument();
   });
 
   it("explorer_notice_and_restart_confirmation", async () => {
@@ -281,7 +286,7 @@ describe("Personalizar", () => {
     );
     render(<Personalizar />);
     expect(screen.getByRole("heading", { level: 1, name: "Estilização" })).toBeInTheDocument();
-    for (const n of ["Barra de tarefas", "Menu Iniciar", "Explorador de Arquivos", "Cores e aparência", "Temas", "Sistema"])
+    for (const n of ["Barra de tarefas", "Menu Iniciar", "Explorador de Arquivos", "Cores e aparência", "Sistema"])
       expect(await screen.findByRole("button", { name: n })).toBeEnabled();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Barra de tarefas" }));

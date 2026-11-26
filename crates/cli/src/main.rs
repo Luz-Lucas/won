@@ -9,5 +9,6 @@ mod tweak;
 mod updates;
 
 fn main() {
+    sentinela_core::migrate::migrate_data_dirs();
     std::process::exit(cli::run());
 }

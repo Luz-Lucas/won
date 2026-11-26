@@ -3,6 +3,8 @@ pub const ALLOWED: &[&str] = &[
     "explorer.exe",
     "startmenuexperiencehost.exe",
     "shellexperiencehost.exe",
+    // A janela de pesquisa do Windows 11 (campo "f" -> Firefox) mora aqui, não no Iniciar.
+    "searchhost.exe",
 ];
 
 pub fn allowed(process: &str) -> bool {

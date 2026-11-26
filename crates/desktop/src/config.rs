@@ -35,6 +35,8 @@ pub enum Action {
     MasterGrow,
     MasterShrink,
     OpenLauncher,
+    /// Abre os layouts de encaixe nativos do Windows (Win+Z), para combinar com o tiling.
+    SnapLayouts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,11 +76,39 @@ pub struct Config {
     /// Presente = tiling ligado ao iniciar (`[tiling]`).
     pub tiling: Option<TilingConfig>,
     pub launcher: Option<LauncherConfig>,
+    /// Presente = copiar e colar inteligente ligado (`[clipboard]`).
+    pub clipboard: Option<crate::smartcopy::Options>,
+    /// `[taskbar] middle_click_close = true`: clique do meio na barra fecha o programa.
+    pub middle_click_close: bool,
+    /// `[[widget]]`: widgets na área de trabalho.
+    pub widgets: Vec<crate::widget::WidgetConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawWidget {
+    id: Option<String>,
+    kind: crate::widget::WidgetKind,
+    x: Option<i32>,
+    y: Option<i32>,
+    width: Option<u32>,
+    height: Option<u32>,
+    background: Option<String>,
+    foreground: Option<String>,
+    radius: Option<u32>,
+    opacity: Option<u32>,
+    font_size: Option<u32>,
+    #[serde(default)]
+    locked: bool,
+    format: Option<String>,
+    city: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawFile {
+    #[serde(default)]
+    widget: Vec<RawWidget>,
     #[serde(default)]
     hotkey: Vec<RawHotkey>,
     #[serde(default)]
@@ -87,6 +117,92 @@ struct RawFile {
     bar: Option<RawBar>,
     tiling: Option<RawTiling>,
     launcher: Option<RawLauncher>,
+    clipboard: Option<RawClipboard>,
+    taskbar: Option<RawTaskbar>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTaskbar {
+    #[serde(default)]
+    middle_click_close: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawClipboard {
+    #[serde(default)]
+    strip_tracking: bool,
+    #[serde(default)]
+    trim: bool,
+    #[serde(default)]
+    unwrap: bool,
+    /// keep, lower, upper, title
+    casing: Option<String>,
+    /// keep, double_backslash, forward
+    paths: Option<String>,
+    /// off, urls, emails
+    extract: Option<String>,
+    #[serde(default)]
+    replace: Vec<RawReplace>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawReplace {
+    from: String,
+    to: String,
+}
+
+fn parse_clipboard(
+    c: &RawClipboard,
+    errors: &mut Vec<String>,
+) -> Option<crate::smartcopy::Options> {
+    use crate::smartcopy::{Casing, Extract, Options, PathMode};
+    let casing = match c.casing.as_deref().unwrap_or("keep") {
+        "keep" => Casing::Keep,
+        "lower" => Casing::Lower,
+        "upper" => Casing::Upper,
+        "title" => Casing::Title,
+        o => {
+            errors.push(format!("clipboard: casing \"{o}\" inválido"));
+            Casing::Keep
+        }
+    };
+    let paths = match c.paths.as_deref().unwrap_or("keep") {
+        "keep" => PathMode::Keep,
+        "double_backslash" => PathMode::DoubleBackslash,
+        "forward" => PathMode::Forward,
+        o => {
+            errors.push(format!("clipboard: paths \"{o}\" inválido"));
+            PathMode::Keep
+        }
+    };
+    let extract = match c.extract.as_deref().unwrap_or("off") {
+        "off" => Extract::Off,
+        "urls" => Extract::Urls,
+        "emails" => Extract::Emails,
+        o => {
+            errors.push(format!("clipboard: extract \"{o}\" inválido"));
+            Extract::Off
+        }
+    };
+    if c.replace.len() > 50 {
+        errors.push("clipboard: no máximo 50 trocas".into());
+    }
+    Some(Options {
+        strip_tracking: c.strip_tracking,
+        trim: c.trim,
+        unwrap: c.unwrap,
+        casing,
+        paths,
+        extract,
+        replacements: c
+            .replace
+            .iter()
+            .map(|r| (r.from.clone(), r.to.clone()))
+            .collect(),
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,6 +258,17 @@ struct RawTiling {
     gap: Option<u32>,
     outer_gap: Option<u32>,
     master_ratio: Option<f32>,
+    portrait_layout: Option<Layout>,
+    #[serde(default)]
+    monitor: Vec<RawMonitor>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMonitor {
+    index: usize,
+    layout: Option<Layout>,
+    max_windows: Option<usize>,
 }
 
 fn yes() -> bool {
@@ -157,12 +284,25 @@ struct RawBar {
     foreground: Option<String>,
     font: Option<String>,
     font_size: Option<u32>,
+    font_weight: Option<u32>,
+    icons_only_from: Option<u32>,
+    hide_when_maximized: Option<bool>,
+    always_visible_when_empty: Option<bool>,
+    visible_on_desktop: Option<bool>,
+    active_outline: Option<bool>,
     #[serde(default)]
     hide_native_taskbar: bool,
+    /// Lista ordenada dos módulos (substitui left/center/right: a ordem manda, sem âncoras).
+    modules: Option<Vec<Module>>,
     left: Option<Vec<Module>>,
     center: Option<Vec<Module>>,
     right: Option<Vec<Module>>,
     clock_format: Option<String>,
+    #[serde(default)]
+    islands: bool,
+    island_radius: Option<u32>,
+    island_margin: Option<u32>,
+    island_align: Option<bar::IslandAlign>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,6 +319,87 @@ fn color(text: &str) -> Result<Rgb, String> {
     }
     let n = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).unwrap_or(0);
     Ok(Rgb(n(0), n(2), n(4)))
+}
+
+fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widget::WidgetConfig> {
+    use crate::widget::{MAX_SIZE, MAX_WIDGETS, MIN_SIZE, WidgetConfig, WidgetKind};
+    if raw.len() > MAX_WIDGETS {
+        errors.push(format!("widget: no máximo {MAX_WIDGETS}"));
+        return Vec::new();
+    }
+    let mut out: Vec<WidgetConfig> = Vec::new();
+    for (i, w) in raw.iter().enumerate() {
+        let id = w.id.clone().unwrap_or_else(|| format!("widget{}", i + 1));
+        if id.is_empty() || id.contains(char::is_whitespace) {
+            errors.push(format!("widget {}: id sem espaços", i + 1));
+            continue;
+        }
+        if out.iter().any(|o| o.id == id) {
+            errors.push(format!("widget \"{id}\" repetido"));
+            continue;
+        }
+        let mut pick = |t: &Option<String>, d: Rgb| match t.as_deref().map(color) {
+            Some(Ok(c)) => c,
+            Some(Err(e)) => {
+                errors.push(format!("widget \"{id}\": {e}"));
+                d
+            }
+            None => d,
+        };
+        let background = pick(&w.background, Rgb(0x14, 0x16, 0x1A));
+        let foreground = pick(&w.foreground, Rgb(0xFF, 0xFF, 0xFF));
+        let (dw, dh) = match w.kind {
+            WidgetKind::Media => (300, 90),
+            WidgetKind::Agenda | WidgetKind::Tasks => (300, 170),
+            WidgetKind::Calendar => (270, 190),
+            _ => (170, 100),
+        };
+        let width = w.width.unwrap_or(dw);
+        let height = w.height.unwrap_or(dh);
+        if !(MIN_SIZE..=MAX_SIZE).contains(&width) || !(MIN_SIZE..=MAX_SIZE).contains(&height) {
+            errors.push(format!(
+                "widget \"{id}\": width e height vão de {MIN_SIZE} a {MAX_SIZE}"
+            ));
+            continue;
+        }
+        let font_size = w
+            .font_size
+            .unwrap_or(if w.kind.is_list() { 13 } else { 24 });
+        if !(8..=96).contains(&font_size) || w.radius.unwrap_or(16) > 60 {
+            errors.push(format!("widget \"{id}\": font_size 8 a 96 e radius 0 a 60"));
+            continue;
+        }
+        let opacity = w.opacity.unwrap_or(100);
+        if opacity > 100 {
+            errors.push(format!("widget \"{id}\": opacity vai de 0 a 100"));
+            continue;
+        }
+        let format = w
+            .format
+            .clone()
+            .unwrap_or_else(|| bar::DEFAULT_CLOCK.into());
+        if format.len() > 40 {
+            errors.push(format!("widget \"{id}\": format longo demais"));
+            continue;
+        }
+        out.push(WidgetConfig {
+            id,
+            kind: w.kind,
+            x: w.x.unwrap_or(80 + 30 * i as i32),
+            y: w.y.unwrap_or(80 + 30 * i as i32),
+            width,
+            height,
+            background,
+            foreground,
+            radius: w.radius.unwrap_or(16),
+            opacity,
+            font_size,
+            locked: w.locked,
+            format,
+            city: w.city.clone().unwrap_or_else(|| "São Paulo".into()),
+        });
+    }
+    out
 }
 
 fn action(h: &RawHotkey) -> Result<Action, String> {
@@ -220,6 +441,7 @@ fn action(h: &RawHotkey) -> Result<Action, String> {
         "toggle-float" => named(Action::ToggleFloat),
         "master-grow" => named(Action::MasterGrow),
         "master-shrink" => named(Action::MasterShrink),
+        "snap-layouts" => named(Action::SnapLayouts),
         other => Err(format!("ação desconhecida \"{other}\"")),
     }
 }
@@ -294,11 +516,32 @@ fn parse_tiling(t: &RawTiling, errors: &mut Vec<String>) -> Option<TilingConfig>
             tiling::MAX_RATIO
         ));
     }
+    let mut monitors = Vec::new();
+    for m in &t.monitor {
+        if !(1..=16).contains(&m.index) {
+            errors.push("tiling.monitor: index vai de 1 a 16 (1 = monitor mais à esquerda)".into());
+        } else if monitors
+            .iter()
+            .any(|r: &tiling::MonitorRule| r.index == m.index)
+        {
+            errors.push(format!("tiling.monitor: index {} repetido", m.index));
+        }
+        if m.max_windows.is_some_and(|n| !(1..=12).contains(&n)) {
+            errors.push("tiling.monitor: max_windows vai de 1 a 12".into());
+        }
+        monitors.push(tiling::MonitorRule {
+            index: m.index,
+            layout: m.layout,
+            max_windows: m.max_windows,
+        });
+    }
     (errors.len() == before).then_some(TilingConfig {
         layout: t.layout.unwrap_or(Layout::MasterStack),
         gap,
         outer_gap,
         master_ratio,
+        portrait_layout: t.portrait_layout.unwrap_or(Layout::Rows),
+        monitors,
     })
 }
 
@@ -330,6 +573,14 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
             bar::MAX_FONT
         ));
     }
+    let font_weight = b.font_weight.unwrap_or(700);
+    if !(100..=900).contains(&font_weight) {
+        errors.push("bar: font_weight deve ficar entre 100 e 900".into());
+    }
+    let icons_only_from = b.icons_only_from.unwrap_or(3);
+    if icons_only_from > 30 {
+        errors.push("bar: icons_only_from vai de 0 a 30".into());
+    }
     let font = b.font.clone().unwrap_or_else(|| "Segoe UI".into());
     if font.trim().is_empty() || font.chars().count() > 31 || font.contains('\0') {
         errors.push("bar: font inválida".into());
@@ -341,23 +592,53 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
     if clock_format.chars().count() > 40 {
         errors.push("bar: clock_format longo demais".into());
     }
-    let (left, center, right) = (
-        b.left.clone().unwrap_or_else(|| vec![Module::Title]),
-        b.center.clone().unwrap_or_default(),
-        b.right
-            .clone()
-            .unwrap_or_else(|| vec![Module::Cpu, Module::Ram, Module::Clock]),
-    );
+    let (left, center, right) = if let Some(m) = b.modules.clone() {
+        // Lista ordenada: a ordem é a da lista, da esquerda para a direita.
+        (m, Vec::new(), Vec::new())
+    } else {
+        (
+            b.left.clone().unwrap_or_else(|| vec![Module::Title]),
+            b.center.clone().unwrap_or_default(),
+            b.right.clone().unwrap_or_else(|| {
+                if b.islands {
+                    vec![
+                        Module::Network,
+                        Module::Volume,
+                        Module::Cpu,
+                        Module::Ram,
+                        Module::Clock,
+                    ]
+                } else {
+                    vec![Module::Cpu, Module::Ram, Module::Clock]
+                }
+            }),
+        )
+    };
     if left.len() + center.len() + right.len() > 12 {
         errors.push("bar: no máximo 12 módulos".into());
     }
+    let island_radius = b.island_radius.unwrap_or(12);
+    let island_margin = b.island_margin.unwrap_or(6);
+    if island_radius > 40 || island_margin > 40 {
+        errors.push("bar: island_radius e island_margin vão de 0 a 40".into());
+    }
     (errors.len() == before).then_some(BarConfig {
+        islands: b.islands,
+        island_radius,
+        island_margin,
+        island_align: b.island_align.unwrap_or(bar::IslandAlign::Center),
         edge: b.edge.unwrap_or(Edge::Top),
         height,
         background,
         foreground,
         font,
         font_size,
+        font_weight,
+        icons_only_from,
+        hide_when_maximized: b.hide_when_maximized.unwrap_or(true),
+        always_visible_when_empty: b.always_visible_when_empty.unwrap_or(true),
+        visible_on_desktop: b.visible_on_desktop.unwrap_or(true),
+        active_outline: b.active_outline.unwrap_or(false),
         hide_native_taskbar: b.hide_native_taskbar,
         left,
         center,
@@ -456,26 +737,35 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
         .launcher
         .as_ref()
         .and_then(|l| parse_launcher(l, &mut hotkeys, &mut errors));
+    let clipboard = raw
+        .clipboard
+        .as_ref()
+        .and_then(|c| parse_clipboard(c, &mut errors));
+
+    let widgets = parse_widgets(&raw.widget, &mut errors);
 
     if errors.is_empty() {
         Ok(Config {
+            widgets,
             hotkeys,
             rules,
             borders,
             bar,
             tiling,
             launcher,
+            clipboard,
+            middle_click_close: raw.taskbar.as_ref().is_some_and(|t| t.middle_click_close),
         })
     } else {
         Err(errors)
     }
 }
 
-/// `%APPDATA%\Sentinela\desktop.toml`.
+/// `%APPDATA%\WON\desktop.toml`.
 pub fn default_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(std::env::temp_dir)
-        .join("Sentinela")
+        .join("WON")
         .join("desktop.toml")
 }
 
@@ -585,6 +875,27 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # inactive = "#3A3A3C"
 
 # Lançador: caixa de busca de apps, janelas abertas e contas (ex.: 2*(3+4)).
+# [taskbar]
+# middle_click_close = true   # clique do meio no botão da barra fecha o programa (experimental)
+#
+# [[widget]]                  # widget na área de trabalho (arraste com o mouse)
+# kind = "clock"              # clock, cpu, ram, network ou media
+# x = 80
+# y = 80
+# width = 170
+# height = 100
+# locked = false              # true: não deixa arrastar
+# [clipboard]                 # copiar e colar inteligente (limpa o texto ao copiar)
+# strip_tracking = true       # tira utm_*, fbclid, gclid das URLs
+# trim = true                 # tira espaços do começo e do fim
+# unwrap = false              # junta linhas quebradas (texto de PDF)
+# casing = "keep"             # keep, lower, upper, title
+# paths = "keep"              # keep, double_backslash, forward
+# extract = "off"             # off, urls, emails
+# [[clipboard.replace]]
+# from = "foo"
+# to = "bar"
+#
 # [launcher]
 # hotkey = "Alt+Space"
 # max_results = 8              # 3 a 15
@@ -599,8 +910,13 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # gap = 8
 # outer_gap = 8
 # master_ratio = 0.55          # 0,2 a 0,8
+# portrait_layout = "rows"     # layout dos monitores em retrato (janelas empilhadas)
+# [[tiling.monitor]]           # regra por monitor (1 = o mais à esquerda)
+# index = 2
+# layout = "rows"
+# max_windows = 3              # 2 ou 3 zonas empilhadas
 # Ações de atalho do tiling: tile-toggle, tile-next-layout, focus-next, focus-prev,
-# swap-master, toggle-float, master-grow, master-shrink.
+# swap-master, toggle-float, master-grow, master-shrink, snap-layouts (abre os layouts de encaixe do Windows, Win+Z).
 
 # Barra própria (fica ocupando a borda; janelas maximizadas não passam por baixo dela).
 # [bar]
@@ -610,15 +926,43 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # foreground = "#FFFFFF"
 # font = "Segoe UI"
 # font_size = 12
+# font_weight = 700            # 100 a 900 (400 normal, 700 negrito)
+# hide_when_maximized = true  # some enquanto uma janela estiver maximizada
+# always_visible_when_empty = true  # sem nenhum app aberto, a barra fica sempre visível
+# visible_on_desktop = true  # clicar na área de trabalho não esconde a barra
+# active_outline = false # contorno em volta do ícone do app ativo
+# icons_only_from = 3          # com 3 ou mais janelas, a ilha mostra só ícones (0 = nunca)
 # left = ["title"]             # módulos: title, clock, cpu, ram
 # center = []
 # right = ["cpu", "ram", "clock"]
 # clock_format = "%H:%M"       # %H %M %S %d %m %Y %y
 # hide_native_taskbar = false  # esconde a barra do Windows enquanto o programa roda
+# islands = false              # duas ilhas: janelas abertas (largura ajustada) e módulos à direita
+# island_radius = 12           # 0 a 40
+# island_margin = 6            # 0 a 40
+# island_align = "center"      # center ou left (ilha de janelas)
 "##;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn parses_widgets_and_rejects_bad_ones() {
+        let ok = parse(
+            "[[widget]]\nkind = \"clock\"\nid = \"hora\"\n[[widget]]\nkind = \"cpu\"\nwidth = 200\nheight = 80\nlocked = true\n",
+        )
+        .unwrap();
+        assert_eq!(ok.widgets.len(), 2);
+        assert_eq!(ok.widgets[0].id, "hora");
+        assert_eq!(ok.widgets[1].id, "widget2");
+        assert!(ok.widgets[1].locked);
+        assert!(parse("[[widget]]\nkind = \"cpu\"\nwidth = 10\n").is_err());
+        assert!(parse("[[widget]]\nkind = \"clima\"\n").is_err());
+        assert_eq!(ok.widgets[0].opacity, 100);
+        let t = parse("[[widget]]\nkind = \"clock\"\nopacity = 0\n").unwrap();
+        assert_eq!(t.widgets[0].opacity, 0);
+        assert!(parse("[[widget]]\nkind = \"clock\"\nopacity = 101\n").is_err());
+    }
+
     use super::*;
     use std::fs;
 
@@ -678,9 +1022,30 @@ mod tests {
         assert!(parse("[tiling]\nmaster_ratio=0.95\n").is_err());
         assert!(parse("[tiling]\ngap=500\n").is_err());
         assert!(parse("[tiling]\nlayout=\"spiral\"\n").is_err());
+        let c = parse("[tiling]\n[[tiling.monitor]]\nindex=2\nlayout=\"rows\"\nmax_windows=3\n")
+            .unwrap();
+        let t = c.tiling.unwrap();
+        assert_eq!(t.portrait_layout, Layout::Rows);
+        assert_eq!(t.monitors[0].max_windows, Some(3));
+        assert!(parse("[tiling]\n[[tiling.monitor]]\nindex=0\n").is_err());
         assert!(
             parse("[[hotkey]]\nkeys=\"Win+J\"\naction=\"focus-next\"\ncommand=\"x\"\n").is_err()
         );
+    }
+
+    #[test]
+    fn bar_modules_are_an_ordered_list() {
+        let c = parse("[bar]\nmodules=[\"clock\",\"title\",\"cpu\"]\nleft=[\"ram\"]\n").unwrap();
+        let b = c.bar.unwrap();
+        assert_eq!(
+            b.left,
+            vec![
+                crate::bar::Module::Clock,
+                crate::bar::Module::Title,
+                crate::bar::Module::Cpu
+            ]
+        );
+        assert!(b.center.is_empty() && b.right.is_empty());
     }
 
     #[test]
@@ -699,6 +1064,12 @@ mod tests {
         assert!(parse("[bar]\nleft=[\"coisa\"]\n").is_err());
         assert!(parse("[bar]\nedge=\"left\"\n").is_err());
         assert!(parse("[bar]\nmagia=1\n").is_err());
+        let b = parse("[bar]\nislands=true\nisland_radius=20\nisland_align=\"left\"\n")
+            .unwrap()
+            .bar
+            .unwrap();
+        assert!(b.islands && b.island_radius == 20 && b.island_align == bar::IslandAlign::Left);
+        assert!(parse("[bar]\nisland_margin=99\n").is_err());
     }
 
     #[test]
@@ -812,5 +1183,56 @@ active = "azul"
         fs::write(&p, "#".repeat(300 * 1024)).unwrap();
         let mut l = Loader::new(&p);
         assert!(matches!(l.reload(), Reload::Rejected(_)));
+    }
+}
+
+#[cfg(test)]
+mod editor_roundtrip {
+    use super::*;
+
+    /// O que o editor visual do app escreve (desktopToml.ts) tem de ser aceito pelo daemon.
+    #[test]
+    fn visual_editor_output_is_accepted() {
+        let text = r##"
+[[hotkey]]
+keys = "Alt+Return"
+action = "toggle-maximize"
+
+[bar]
+edge = "bottom"
+height = 36
+background = "#101018"
+foreground = "#FFFFFF"
+font = "Segoe UI"
+font_size = 10
+hide_native_taskbar = false
+left = ["title"]
+center = ["clock"]
+right = ["cpu", "ram"]
+clock_format = "%H:%M"
+islands = true
+island_radius = 12
+island_margin = 6
+island_align = "center"
+
+[tiling]
+layout = "master-stack"
+gap = 8
+outer_gap = 8
+master_ratio = 0.55
+portrait_layout = "rows"
+
+[[tiling.monitor]]
+index = 2
+layout = "rows"
+max_windows = 3
+
+[launcher]
+hotkey = "Alt+Space"
+max_results = 8
+"##;
+        let c = parse(text).unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(c.tiling.is_some());
+        assert!(c.bar.is_some());
     }
 }

@@ -85,7 +85,7 @@ pub fn accent_tweak(c: Rgb) -> Tweak {
     Tweak {
         id: ACCENT_ID.into(),
         title: format!("Cor de destaque do Windows ({})", c.hex()),
-        description: "Muda a cor de destaque do Windows para a do tema.".into(),
+        description: "Muda a cor de destaque do Windows para a do tema e liga o modo escuro (apps e sistema).".into(),
         group: Group::Personalizacao,
         evidence: Evidence::Comprovado,
         effect: Effect::Relogon,
@@ -104,6 +104,18 @@ pub fn accent_tweak(c: Rgb) -> Tweak {
                 r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent",
                 "AccentColorMenu",
                 abgr(c),
+            ),
+            // Modo escuro dos apps e do sistema: a pesquisa do Windows (resultados em WebView2)
+            // só escurece por aqui, o XAML não alcança.
+            dword(
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "AppsUseLightTheme",
+                0,
+            ),
+            dword(
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "SystemUsesLightTheme",
+                0,
             ),
         ],
         choice: None,
@@ -133,17 +145,18 @@ fn resolve_accent(theme: &Theme, env: &Env, warnings: &mut Vec<String>) -> Optio
 
 /// Cor dominante da miniatura do wallpaper do tema (ou do que está em uso).
 fn color_from_wallpaper(theme: &Theme, env: &Env, warnings: &mut Vec<String>) -> Option<Rgb> {
-    let item = match &theme.wallpaper {
-        Some(w) => project_json(env, &w.workshop_id).map(|(_, i)| i),
-        None => env.wallpaper.as_ref().and_then(|w| {
-            let file = PathBuf::from(w.current.as_ref()?);
-            gallery::read_item(file.parent()?)
-        }),
+    let current = env.wallpaper.as_ref().and_then(|w| w.current.clone());
+    let from_item = match &theme.wallpaper {
+        Some(w) => project_json(env, &w.workshop_id)
+            .and_then(|(_, i)| i.preview)
+            .and_then(|p| std::fs::read(p).ok())
+            .and_then(|b| accent_from_image(&b)),
+        None => None,
     };
-    let c = item
-        .and_then(|i| i.preview)
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|b| accent_from_image(&b));
+    let c = from_item.or_else(|| {
+        crate::wallpaper::palette::wallpaper_image_bytes(current.as_deref())
+            .and_then(|b| accent_from_image(&b))
+    });
     if c.is_none() {
         warnings.push(
             "não consegui tirar a cor do papel de parede; as cores que dependem dele ficam como estão"
@@ -427,11 +440,11 @@ fn save_history(path: &Path, h: &History) -> Result<(), String> {
     write().map_err(|e| format!("não foi possível gravar o histórico de temas: {e}"))
 }
 
-/// `%LOCALAPPDATA%\\Sentinela\\themes\\history.json`.
+/// `%LOCALAPPDATA%\\WON\\themes\\history.json`.
 pub fn default_history_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
-        .join("Sentinela")
+        .join("WON")
         .join("themes")
         .join("history.json")
 }

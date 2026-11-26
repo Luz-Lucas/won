@@ -1,3 +1,5 @@
+import ShellMods from "../components/ShellMods";
+import SystemFont from "../components/SystemFont";
 import { useCallback, useEffect, useState } from "react";
 import {
   relaunchElevated,
@@ -25,7 +27,6 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import Desktop from "../components/Desktop";
 import Terminal from "../components/Terminal";
 import Loja from "../components/Loja";
-import Themes from "../components/Themes";
 import StylePreview, { effectiveOn } from "../components/StylePreview";
 import type { Page } from "../components/Sidebar";
 import WallpaperGallery from "../components/WallpaperGallery";
@@ -41,7 +42,8 @@ const EFFECT_NOTICE: Partial<Record<TweakEffect, string>> = {
 };
 
 const EXPLORER_NOTICE = "Reinicie o Explorer para ver a mudança.";
-const EXTERNAL = "Configurado fora do WON.";
+const EXTERNAL_NOTE =
+  "Ligado fora do WON. Ao desligar aqui, volta ao padrão do Windows.";
 const ADMIN = "requer administrador";
 
 const OTHER_ACCOUNT =
@@ -162,6 +164,12 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
     setStarted({ effect: p.item.tweak.effect });
     setRestartState({ kind: "idle" });
     if (p.kind === "on") void job.start(() => tweaksApply([id]));
+    else if (p.kind === "off" && !p.item.in_journal)
+      void job.start(async () => {
+        // Ajuste ligado fora do app: primeiro assume no diário, depois desfaz.
+        await tweaksApply([id]);
+        return tweaksUndo([id]);
+      });
     else if (p.kind === "off") void job.start(() => tweaksUndo([id]));
     else void job.start(() => tweaksApplyChoice(id));
   };
@@ -198,7 +206,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
   const renderSwitch = (i: TweakItem) => {
     const t = i.tweak;
     const external = applied(i) && !i.in_journal;
-    const disabled = running || !usable(i) || external;
+    const disabled = running || !usable(i);
     return (
       <li
         key={t.id}
@@ -224,7 +232,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
           {applied(i) && <span className="tweak-badge">Aplicado</span>}
           {badges(i)}
         </div>
-        {external && <p className="muted clean-warning">{EXTERNAL}</p>}
+        {external && <p className="muted clean-warning">{EXTERNAL_NOTE}</p>}
         {blockedNote(i)}
       </li>
     );
@@ -419,7 +427,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
   );
 }
 
-type View = "hub" | TweakArea | "wallpaper" | "temas" | "loja" | "terminal" | "desktop";
+type View = "hub" | TweakArea | "wallpaper" | "loja" | "terminal" | "desktop";
 
 /** Estilização: um menu de áreas; cada uma com referência, prévia e seus controles. */
 export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page) => void }) {
@@ -461,6 +469,10 @@ export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page)
         <>
           <h2>{info.title}</h2>
           <p className="muted">{info.description}</p>
+          {(view === "barra" || view === "iniciar") && (
+            <ShellMods only={view === "iniciar" ? ["xaml"] : ["xaml", "icones", "rotulos"]} />
+          )}
+          {view === "sistema" && <SystemFont />}
           <details className="style-reference">
             <summary>Referências: o que esta área muda</summary>
             <ul>
@@ -537,7 +549,6 @@ export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page)
       </div>
       {view === "wallpaper" && engine && <WallpaperGallery status={engine} />}
       {view === "loja" && <Loja />}
-      {view === "temas" && <Themes engine={engine?.installed ?? false} />}
       {view === "desktop" && desk && <Desktop status={desk} onChanged={loadDesk} />}
       {view === "terminal" && term && (
         <Terminal status={term} engine={engine?.installed ?? false} onChanged={loadTerm} />
@@ -551,7 +562,6 @@ const HUB_ORDER: Exclude<View, "hub">[] = [
   "iniciar",
   "explorador",
   "aparencia",
-  "temas",
   "loja",
   "wallpaper",
   "terminal",

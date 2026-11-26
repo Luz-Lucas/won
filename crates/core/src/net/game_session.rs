@@ -11,11 +11,11 @@ use serde::{Deserialize, Serialize};
 use super::routes::RouteBackend;
 use crate::games::running::diff;
 
-/// `%LOCALAPPDATA%\Sentinela\net-game.json`.
+/// `%LOCALAPPDATA%\WON\net-game.json`.
 pub fn default_settings_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("net-game.json")
 }
 

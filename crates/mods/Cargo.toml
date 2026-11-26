@@ -25,3 +25,6 @@ windows-sys = { workspace = true, features = ["Win32_System_Diagnostics_Debug", 
 [dev-dependencies]
 tempfile.workspace = true
 goblin.workspace = true
+
+[build-dependencies]
+embed-resource = "3"

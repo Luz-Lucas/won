@@ -29,11 +29,11 @@ pub struct ActivityEntry {
     pub summary: String,
 }
 
-/// `%LOCALAPPDATA%\Sentinela\activity.json`.
+/// `%LOCALAPPDATA%\WON\activity.json`.
 pub fn default_activity_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("activity.json")
 }
 

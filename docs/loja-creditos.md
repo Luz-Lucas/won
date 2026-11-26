@@ -93,3 +93,6 @@ Loja pública.
 - Ícones de marca (Discord, Spotify, Steam...) não entram na Loja pública (marca registrada);
   se um dia forem feitos, só para uso local na máquina do usuário.
 - Os ponteiros de espera animados (`Wait`, `AppStarting`) são `.ani` de 12 quadros gerados à mão.
+
+## Cursores de vsthemes.org (modest-dark, dot-m, windows-11-cursors-concept-v2)
+Pacotes `cursor-modest-dark`, `cursor-win11-concept`, `cursor-dot-escuro`, `cursor-dot-claro`: obtidos em vsthemes.org; a licença de uso foi confirmada pelo usuário (Lucas) em 25/11/2026.

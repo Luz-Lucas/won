@@ -11,8 +11,10 @@ use std::ffi::c_void;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT};
 use windows_sys::Win32::Graphics::Dwm::DwmGetWindowAttribute;
 use windows_sys::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+    EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+    MonitorFromWindow,
 };
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GW_OWNER, GWL_EXSTYLE, GWL_STYLE, GetForegroundWindow, GetWindow, GetWindowLongW,
     GetWindowRect, IsIconic, IsWindow, IsWindowVisible, IsZoomed, SW_RESTORE, SWP_NOACTIVATE,
@@ -24,6 +26,8 @@ const DWMWA_CLOAKED: u32 = 14;
 const WS_THICKFRAME: u32 = 0x0004_0000;
 const WS_MAXIMIZEBOX: u32 = 0x0001_0000;
 const RATIO_STEP: f32 = 0.05;
+/// Distância (px) a partir da qual uma janela é considerada movida pelo usuário.
+const MOVED_PX: i32 = 96;
 
 pub struct Tiler {
     pub enabled: bool,
@@ -34,6 +38,17 @@ pub struct Tiler {
     saved: HashMap<isize, RECT>,
     /// Última disposição aplicada: não mexe de novo se nada mudou.
     last: Vec<(isize, Rect)>,
+    /// Quando a última disposição foi aplicada: logo depois, as janelas ainda estão se ajustando
+    /// (troca de DPI entre monitores, animações) e não contam como "movidas".
+    placed_at: Option<std::time::Instant>,
+    /// Verificações seguidas em que a janela estava longe do lugar.
+    strikes: HashMap<isize, u8>,
+    /// Janelas com tamanho mínimo maior que o espaço (Spotify): ficam do tamanho que têm, na
+    /// borda direita, e as outras se organizam no que sobra. Valor = largura.
+    reserved: HashMap<isize, i32>,
+    seen: usize,
+    /// Última execução de `retile`: eventos em rajada (janela abrindo, tooltips) não refazem tudo.
+    last_run: Option<std::time::Instant>,
 }
 
 impl Tiler {
@@ -45,11 +60,18 @@ impl Tiler {
                 gap: 8,
                 outer_gap: 8,
                 master_ratio: 0.55,
+                portrait_layout: Layout::Rows,
+                monitors: Vec::new(),
             },
             order: HashMap::new(),
             floating: HashSet::new(),
             saved: HashMap::new(),
             last: Vec::new(),
+            placed_at: None,
+            last_run: None,
+            strikes: HashMap::new(),
+            reserved: HashMap::new(),
+            seen: usize::MAX,
         }
     }
 
@@ -57,12 +79,16 @@ impl Tiler {
     pub fn configure(&mut self, cfg: Option<&TilingConfig>, rules: &[Rule]) {
         match cfg {
             Some(c) => {
+                crate::dlog::log(&format!("tiling LIGADO: {c:?}"));
                 self.cfg = c.clone();
                 self.enabled = true;
                 self.last.clear();
                 self.retile(rules);
             }
-            None => self.disable(),
+            None => {
+                crate::dlog::log("tiling DESLIGADO (sem [tiling] ou enabled=false)");
+                self.disable();
+            }
         }
     }
 
@@ -97,12 +123,33 @@ impl Tiler {
         if !self.enabled {
             return;
         }
+        // Rajadas de eventos (cada janela/tooltip que aparece dispara um): no máximo ~4 passadas por
+        // segundo; o relógio de 1 s fecha o que sobrar. Antes cada evento varria todas as janelas.
+        if self
+            .last_run
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(250))
+        {
+            return;
+        }
+        self.last_run = Some(std::time::Instant::now());
         let fg = unsafe { GetForegroundWindow() };
         // Em jogo (janela cobrindo o monitor) ninguém é movido.
         if !fg.is_null() && is_covering(fg) {
             return;
         }
+        // Com o botão do mouse apertado alguém pode estar arrastando uma janela (ou o Snap do
+        // Windows está mostrando as zonas): não briga com o usuário, espera soltar.
+        if unsafe { GetAsyncKeyState(i32::from(VK_LBUTTON)) } < 0 {
+            return;
+        }
+        self.release_moved_windows();
         let found = candidates(rules, &self.floating);
+        if found.len() != self.seen {
+            self.seen = found.len();
+            crate::dlog::log(&format!("tiling: {} janela(s) candidata(s)", found.len()));
+        }
+        self.reserved
+            .retain(|h, _| found.iter().any(|(f, _)| f == h));
         let mut per_monitor: HashMap<isize, Vec<isize>> = HashMap::new();
         for (hwnd, mon) in &found {
             per_monitor.entry(*mon).or_default().push(*hwnd);
@@ -118,15 +165,44 @@ impl Tiler {
             }
         }
 
+        let monitors = monitors_left_to_right();
         let mut plan: Vec<(isize, Rect)> = Vec::new();
         for (mon, list) in &self.order {
             let Some(area) = work_area(*mon as *mut c_void) else {
                 continue;
             };
-            for (h, r) in list
+            let (resv, norm): (Vec<isize>, Vec<isize>) = list
                 .iter()
-                .zip(tiling::arrange(&self.cfg, area, list.len()))
-            {
+                .copied()
+                .partition(|h| self.reserved.contains_key(h));
+            // Janelas que não encolhem ficam na borda direita, do tamanho que têm.
+            let mut right_edge = area.right;
+            for h in &resv {
+                let w = self.reserved[h].min(area.right - area.left);
+                plan.push((
+                    *h,
+                    Rect {
+                        left: right_edge - w,
+                        top: area.top,
+                        right: right_edge,
+                        bottom: area.bottom,
+                    },
+                ));
+                right_edge -= w + self.cfg.gap as i32;
+            }
+            let area = Rect {
+                right: right_edge.max(area.left + 200),
+                ..area
+            };
+            let index = monitors.iter().position(|m| m == mon).map_or(1, |i| i + 1);
+            let (layout, max) = self.cfg.for_monitor(index, area);
+            // Acima do limite do monitor, as janelas ficam soltas onde estão.
+            let n = max.map_or(norm.len(), |m| m.min(norm.len()));
+            let cfg = TilingConfig {
+                layout,
+                ..self.cfg.clone()
+            };
+            for (h, r) in norm.iter().zip(tiling::arrange(&cfg, area, n)) {
                 plan.push((*h, r));
             }
         }
@@ -137,7 +213,70 @@ impl Tiler {
         for (h, r) in &plan {
             self.place(*h as HWND, *r);
         }
+        crate::dlog::log(&format!(
+            "tiling: {} janela(s) organizadas: {:?}",
+            plan.len(),
+            plan
+        ));
         self.last = plan;
+        self.placed_at = Some(std::time::Instant::now());
+    }
+
+    /// Janela que o usuário arrastou ou encaixou (Snap do Windows, Win+setas) para outro lugar
+    /// deixa de ser organizada: fica onde ele a pôs. `toggle-float` a traz de volta.
+    fn release_moved_windows(&mut self) {
+        if self
+            .placed_at
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(1500))
+        {
+            return;
+        }
+        let mut moved = Vec::new();
+        for (h, want) in &self.last {
+            let hwnd = *h as HWND;
+            unsafe {
+                if IsWindow(hwnd) == 0 {
+                    continue;
+                }
+                let mut vis: RECT = std::mem::zeroed();
+                let ok = DwmGetWindowAttribute(
+                    hwnd,
+                    DWMWA_EXTENDED_FRAME_BOUNDS,
+                    (&raw mut vis).cast::<c_void>(),
+                    std::mem::size_of::<RECT>() as u32,
+                );
+                if ok != 0 || IsIconic(hwnd) != 0 {
+                    continue;
+                }
+                // Só o canto de cima à esquerda: janelas com tamanho mínimo maior que o espaço
+                // crescem para a direita e para baixo, mas não saem do lugar.
+                let far = (vis.left - want.left).abs() > MOVED_PX
+                    || (vis.top - want.top).abs() > MOVED_PX;
+                if far {
+                    let n = self.strikes.entry(*h).or_insert(0);
+                    *n += 1;
+                    // Duas verificações seguidas: um deslize momentâneo não solta a janela.
+                    if *n >= 2 {
+                        moved.push(*h);
+                    }
+                } else {
+                    self.strikes.remove(h);
+                }
+            }
+        }
+        if moved.is_empty() {
+            return;
+        }
+        crate::dlog::log(&format!(
+            "tiling: janelas soltas (movidas pelo usuário): {moved:?}"
+        ));
+        for h in moved {
+            self.strikes.remove(&h);
+            self.floating.insert(h);
+            // Fica onde o usuário pôs: não volta ao lugar antigo ao desligar o tiling.
+            self.saved.remove(&h);
+        }
+        self.last.clear();
     }
 
     fn place(&mut self, hwnd: HWND, target: Rect) {
@@ -149,6 +288,11 @@ impl Tiler {
             self.saved.entry(hwnd as isize).or_insert(cur);
             if IsZoomed(hwnd) != 0 {
                 ShowWindow(hwnd, SW_RESTORE);
+                // `cur` era o retângulo MAXIMIZADO: sem reler, a compensação das bordas sai
+                // gigante e a janela fica maior que a tela (e passa a "cobrir" o monitor).
+                if GetWindowRect(hwnd, &mut cur) == 0 {
+                    return;
+                }
             }
             // As janelas têm bordas invisíveis; compensa para os espaços
             // ficarem do tamanho certo.
@@ -169,6 +313,13 @@ impl Tiler {
             } else {
                 (0, 0, 0, 0)
             };
+            // Bordas invisíveis reais têm poucos pixels; algo maior é leitura de momento errado.
+            let sane = |v: i32| (0..=32).contains(&v);
+            let (dl, dt, dr, db) = if sane(dl) && sane(dt) && sane(dr) && sane(db) {
+                (dl, dt, dr, db)
+            } else {
+                (0, 0, 0, 0)
+            };
             SetWindowPos(
                 hwnd,
                 std::ptr::null_mut(),
@@ -178,6 +329,54 @@ impl Tiler {
                 (target.bottom - target.top) + dt + db,
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
+            // Janela com tamanho mínimo maior que o espaço (Spotify, por exemplo) não encolhe e
+            // vazaria para fora da tela, deixando o botão de fechar inalcançável: solta a janela
+            // do tiling e a traz toda para dentro da área de trabalho.
+            let mut now_r: RECT = std::mem::zeroed();
+            if GetWindowRect(hwnd, &mut now_r) != 0 {
+                let over_w =
+                    (now_r.right - now_r.left) > (target.right - target.left) + dl + dr + 8;
+                let over_h =
+                    (now_r.bottom - now_r.top) > (target.bottom - target.top) + dt + db + 8;
+                if over_w && !self.reserved.contains_key(&(hwnd as isize)) {
+                    // Não encolhe: reserva a largura que tem e deixa as outras janelas se ajustarem.
+                    self.reserved
+                        .insert(hwnd as isize, now_r.right - now_r.left - dl - dr);
+                    self.last.clear();
+                    crate::dlog::log(&format!(
+                        "tiling: janela {hwnd:?} tem largura mínima {}; as outras se ajustam",
+                        now_r.right - now_r.left
+                    ));
+                } else if over_w || over_h {
+                    self.floating.insert(hwnd as isize);
+                    self.saved.remove(&(hwnd as isize));
+                    self.last.clear();
+                    if let Some(area) = work_area(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST))
+                    {
+                        let (w, h) = (now_r.right - now_r.left, now_r.bottom - now_r.top);
+                        let x = (area.right - w)
+                            .max(area.left)
+                            .min(now_r.left.max(area.left));
+                        let y = (area.bottom - h).max(area.top).min(now_r.top.max(area.top));
+                        SetWindowPos(
+                            hwnd,
+                            std::ptr::null_mut(),
+                            x,
+                            y,
+                            0,
+                            0,
+                            windows_sys::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
+                                | SWP_NOZORDER
+                                | SWP_NOACTIVATE,
+                        );
+                    }
+                    crate::dlog::log(&format!(
+                        "tiling: janela {hwnd:?} não cabe no espaço ({}x{}); solta do tiling",
+                        now_r.right - now_r.left,
+                        now_r.bottom - now_r.top
+                    ));
+                }
+            }
         }
     }
 
@@ -257,6 +456,28 @@ impl Default for Tiler {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Monitores da esquerda para a direita (o primeiro é o índice 1 das regras).
+fn monitors_left_to_right() -> Vec<isize> {
+    unsafe extern "system" fn cb(mon: HMONITOR, _: HDC, rc: *mut RECT, lparam: LPARAM) -> i32 {
+        // SAFETY: `lparam` é o `Vec` emprestado por `monitors_left_to_right`; `rc` vem do sistema.
+        let out = unsafe { &mut *(lparam as *mut Vec<(i32, i32, isize)>) };
+        let r = unsafe { *rc };
+        out.push((r.left, r.top, mon as isize));
+        1
+    }
+    let mut found: Vec<(i32, i32, isize)> = Vec::new();
+    unsafe {
+        EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            Some(cb),
+            (&raw mut found) as LPARAM,
+        );
+    }
+    found.sort();
+    found.into_iter().map(|(_, _, m)| m).collect()
 }
 
 fn work_area(mon: *mut c_void) -> Option<Rect> {

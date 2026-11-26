@@ -23,3 +23,6 @@ tempfile.workspace = true
 sha2.workspace = true
 hex.workspace = true
 serde_json.workspace = true
+
+[build-dependencies]
+embed-resource = "3"

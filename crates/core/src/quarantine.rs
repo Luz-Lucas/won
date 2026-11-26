@@ -32,7 +32,7 @@ pub fn default_quarantine_dir() -> PathBuf {
     }
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("quarantine")
 }
 
@@ -659,7 +659,7 @@ mod tests {
     #[test]
     fn default_dir_shape() {
         if std::env::var_os("SENTINELA_QUARANTINE_DIR").is_none_or(|v| v.is_empty()) {
-            assert!(default_quarantine_dir().ends_with("Sentinela/quarantine"));
+            assert!(default_quarantine_dir().ends_with("WON/quarantine"));
         }
     }
 }

@@ -50,9 +50,14 @@ mod imp {
     }
 
     pub fn apply() {
-        let Some(dir) = std::env::var_os("LOCALAPPDATA") else { return };
-        let file = std::path::Path::new(&dir).join("Sentinela/mods/labels.rva");
-        let Some(rva) = std::fs::read_to_string(file).ok().and_then(|t| parse_rva(&t)) else {
+        let Some(dir) = std::env::var_os("LOCALAPPDATA") else {
+            return;
+        };
+        let file = std::path::Path::new(&dir).join("WON/mods/labels.rva");
+        let Some(rva) = std::fs::read_to_string(file)
+            .ok()
+            .and_then(|t| parse_rva(&t))
+        else {
             return;
         };
         let name: Vec<u16> = "Taskbar.dll\0".encode_utf16().collect();

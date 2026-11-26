@@ -10,12 +10,11 @@ vi.mock("../api", () => ({
   lojaApply: vi.fn(),
   lojaRemove: vi.fn(),
   lojaRevert: vi.fn(),
+  lojaCursorSize: vi.fn(),
+  lojaSetCursorSize: vi.fn(),
   lojaApplyShortcuts: vi.fn(),
   lojaRevertShortcuts: vi.fn(),
   restartExplorer: vi.fn(),
-  themePreview: vi.fn(),
-  themeApply: vi.fn(),
-  themeUndo: vi.fn(),
 }));
 
 const item = (o: Partial<api.LojaItem>): api.LojaItem => ({
@@ -41,6 +40,8 @@ const page = (items: api.LojaItem[]): api.LojaPage => ({ items, online: false, o
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(api.lojaCursorSize).mockResolvedValue(null);
+  vi.mocked(api.lojaSetCursorSize).mockResolvedValue();
 });
 
 describe("Loja", () => {
@@ -103,26 +104,14 @@ describe("Loja", () => {
     expect(screen.getByText("Flat")).toBeTruthy();
   });
 
-  it("tema: mostra a prévia e só aplica depois de confirmar", async () => {
+  it("muda o tamanho do ponteiro e desfaz", async () => {
     const user = userEvent.setup();
-    vi.mocked(api.lojaList).mockResolvedValue(
-      page([
-        item({ id: "c1", name: "Neon", installed: true }),
-        item({ id: "i1", kind: "icones", name: "Neon icons", installed: true }),
-        item({ id: "t1", kind: "temas", name: "Noite neon", toml: "version = 1", cursor: "c1", icons: "i1", installed: true }),
-      ]),
-    );
-    vi.mocked(api.themePreview).mockResolvedValue({
-      items: [{ kind: "tweak", label: "Tema escuro", detail: "", change: true }],
-      warnings: [],
-    } as unknown as api.ThemePreview);
-    vi.mocked(api.themeApply).mockResolvedValue({ record: null, results: [], warnings: [] } as unknown as api.ThemeApplied);
-    vi.mocked(api.lojaApply).mockResolvedValue({ id: "c1", restart_explorer: false });
+    vi.mocked(api.lojaList).mockResolvedValue(page([item({ id: "c1", name: "Noite" })]));
     render(<Loja />);
-    await user.click(await screen.findByRole("button", { name: "Aplicar tema Noite neon" }));
-    expect(api.themeApply).not.toHaveBeenCalled();
-    await user.click(await screen.findByRole("button", { name: "Aplicar tema" }));
-    await waitFor(() => expect(api.themeApply).toHaveBeenCalledWith("version = 1"));
-    await waitFor(() => expect(api.lojaApply).toHaveBeenCalledTimes(2));
+    await user.click(await screen.findByRole("button", { name: "Pequeno" }));
+    await waitFor(() => expect(api.lojaSetCursorSize).toHaveBeenCalledWith(24));
+    vi.mocked(api.lojaCursorSize).mockResolvedValue(24);
+    await user.click(await screen.findByRole("button", { name: "Desfazer tamanho" }));
+    await waitFor(() => expect(api.lojaSetCursorSize).toHaveBeenCalledWith(null));
   });
 });

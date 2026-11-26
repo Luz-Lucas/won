@@ -12,6 +12,7 @@ import Sidebar, { type Page } from "./components/Sidebar";
 import { JobsProvider, useJobSettled } from "./jobs";
 import Aplicativos from "./pages/Aplicativos";
 import Ajustes from "./pages/Ajustes";
+import Desempenho from "./pages/Desempenho";
 import Disco from "./pages/Disco";
 import Historico from "./pages/Historico";
 import Inicio from "./pages/Inicio";
@@ -24,6 +25,7 @@ import Quarentena from "./pages/Quarentena";
 import Seguranca, { type ExplorerRequest } from "./pages/Seguranca";
 import "./styles/tokens.css";
 import "./styles/app.css";
+import "./styles/ui.css";
 
 function Shell() {
   const [page, setPage] = useState<Page>("inicio");
@@ -141,6 +143,7 @@ function Shell() {
         {page === "disco" && <Disco />}
         {page === "historico" && <Historico />}
         {page === "ajustes" && <Ajustes />}
+        {page === "desempenho" && <Desempenho />}
       </main>
       {askQuit && (
         <ConfirmDialog

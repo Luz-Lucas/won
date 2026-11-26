@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use clap::{Parser, Subcommand};
-use sentinela_mods::{eject, inject_mod, recovery, registry};
+use sentinela_mods::{eject, inject_mod, migrate, recovery, registry};
 
 #[derive(Parser)]
 #[command(name = "sentinela-mods", about = "Motor de mods do WON")]
@@ -36,11 +36,18 @@ enum Cmd {
         #[arg(long)]
         experimental: bool,
     },
+    /// Mods 6/7: estilo da barra pela árvore XAML (método Windhawk). Desfazer: eject-all
+    ShellXaml {
+        dll: std::path::PathBuf,
+        #[arg(long)]
+        experimental: bool,
+    },
     /// Grava o script de recuperação e mostra o caminho
     Recovery,
 }
 
 fn main() -> Result<()> {
+    migrate::migrate_data_dirs();
     let dir = registry::data_dir();
     match Cli::parse().cmd {
         Cmd::List => {
@@ -77,14 +84,42 @@ fn main() -> Result<()> {
             let build = sysinfo::System::kernel_version()
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            let done = sentinela_mods::enable_shell_labels(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            let done = sentinela_mods::enable_shell_labels(
+                &dir,
+                &std::env::current_exe()?,
+                &dll,
+                build,
+                &[],
+                experimental,
+            )?;
             println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::ShellIcons { dll, experimental } => {
             let build = sysinfo::System::kernel_version()
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            let done = sentinela_mods::enable_shell_icons(&dir, &std::env::current_exe()?, &dll, build, &[], experimental)?;
+            let done = sentinela_mods::enable_shell_icons(
+                &dir,
+                &std::env::current_exe()?,
+                &dll,
+                build,
+                &[],
+                experimental,
+            )?;
+            println!("{} carregamento(s) no Explorer (build {build})", done.len());
+        }
+        Cmd::ShellXaml { dll, experimental } => {
+            let build = sysinfo::System::kernel_version()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            let done = sentinela_mods::enable_shell_xaml(
+                &dir,
+                &std::env::current_exe()?,
+                &dll,
+                build,
+                &[],
+                experimental,
+            )?;
             println!("{} carregamento(s) no Explorer (build {build})", done.len());
         }
         Cmd::Recovery => println!(

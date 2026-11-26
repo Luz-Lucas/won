@@ -11,6 +11,11 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: () => Promise.resolve(() => {}) }));
 
 vi.mock("../api", () => ({
+  systemFontStatus: vi.fn().mockResolvedValue(undefined),
+  systemFontSet: vi.fn(),
+  shellModsStatus: vi.fn().mockResolvedValue(undefined),
+  shellModSet: vi.fn(),
+  xamlCfgWrite: vi.fn(),
   tweaksList: vi.fn().mockResolvedValue({ tweaks: [], elevated: true, hkcu_allowed: true }),
   tweaksApply: vi.fn(),
   tweaksApplyChoice: vi.fn(),
@@ -23,12 +28,6 @@ vi.mock("../api", () => ({
   wallpaperGallery: vi.fn(),
   wallpaperOpen: vi.fn(),
   wallpaperPauseModeSet: vi.fn(),
-  themeList: vi.fn().mockResolvedValue({ themes: [], history: [] }),
-  themePreview: vi.fn(),
-  themeApply: vi.fn(),
-  themeUndo: vi.fn(),
-  themeExport: vi.fn(),
-  themeImport: vi.fn(),
   terminalStatus: vi.fn().mockRejectedValue("sem terminal"),
   desktopStatus: vi.fn(),
   desktopStart: vi.fn(),
@@ -68,7 +67,7 @@ describe("Desktop em Personalizar", () => {
   it("hidden_when_program_is_missing", async () => {
     m.desktopStatus.mockResolvedValue(status({ installed: false }));
     render(<Personalizar />);
-    await screen.findByRole("button", { name: "Temas" });
+    await screen.findByRole("button", { name: "Loja" });
     await waitFor(() => expect(m.desktopStatus).toHaveBeenCalled());
     expect(screen.getByRole("button", { name: "Desktop" })).toBeDisabled();
   });
@@ -122,9 +121,9 @@ describe("Editor visual do desktop", () => {
     expect(box.value).toContain("[bar]");
     expect(box.value).toContain("# vazio");
     expect(screen.getByRole("img", { name: "Prévia da barra própria" })).toBeTruthy();
-    await userEvent.selectOptions(screen.getByLabelText("Posição de Relógio"), "left");
+    await userEvent.click(screen.getByRole("button", { name: "Subir Relógio" }));
     expect((screen.getByLabelText("desktop.toml") as HTMLTextAreaElement).value).toMatch(
-      /left = \["title", "clock"\]/,
+      /modules = \["title", "cpu", "clock", "ram"\]/,
     );
     expect(m.desktopConfigCheck).toHaveBeenCalled();
   });

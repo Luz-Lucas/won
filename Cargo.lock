@@ -4978,6 +4978,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "ctrlc",
+ "embed-resource",
  "globset",
  "hex",
  "predicates",
@@ -5021,9 +5022,13 @@ name = "sentinela-desktop"
 version = "0.1.0"
 dependencies = [
  "dirs 7.0.0",
+ "embed-resource",
  "serde",
+ "serde_json",
  "tempfile",
  "toml 1.2.2+spec-1.1.0",
+ "ureq",
+ "windows",
  "windows-sys 0.61.2",
 ]
 
@@ -5048,6 +5053,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tempfile",
+ "toml 1.2.2+spec-1.1.0",
  "windows-sys 0.61.2",
 ]
 
@@ -5064,12 +5070,25 @@ name = "sentinela-mod-test"
 version = "0.1.0"
 
 [[package]]
+name = "sentinela-mod-xaml"
+version = "0.1.0"
+dependencies = [
+ "windows",
+ "windows-collections",
+ "windows-core",
+ "windows-future",
+ "windows-link",
+ "windows-numerics",
+]
+
+[[package]]
 name = "sentinela-mods"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
  "dirs 7.0.0",
+ "embed-resource",
  "goblin",
  "pdb",
  "serde",

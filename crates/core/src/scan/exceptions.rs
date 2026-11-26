@@ -1,5 +1,5 @@
 //! "Ignorar sempre" (§15.3): hashes que a verificação não mostra mais.
-//! Arquivo JSON em `%LOCALAPPDATA%\Sentinela\scan-exceptions.json`.
+//! Arquivo JSON em `%LOCALAPPDATA%\WON\scan-exceptions.json`.
 
 use std::path::{Path, PathBuf};
 
@@ -24,7 +24,7 @@ pub struct Exception {
 pub fn default_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Sentinela")
+        .join("WON")
         .join("scan-exceptions.json")
 }
 

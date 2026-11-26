@@ -5,8 +5,8 @@
 use crate::updater::Fetcher;
 use serde::{Deserialize, Serialize};
 
-pub const LATEST_URL: &str = "https://api.github.com/repos/Luz-Lucas/sentinela/releases/latest";
-const PAGE_PREFIX: &str = "https://github.com/Luz-Lucas/sentinela/";
+pub const LATEST_URL: &str = "https://api.github.com/repos/Luz-Lucas/won/releases/latest";
+const PAGE_PREFIX: &str = "https://github.com/Luz-Lucas/won/";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AppUpdate {
@@ -80,7 +80,7 @@ mod tests {
         }
     }
 
-    const NEW: &str = r#"{"tag_name":"v0.3.0","html_url":"https://github.com/Luz-Lucas/sentinela/releases/tag/v0.3.0"}"#;
+    const NEW: &str = r#"{"tag_name":"v0.3.0","html_url":"https://github.com/Luz-Lucas/won/releases/tag/v0.3.0"}"#;
 
     #[test]
     fn versions_compare_numerically() {
@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn drafts_prereleases_and_foreign_links_are_ignored() {
-        let pre = r#"{"tag_name":"v9.0.0","html_url":"https://github.com/Luz-Lucas/sentinela/x","prerelease":true}"#;
+        let pre = r#"{"tag_name":"v9.0.0","html_url":"https://github.com/Luz-Lucas/won/x","prerelease":true}"#;
         assert!(!check("0.1.0", &Fake(pre)).unwrap().available);
         let evil = r#"{"tag_name":"v9.0.0","html_url":"https://evil.example/x"}"#;
         assert!(check("0.1.0", &Fake(evil)).is_err());

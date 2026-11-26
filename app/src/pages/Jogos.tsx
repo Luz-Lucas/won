@@ -11,6 +11,7 @@ import type {
 import GameSessionCard from "../components/GameSession";
 import ConfirmDialog from "../components/ConfirmDialog";
 import GpuPerGame from "../components/GpuPerGame";
+import MemoryOptimizer from "../components/MemoryOptimizer";
 import StartupList from "../components/StartupList";
 import { useJob } from "../jobs";
 import {
@@ -506,6 +507,7 @@ export default function Jogos() {
         proteções para ganhar FPS.
       </p>
       <GpuPerGame />
+      <MemoryOptimizer />
       <StartupList />
       {askDelete && activeUser && (
         <ConfirmDialog

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 static BUNDLE: &[u8] = include_bytes!("../../../../catalog/loja/loja.zip");
 
 pub const REMOTE_URL: &str =
-    "https://raw.githubusercontent.com/Luz-Lucas/sentinela/main/catalog/loja/remoto.json";
+    "https://raw.githubusercontent.com/Luz-Lucas/won/main/catalog/loja/remoto.json";
 
 const MAX_INDEX: u64 = 2 * 1024 * 1024;
 const MAX_PREVIEW: usize = 256 * 1024;
