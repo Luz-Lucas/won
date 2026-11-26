@@ -274,7 +274,14 @@ pub fn xaml_cfg_write(text: String) -> Result<(), String> {
         .map(|t| t.lines().any(|l| l.trim() == "enabled=true"))
         .unwrap_or(false);
     let now_on = text.lines().any(|l| l.trim() == "enabled=true");
+    let dark_was = std::fs::read_to_string(&cfg)
+        .map(|t| t.lines().any(|l| l.trim() == "search_dark=true"))
+        .unwrap_or(false);
+    let dark_now = now_on && text.lines().any(|l| l.trim() == "search_dark=true");
     std::fs::write(&cfg, text).map_err(|e| e.to_string())?;
+    if dark_was != dark_now {
+        std::thread::spawn(move || set_search_dark(dark_now));
+    }
     if was_on && !now_on {
         // Desligar não pode exigir reiniciar o app: limpa o estado preso no Iniciar/pesquisa.
         std::thread::spawn(sentinela_mods::reset_start_hosts_now);
@@ -297,3 +304,35 @@ pub fn spawn_xaml_watch() {
         }
     });
 }
+
+/// Modo escuro da tela de resultados da pesquisa (WebView2). Pelo ambiente do processo não
+/// funciona (o WebView2 já existe quando a DLL entra); o WebView2 lê argumentos extras da
+/// política `Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments`, com o
+/// nome do .exe como valor. Experimental: vale depois de reiniciar a pesquisa.
+#[cfg(windows)]
+fn set_search_dark(on: bool) {
+    use std::os::windows::process::CommandExt;
+    const KEY: &str = r"HKCU\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments";
+    let mut c = std::process::Command::new("reg");
+    if on {
+        c.args([
+            "add",
+            KEY,
+            "/v",
+            "SearchHost.exe",
+            "/t",
+            "REG_SZ",
+            "/d",
+            "--force-dark-mode --enable-features=WebContentsForceDark",
+            "/f",
+        ]);
+    } else {
+        c.args(["delete", KEY, "/v", "SearchHost.exe", "/f"]);
+    }
+    let _ = c.creation_flags(0x0800_0000).status();
+    log(format!("Pesquisa: modo escuro {}", if on { "ligado" } else { "desligado" }));
+    sentinela_mods::reset_start_hosts_now();
+}
+
+#[cfg(not(windows))]
+fn set_search_dark(_on: bool) {}

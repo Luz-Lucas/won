@@ -134,8 +134,14 @@ pub fn snap_to_others(m: R, others: &[R], near: i32) -> (i32, i32) {
         }
         pos + best.unwrap_or(0)
     };
-    let xs = others.iter().flat_map(|o| [o.0, o.0 + o.2 / 2, o.0 + o.2]).collect();
-    let ys = others.iter().flat_map(|o| [o.1, o.1 + o.3 / 2, o.1 + o.3]).collect();
+    let xs = others
+        .iter()
+        .flat_map(|o| [o.0, o.0 + o.2 / 2, o.0 + o.2])
+        .collect();
+    let ys = others
+        .iter()
+        .flat_map(|o| [o.1, o.1 + o.3 / 2, o.1 + o.3])
+        .collect();
     (axis(m.0, m.2, xs), axis(m.1, m.3, ys))
 }
 
@@ -145,8 +151,14 @@ mod tests {
     fn snaps_edges_to_neighbours() {
         use super::snap_to_others;
         // a borda direita de (205,400,100,100) fica a 5 px da esquerda do vizinho (300)
-        assert_eq!(snap_to_others((205, 400, 100, 100), &[(300, 100, 100, 100)], 12), (200, 400));
-        assert_eq!(snap_to_others((600, 400, 100, 100), &[(300, 100, 100, 100)], 12), (600, 400));
+        assert_eq!(
+            snap_to_others((205, 400, 100, 100), &[(300, 100, 100, 100)], 12),
+            (200, 400)
+        );
+        assert_eq!(
+            snap_to_others((600, 400, 100, 100), &[(300, 100, 100, 100)], 12),
+            (600, 400)
+        );
     }
 
     use super::*;
@@ -154,8 +166,20 @@ mod tests {
     #[test]
     fn positions_round_trip() {
         let v = vec![
-            Saved { id: "a".into(), x: 10, y: -20, cx: 1, cy: 2 },
-            Saved { id: "b".into(), x: 0, y: 5, cx: 80, cy: 80 },
+            Saved {
+                id: "a".into(),
+                x: 10,
+                y: -20,
+                cx: 1,
+                cy: 2,
+            },
+            Saved {
+                id: "b".into(),
+                x: 0,
+                y: 5,
+                cx: 80,
+                cy: 80,
+            },
         ];
         assert_eq!(parse_positions(&format_positions(&v)), v);
         assert!(parse_positions("lixo\nx 1\n").is_empty());
@@ -179,7 +203,13 @@ mod tests {
             locked: false,
             format: "%H".into(),
         };
-        let saved = vec![Saved { id: "a".into(), x: 500, y: 300, cx: 100, cy: 100 }];
+        let saved = vec![Saved {
+            id: "a".into(),
+            x: 500,
+            y: 300,
+            cx: 100,
+            cy: 100,
+        }];
         assert_eq!(start_position(&cfg, &saved), (500, 300));
         let moved = WidgetConfig { x: 120, ..cfg };
         assert_eq!(start_position(&moved, &saved), (120, 100));

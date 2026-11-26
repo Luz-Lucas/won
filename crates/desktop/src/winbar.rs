@@ -399,12 +399,16 @@ unsafe fn paint_islands(hwnd: HWND, b: &Bar) {
         let sel = CreateSolidBrush(colorref(mix(b.cfg.background, b.cfg.foreground, 22)));
         let old_pen = SelectObject(hdc, GetStockObject(NULL_PEN));
 
-        // Ilha da direita: os módulos do centro e da direita (relógio, CPU, RAM).
-        let mut mods = b.cfg.center.clone();
-        mods.extend(b.cfg.right.iter().copied());
-        // O relógio nunca some da ilha da direita.
-        if !mods.contains(&Module::Clock) {
-            mods.insert(0, Module::Clock);
+        // Ilha da direita: todos os módulos, na ordem da lista (antes os da esquerda sumiam).
+        let mut mods: Vec<Module> = Vec::new();
+        for m in b.cfg.left.iter().chain(&b.cfg.center).chain(&b.cfg.right) {
+            if !mods.contains(m) {
+                mods.push(*m);
+            }
+        }
+        // Ilha vazia não faz sentido: sem nenhum módulo, mostra o relógio.
+        if mods.is_empty() {
+            mods.push(Module::Clock);
         }
         let right_text = group_text(b, &mods);
         let right_w = text_width(hdc, &right_text) + 2 * PAD;

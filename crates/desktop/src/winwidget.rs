@@ -5,27 +5,27 @@
 use crate::bar;
 use crate::config::Rgb;
 use crate::widget::{self, WidgetConfig, WidgetKind};
-use std::cell::RefCell;
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, BeginPaint,
     CreateCompatibleDC, CreateDIBSection, CreateFontW, CreateRoundRectRgn, CreateSolidBrush,
-    DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DeleteDC,
-    DeleteObject, DrawTextW, EndPaint, FillRect, GetDC, GetDeviceCaps, LOGPIXELSY, PAINTSTRUCT,
-    ReleaseDC, SelectObject, SetBkMode, SetTextColor, SetWindowRgn, TRANSPARENT,
+    DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER,
+    DeleteDC, DeleteObject, DrawTextW, EndPaint, FillRect, GetDC, GetDeviceCaps, LOGPIXELSY,
+    PAINTSTRUCT, ReleaseDC, SelectObject, SetBkMode, SetTextColor, SetWindowRgn, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, EnumWindows, FindWindowExW, FindWindowW,
-    GWLP_USERDATA, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, HTCAPTION,
-    RegisterClassExW, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-    SM_YVIRTUALSCREEN, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SendMessageW,
-    SetWindowLongPtrW, SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WM_ERASEBKGND, WM_EXITSIZEMOVE,
-    WM_LBUTTONDOWN, WM_MOVING, WM_NCLBUTTONDOWN, WM_PAINT, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW, WS_POPUP,
+    GWLP_USERDATA, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, HTCAPTION, RegisterClassExW,
+    SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SendMessageW, SetWindowLongPtrW,
+    SetWindowPos, ShowWindow, ULW_ALPHA, UpdateLayeredWindow, WM_ERASEBKGND, WM_EXITSIZEMOVE,
+    WM_LBUTTONDOWN, WM_MOUSEWHEEL, WM_MOVING, WM_NCLBUTTONDOWN, WM_PAINT, WNDCLASSEXW,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
 const CLASS: &str = "SentinelaDesktopWidget";
@@ -102,8 +102,14 @@ fn desktop_host() -> HWND {
 
 fn on_virtual_screen(x: i32, y: i32) -> bool {
     unsafe {
-        let (vx, vy) = (GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN));
-        let (vw, vh) = (GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
+        let (vx, vy) = (
+            GetSystemMetrics(SM_XVIRTUALSCREEN),
+            GetSystemMetrics(SM_YVIRTUALSCREEN),
+        );
+        let (vw, vh) = (
+            GetSystemMetrics(SM_CXVIRTUALSCREEN),
+            GetSystemMetrics(SM_CYVIRTUALSCREEN),
+        );
         x >= vx - 20 && y >= vy - 20 && x < vx + vw - 40 && y < vy + vh - 40
     }
 }
@@ -113,7 +119,10 @@ pub fn apply(list: &[WidgetConfig]) {
     destroy();
     WIDGET_MEDIA.store(false, std::sync::atomic::Ordering::Relaxed);
     if list.is_empty() {
-        crate::winsys::set_media_wanted(BAR_MEDIA.load(std::sync::atomic::Ordering::Relaxed), false);
+        crate::winsys::set_media_wanted(
+            BAR_MEDIA.load(std::sync::atomic::Ordering::Relaxed),
+            false,
+        );
         return;
     }
     if list.iter().any(|w| w.kind.is_list()) {
@@ -121,7 +130,10 @@ pub fn apply(list: &[WidgetConfig]) {
     }
     let want_media = list.iter().any(|w| w.kind == WidgetKind::Media);
     WIDGET_MEDIA.store(want_media, std::sync::atomic::Ordering::Relaxed);
-    crate::winsys::set_media_wanted(BAR_MEDIA.load(std::sync::atomic::Ordering::Relaxed), want_media);
+    crate::winsys::set_media_wanted(
+        BAR_MEDIA.load(std::sync::atomic::Ordering::Relaxed),
+        want_media,
+    );
     crate::winsys::start_sampler();
     let saved = saved_positions();
     unsafe {
@@ -166,7 +178,15 @@ pub fn apply(list: &[WidgetConfig]) {
             let rgn = CreateRoundRectRgn(0, 0, cfg.width as i32 + 1, cfg.height as i32 + 1, r, r);
             SetWindowRgn(hwnd, rgn, 1);
             if !host.is_null() {
-                SetWindowPos(hwnd, host, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                SetWindowPos(
+                    hwnd,
+                    host,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                );
             }
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
             render(hwnd, cfg);
@@ -201,7 +221,15 @@ pub fn tick() {
         for it in items.iter() {
             unsafe {
                 if !host.is_null() {
-                    SetWindowPos(it.hwnd, host, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    SetWindowPos(
+                        it.hwnd,
+                        host,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                    );
                 }
                 render(it.hwnd, &it.cfg);
             }
@@ -243,15 +271,30 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
         WidgetKind::Weather => crate::weather::text(&cfg.city),
         WidgetKind::Agenda => {
             let c = crate::organize::load_cache();
-            crate::organize::agenda_text(&c, crate::organize::now_epoch(), crate::organize::local_offset(), 12)
+            crate::organize::agenda_text(
+                &c,
+                crate::organize::now_epoch(),
+                crate::organize::local_offset(),
+                12,
+            )
         }
         WidgetKind::Tasks => {
             let c = crate::organize::load_cache();
-            crate::organize::tasks_text(&c, crate::organize::now_epoch(), crate::organize::local_offset(), 12)
+            crate::organize::tasks_text(
+                &c,
+                crate::organize::now_epoch(),
+                crate::organize::local_offset(),
+                12,
+            )
         }
         WidgetKind::Calendar => {
             let c = crate::organize::load_cache();
-            crate::organize::calendar_text(&c, crate::organize::now_epoch(), crate::organize::local_offset()).1
+            crate::organize::calendar_text(
+                &c,
+                crate::organize::now_epoch(),
+                crate::organize::local_offset(),
+            )
+            .1
         }
         WidgetKind::Media => {
             if snap.media.is_empty() {
@@ -268,7 +311,23 @@ fn texts(cfg: &WidgetConfig) -> (String, String) {
         }
         WidgetKind::Calendar => {
             let c = crate::organize::load_cache();
-            crate::organize::calendar_text(&c, crate::organize::now_epoch(), crate::organize::local_offset()).0
+            crate::organize::calendar_text(
+                &c,
+                crate::organize::now_epoch(),
+                crate::organize::local_offset(),
+            )
+            .0
+        }
+        WidgetKind::Media => {
+            let sys = crate::winsys::snapshot().vol;
+            let sys = sys.trim_start_matches("VOL ").to_string();
+            match crate::winsys::app_volume("spotify.exe", 0.0) {
+                Some(v) => format!(
+                    "SPOTIFY {}% \u{b7} SISTEMA {sys}",
+                    (v * 100.0).round() as u32
+                ),
+                None => format!("SISTEMA {sys}"),
+            }
         }
         WidgetKind::Weather if !cfg.city.trim().is_empty() => cfg.city.trim().to_uppercase(),
         k => k.label().to_string(),
@@ -288,13 +347,47 @@ unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &Widg
         // o texto vira alfa e precisa de cinza puro: ANTIALIASED_QUALITY (4).
         let q: u32 = if cfg.opacity >= 100 { 5 } else { 4 };
         let mk = |pt: i32, weight: i32| {
-            CreateFontW(-(pt * dpi / 72), 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, q, 0, face.as_ptr())
+            CreateFontW(
+                -(pt * dpi / 72),
+                0,
+                0,
+                0,
+                weight,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                q,
+                0,
+                face.as_ptr(),
+            )
         };
         let list = cfg.kind.is_list();
         let big = if list {
             // Listas: texto corrido à esquerda; o calendário usa fonte monoespaçada para a grade.
-            let f = wide(if cfg.kind == WidgetKind::Calendar { "Consolas" } else { "Segoe UI" });
-            CreateFontW(-(cfg.font_size as i32 * dpi / 72), 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, q, 0, f.as_ptr())
+            let f = wide(if cfg.kind == WidgetKind::Calendar {
+                "Consolas"
+            } else {
+                "Segoe UI"
+            });
+            CreateFontW(
+                -(cfg.font_size as i32 * dpi / 72),
+                0,
+                0,
+                0,
+                400,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                q,
+                0,
+                f.as_ptr(),
+            )
         } else {
             mk(cfg.font_size as i32, 700)
         };
@@ -313,7 +406,13 @@ unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &Widg
             bottom: rc.top + 8 * sc + small_h,
         };
         let w = label.encode_utf16().collect::<Vec<u16>>();
-        DrawTextW(hdc, w.as_ptr(), w.len() as i32, &mut lr, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS);
+        DrawTextW(
+            hdc,
+            w.as_ptr(),
+            w.len() as i32,
+            &mut lr,
+            DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS,
+        );
 
         SelectObject(hdc, big);
         SetTextColor(hdc, colorref(cfg.foreground));
@@ -345,8 +444,16 @@ unsafe fn draw(hdc: windows_sys::Win32::Graphics::Gdi::HDC, rc: RECT, cfg: &Widg
 /// do widget e o texto fica opaco, com a cobertura do suavizado como alfa. Premultiplicado.
 fn apply_alpha(px: &mut [u32], cfg: &WidgetConfig) {
     let a_bg = (cfg.opacity.min(100) * 255 / 100) as u32;
-    let bg = [cfg.background.2 as i32, cfg.background.1 as i32, cfg.background.0 as i32]; // B,G,R
-    let fg = [cfg.foreground.2 as i32, cfg.foreground.1 as i32, cfg.foreground.0 as i32];
+    let bg = [
+        cfg.background.2 as i32,
+        cfg.background.1 as i32,
+        cfg.background.0 as i32,
+    ]; // B,G,R
+    let fg = [
+        cfg.foreground.2 as i32,
+        cfg.foreground.1 as i32,
+        cfg.foreground.0 as i32,
+    ];
     let bg32 = (bg[2] as u32) << 16 | (bg[1] as u32) << 8 | bg[0] as u32;
     // Canal em que texto e fundo mais se afastam: mede a cobertura do texto.
     let (k, dk) = (0..3)
@@ -361,11 +468,22 @@ fn apply_alpha(px: &mut [u32], cfg: &WidgetConfig) {
         }
         if rgb == bg32 {
             let (b, g, r) = (rgb & 0xFF, (rgb >> 8) & 0xFF, (rgb >> 16) & 0xFF);
-            *p = (a_bg << 24) | ((r * a_bg / 255) << 16) | ((g * a_bg / 255) << 8) | (b * a_bg / 255);
+            *p = (a_bg << 24)
+                | ((r * a_bg / 255) << 16)
+                | ((g * a_bg / 255) << 8)
+                | (b * a_bg / 255);
             continue;
         }
-        let ch = [(rgb & 0xFF) as i32, ((rgb >> 8) & 0xFF) as i32, ((rgb >> 16) & 0xFF) as i32];
-        let cov = if dk < 8 { 1.0 } else { ((ch[k] - bg[k]).abs() as f32 / dk as f32).clamp(0.0, 1.0) };
+        let ch = [
+            (rgb & 0xFF) as i32,
+            ((rgb >> 8) & 0xFF) as i32,
+            ((rgb >> 16) & 0xFF) as i32,
+        ];
+        let cov = if dk < 8 {
+            1.0
+        } else {
+            ((ch[k] - bg[k]).abs() as f32 / dk as f32).clamp(0.0, 1.0)
+        };
         let a = a_bg + ((255 - a_bg) as f32 * cov) as u32;
         let m = |c: i32| (c as u32 * a / 255).min(255);
         *p = (a << 24) | (m(fg[2]) << 16) | (m(fg[1]) << 8) | m(fg[0]);
@@ -402,21 +520,47 @@ fn render(hwnd: HWND, cfg: &WidgetConfig) {
         bo.bmiHeader.biWidth = w;
         bo.bmiHeader.biHeight = -h;
         let out = if sc > 1 {
-            CreateDIBSection(mem, &bo, DIB_RGB_COLORS, &mut out_bits, std::ptr::null_mut(), 0)
+            CreateDIBSection(
+                mem,
+                &bo,
+                DIB_RGB_COLORS,
+                &mut out_bits,
+                std::ptr::null_mut(),
+                0,
+            )
         } else {
             std::ptr::null_mut()
         };
-        if !dib.is_null() && !bits.is_null() && (sc == 1 || (!out.is_null() && !out_bits.is_null())) {
+        if !dib.is_null() && !bits.is_null() && (sc == 1 || (!out.is_null() && !out_bits.is_null()))
+        {
             let old = SelectObject(mem, dib);
-            draw(mem, RECT { left: 0, top: 0, right: bw, bottom: bh }, cfg, sc);
-            apply_alpha(std::slice::from_raw_parts_mut(bits as *mut u32, (bw * bh) as usize), cfg);
+            draw(
+                mem,
+                RECT {
+                    left: 0,
+                    top: 0,
+                    right: bw,
+                    bottom: bh,
+                },
+                cfg,
+                sc,
+            );
+            apply_alpha(
+                std::slice::from_raw_parts_mut(bits as *mut u32, (bw * bh) as usize),
+                cfg,
+            );
             if sc > 1 {
                 let src = std::slice::from_raw_parts(bits as *const u32, (bw * bh) as usize);
                 let dst = std::slice::from_raw_parts_mut(out_bits as *mut u32, (w * h) as usize);
                 for y in 0..h as usize {
                     for x in 0..w as usize {
                         let i = (2 * y) * bw as usize + 2 * x;
-                        let px = [src[i], src[i + 1], src[i + bw as usize], src[i + bw as usize + 1]];
+                        let px = [
+                            src[i],
+                            src[i + 1],
+                            src[i + bw as usize],
+                            src[i + bw as usize + 1],
+                        ];
                         let mut v = 0u32;
                         for sh in [0u32, 8, 16, 24] {
                             let sum: u32 = px.iter().map(|p| (p >> sh) & 0xFF).sum();
@@ -435,7 +579,17 @@ fn render(hwnd: HWND, cfg: &WidgetConfig) {
                 SourceConstantAlpha: 255,
                 AlphaFormat: AC_SRC_ALPHA as u8,
             };
-            UpdateLayeredWindow(hwnd, screen, std::ptr::null(), &size, mem, &src, 0, &blend, ULW_ALPHA);
+            UpdateLayeredWindow(
+                hwnd,
+                screen,
+                std::ptr::null(),
+                &size,
+                mem,
+                &src,
+                0,
+                &blend,
+                ULW_ALPHA,
+            );
             SelectObject(mem, old);
         }
         if !dib.is_null() {
@@ -446,6 +600,12 @@ fn render(hwnd: HWND, cfg: &WidgetConfig) {
         }
         DeleteDC(mem);
         ReleaseDC(std::ptr::null_mut(), screen);
+    }
+}
+
+fn render_now(hwnd: HWND) {
+    if let Some(cfg) = config_of(hwnd) {
+        render(hwnd, &cfg);
     }
 }
 
@@ -482,6 +642,22 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                 unsafe { DefWindowProcW(hwnd, msg, wp, lp) }
             }
         }
+        WM_MOUSEWHEEL => {
+            // Mídia: a roda muda o volume do Spotify; com Ctrl, o volume geral do sistema.
+            if config_of(hwnd).is_some_and(|c| c.kind == WidgetKind::Media) {
+                let notches = ((wp >> 16) as i16) as f32 / 120.0;
+                let ctrl = (wp & 0x0008) != 0; // MK_CONTROL
+                let step = notches * 0.05;
+                if ctrl {
+                    crate::winsys::adjust_system_volume(step);
+                } else if crate::winsys::app_volume("spotify.exe", step).is_none() {
+                    // Sem sessão do Spotify (nada tocando): ajusta o sistema.
+                    crate::winsys::adjust_system_volume(step);
+                }
+                render_now(hwnd);
+            }
+            0
+        }
         WM_LBUTTONDOWN => {
             if config_of(hwnd).is_some_and(|c| !c.locked) {
                 unsafe {
@@ -506,8 +682,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                                 .filter(|it| it.hwnd != hwnd)
                                 .filter_map(|it| {
                                     let mut o: RECT = std::mem::zeroed();
-                                    (GetWindowRect(it.hwnd, &mut o) != 0)
-                                        .then(|| (o.left, o.top, o.right - o.left, o.bottom - o.top))
+                                    (GetWindowRect(it.hwnd, &mut o) != 0).then(|| {
+                                        (o.left, o.top, o.right - o.left, o.bottom - o.top)
+                                    })
                                 })
                                 .collect()
                         })

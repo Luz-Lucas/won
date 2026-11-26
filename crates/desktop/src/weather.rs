@@ -84,7 +84,8 @@ fn fetch(city: &str) -> Result<String, String> {
             ("format", "json".into()),
         ],
     )?;
-    let (lat, lon, _) = parse_geocode(&g).ok_or_else(|| format!("cidade \"{city}\" não encontrada"))?;
+    let (lat, lon, _) =
+        parse_geocode(&g).ok_or_else(|| format!("cidade \"{city}\" não encontrada"))?;
     let f = get_json(
         "https://api.open-meteo.com/v1/forecast",
         &[
@@ -106,7 +107,10 @@ pub fn text(city: &str) -> String {
     let (cached, stale) = {
         let g = CACHE.lock().unwrap();
         match g.as_ref().and_then(|m| m.get(&key)) {
-            Some(e) => (Some(e.text.clone()), e.at.elapsed() > if e.ok { REFRESH } else { RETRY }),
+            Some(e) => (
+                Some(e.text.clone()),
+                e.at.elapsed() > if e.ok { REFRESH } else { RETRY },
+            ),
             None => (None, true),
         }
     };
@@ -129,7 +133,14 @@ pub fn text(city: &str) -> String {
                     .lock()
                     .unwrap()
                     .get_or_insert_with(HashMap::new)
-                    .insert(key.clone(), Entry { text, at: Instant::now(), ok });
+                    .insert(
+                        key.clone(),
+                        Entry {
+                            text,
+                            at: Instant::now(),
+                            ok,
+                        },
+                    );
                 if let Some(s) = BUSY.lock().unwrap().as_mut() {
                     s.remove(&key);
                 }
@@ -146,7 +157,8 @@ mod tests {
     #[test]
     fn le_a_previsao_e_a_cidade() {
         let f: serde_json::Value =
-            serde_json::from_str(r#"{"current":{"temperature_2m":20.6,"weather_code":3}}"#).unwrap();
+            serde_json::from_str(r#"{"current":{"temperature_2m":20.6,"weather_code":3}}"#)
+                .unwrap();
         assert_eq!(parse_forecast(&f).unwrap(), "21°C · Nublado");
         let g: serde_json::Value = serde_json::from_str(
             r#"{"results":[{"name":"São Paulo","latitude":-23.55,"longitude":-46.63}]}"#,

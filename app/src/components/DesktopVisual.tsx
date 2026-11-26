@@ -16,7 +16,6 @@ import {
   type Module,
   type Sections,
   type TilingModel,
-  type Zone,
 } from "../desktopToml";
 import WidgetCanvas from "./WidgetCanvas";
 
@@ -38,11 +37,6 @@ const MODULE_SAMPLE: Record<Module, string> = {
   media: "♪ Artista - Música",
   clock: "14:32",
 };
-const ZONES: { id: Zone; label: string }[] = [
-  { id: "left", label: "Esquerda" },
-  { id: "center", label: "Centro" },
-  { id: "right", label: "Direita" },
-];
 const CLOCKS: [string, string][] = [
   ["%H:%M", "14:32"],
   ["%H:%M:%S", "14:32:07"],
@@ -58,15 +52,14 @@ const LAYOUT_LABEL: Record<Layout, string> = {
 };
 const HOTKEYS = ["Alt+Space", "Win+Space", "Ctrl+Alt+Space", "Win+Alt+Space", "Ctrl+Space"];
 
-const zoneOf = (b: BarModel, m: Module): Zone | null =>
-  b.left.includes(m) ? "left" : b.center.includes(m) ? "center" : b.right.includes(m) ? "right" : null;
 
 function BarPreview({ bar }: { bar: BarModel }) {
   const clock = CLOCKS.find(([f]) => f === bar.clockFormat)?.[1] ?? "14:32";
   const sample = (m: Module) => (m === "clock" ? clock : MODULE_SAMPLE[m]);
-  const zone = (z: Zone) => (
-    <span className={`dv-zone dv-zone-${z}`}>
-      {bar[z].map((m) => (
+  const order = [...bar.left, ...bar.center, ...bar.right];
+  const zone = () => (
+    <span className="dv-zone dv-zone-left">
+      {order.map((m) => (
         <span key={m}>{sample(m)}</span>
       ))}
     </span>
@@ -102,16 +95,14 @@ function BarPreview({ bar }: { bar: BarModel }) {
               className="dv-zone"
               style={{ background: "rgba(255,255,255,0.12)", borderRadius: bar.islandRadius, padding: "0 6px" }}
             >
-              {[...bar.center, ...bar.right].map((m) => (
+              {order.map((m) => (
                 <span key={m}>{sample(m)}</span>
               ))}
             </span>
           </>
         ) : (
           <>
-            {zone("left")}
-            {zone("center")}
-            {zone("right")}
+            {zone()}
           </>
         )}
       </div>
@@ -231,12 +222,18 @@ export default function DesktopVisual({
   const clip = s.clipboard ?? null;
   const setClip = (p: Partial<ClipboardModel>) => clip && update({ clipboard: { ...clip, ...p } });
 
-  const moveModule = (m: Module, to: Zone | "off") => {
-    if (!bar) return;
-    const strip = (a: Module[]) => a.filter((x) => x !== m);
-    const next = { left: strip(bar.left), center: strip(bar.center), right: strip(bar.right) };
-    if (to !== "off") next[to] = MODULES.filter((x) => x === m || next[to].includes(x));
-    setBar(next);
+  // Os módulos formam uma lista ordenada (da esquerda para a direita; na ilha, na mesma ordem).
+  const order = bar ? [...bar.left, ...bar.center, ...bar.right] : [];
+  const setOrder = (list: Module[]) => setBar({ left: list, center: [], right: [] });
+  const toggleModule = (m: Module, on: boolean) =>
+    setOrder(on ? [...order, m] : order.filter((x) => x !== m));
+  const shiftModule = (m: Module, d: -1 | 1) => {
+    const i = order.indexOf(m);
+    const j = i + d;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    setOrder(next);
   };
 
   return (
@@ -391,24 +388,46 @@ export default function DesktopVisual({
                 </>
               )}
               <fieldset className="choice-group">
-                <legend>Módulos</legend>
-                {MODULES.map((m) => (
-                  <label key={m} className="dv-field dv-inline">
-                    <span>{MODULE_LABEL[m]}</span>
-                    <select
-                      aria-label={`Posição de ${MODULE_LABEL[m]}`}
-                      value={zoneOf(bar, m) ?? "off"}
-                      onChange={(e) => moveModule(m, e.target.value as Zone | "off")}
-                    >
-                      <option value="off">Não mostrar</option>
-                      {ZONES.map((z) => (
-                        <option key={z.id} value={z.id}>
-                          {z.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
+                <legend>Módulos (na ordem em que aparecem)</legend>
+                {[...order, ...MODULES.filter((m) => !order.includes(m))].map((m) => {
+                  const on = order.includes(m);
+                  const i = order.indexOf(m);
+                  return (
+                    <div key={m} className="dv-field dv-inline">
+                      <label className="clean-check">
+                        <input
+                          type="checkbox"
+                          aria-label={`Mostrar ${MODULE_LABEL[m]}`}
+                          checked={on}
+                          onChange={(e) => toggleModule(m, e.target.checked)}
+                        />
+                        <span>{MODULE_LABEL[m]}</span>
+                      </label>
+                      {on && (
+                        <span className="dv-order">
+                          <button
+                            type="button"
+                            className="btn"
+                            aria-label={`Subir ${MODULE_LABEL[m]}`}
+                            disabled={i === 0}
+                            onClick={() => shiftModule(m, -1)}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            className="btn"
+                            aria-label={`Descer ${MODULE_LABEL[m]}`}
+                            disabled={i === order.length - 1}
+                            onClick={() => shiftModule(m, 1)}
+                          >
+                            ▼
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </fieldset>
             </div>
           </div>

@@ -160,6 +160,16 @@ export const DEFAULT_CLIPBOARD: ClipboardModel = {
   replace: [],
 };
 
+const orderedMods = (b: Record<string, unknown>): Module[] => {
+  if (Array.isArray(b.modules)) return mods(b.modules, DEFAULT_ORDER);
+  const all = [
+    ...mods(b.left, ["title"]),
+    ...mods(b.center, []),
+    ...mods(b.right, ["cpu", "ram", "clock"]),
+  ];
+  return all.filter((m, i) => all.indexOf(m) === i);
+};
+
 export const MODULES: Module[] = ["title", "network", "volume", "media", "cpu", "ram", "clock"];
 export const LAYOUTS: Layout[] = ["master-stack", "columns", "grid", "monocle", "rows"];
 
@@ -177,15 +187,16 @@ export const DEFAULT_BAR: BarModel = {
   visibleOnDesktop: true,
   activeOutline: false,
   hideNative: false,
-  left: ["title"],
+  left: ["title", "cpu", "ram", "clock"],
   center: [],
-  right: ["cpu", "ram", "clock"],
+  right: [],
   clockFormat: "%H:%M",
   islands: false,
   islandRadius: 12,
   islandMargin: 6,
   islandAlign: "center",
 };
+const DEFAULT_ORDER: Module[] = [...DEFAULT_BAR.left, ...DEFAULT_BAR.center, ...DEFAULT_BAR.right];
 export const DEFAULT_TILING: TilingModel = {
   layout: "master-stack",
   gap: 8,
@@ -257,9 +268,10 @@ export function readSections(text: string): Sections | null {
       visibleOnDesktop: b.visible_on_desktop !== false,
       activeOutline: b.active_outline === true,
       hideNative: b.hide_native_taskbar === true,
-      left: mods(b.left, DEFAULT_BAR.left),
-      center: mods(b.center, DEFAULT_BAR.center),
-      right: mods(b.right, DEFAULT_BAR.right),
+      // Lista ordenada: `modules`; arquivos antigos (left/center/right) viram uma lista só.
+      left: orderedMods(b),
+      center: [],
+      right: [],
       clockFormat: str(b.clock_format, DEFAULT_BAR.clockFormat),
       islands: b.islands === true,
       islandRadius: num(b.island_radius, DEFAULT_BAR.islandRadius),
@@ -342,9 +354,7 @@ function barToml(b: BarModel): string {
     `visible_on_desktop = ${b.visibleOnDesktop}`,
     `active_outline = ${b.activeOutline}`,
     `hide_native_taskbar = ${b.hideNative}`,
-    `left = ${list(b.left)}`,
-    `center = ${list(b.center)}`,
-    `right = ${list(b.right)}`,
+    `modules = ${list([...b.left, ...b.center, ...b.right])}`,
     `clock_format = ${q(b.clockFormat)}`,
     `islands = ${b.islands}`,
     `island_radius = ${Math.round(b.islandRadius)}`,

@@ -52,7 +52,9 @@ pub struct Cache {
 }
 
 fn data_dir() -> PathBuf {
-    dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")).join("WON")
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("WON")
 }
 pub fn account_path() -> PathBuf {
     data_dir().join("organize.json")
@@ -118,13 +120,23 @@ pub fn parse_iso(s: &str) -> Option<i64> {
         return None;
     }
     let n = |a: usize, z: usize| s.get(a..z)?.parse::<i64>().ok();
-    let (y, mo, d, h, mi, se) = (n(0, 4)?, n(5, 7)?, n(8, 10)?, n(11, 13)?, n(14, 16)?, n(17, 19)?);
+    let (y, mo, d, h, mi, se) = (
+        n(0, 4)?,
+        n(5, 7)?,
+        n(8, 10)?,
+        n(11, 13)?,
+        n(14, 16)?,
+        n(17, 19)?,
+    );
     let mut off = 0;
     let rest = s.get(19..)?;
     let rest = rest.trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
     if let Some(sign) = rest.chars().next().filter(|c| *c == '+' || *c == '-') {
         let t = &rest[1..];
-        let (oh, om) = (t.get(0..2)?.parse::<i64>().ok()?, t.get(3..5).and_then(|x| x.parse::<i64>().ok()).unwrap_or(0));
+        let (oh, om) = (
+            t.get(0..2)?.parse::<i64>().ok()?,
+            t.get(3..5).and_then(|x| x.parse::<i64>().ok()).unwrap_or(0),
+        );
         off = (oh * 3600 + om * 60) * if sign == '-' { -1 } else { 1 };
     }
     Some(days_from_civil(y, mo, d) * 86400 + h * 3600 + mi * 60 + se - off)
@@ -133,7 +145,12 @@ pub fn parse_iso(s: &str) -> Option<i64> {
 pub fn iso_utc(epoch: i64) -> String {
     let (y, m, d) = civil_from_days(epoch.div_euclid(86400));
     let t = epoch.rem_euclid(86400);
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", t / 3600, t % 3600 / 60, t % 60)
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        t / 3600,
+        t % 3600 / 60,
+        t % 60
+    )
 }
 
 pub fn now_epoch() -> i64 {
@@ -149,7 +166,12 @@ pub fn local_offset() -> i64 {
     unsafe {
         let mut tz: TIME_ZONE_INFORMATION = std::mem::zeroed();
         let id = GetTimeZoneInformation(&mut tz);
-        let bias = tz.Bias + if id == 2 { tz.DaylightBias } else { tz.StandardBias };
+        let bias = tz.Bias
+            + if id == 2 {
+                tz.DaylightBias
+            } else {
+                tz.StandardBias
+            };
         -(bias as i64) * 60
     }
 }
@@ -190,7 +212,10 @@ fn read_json(mut resp: ureq::http::Response<ureq::Body>) -> Result<serde_json::V
 }
 
 fn token_request(a: &Account, grant: &str, body: serde_json::Value) -> Result<Account, String> {
-    let url = format!("{}/auth/v1/token?grant_type={grant}", a.url.trim_end_matches('/'));
+    let url = format!(
+        "{}/auth/v1/token?grant_type={grant}",
+        a.url.trim_end_matches('/')
+    );
     let resp = agent()
         .post(&url)
         .header("apikey", a.anon_key.as_str())
@@ -204,7 +229,11 @@ fn token_request(a: &Account, grant: &str, body: serde_json::Value) -> Result<Ac
     next.access_token = s("access_token");
     next.refresh_token = s("refresh_token");
     next.expires_at = now_epoch() + expires_in;
-    if let Some(e) = v.get("user").and_then(|u| u.get("email")).and_then(|e| e.as_str()) {
+    if let Some(e) = v
+        .get("user")
+        .and_then(|u| u.get("email"))
+        .and_then(|e| e.as_str())
+    {
         next.email = e.to_string();
     }
     if next.access_token.is_empty() || next.refresh_token.is_empty() {
@@ -216,18 +245,34 @@ fn token_request(a: &Account, grant: &str, body: serde_json::Value) -> Result<Ac
 /// Login com e-mail e senha (a senha não é guardada). Devolve a conta com a sessão.
 pub fn login(url: &str, anon_key: &str, email: &str, password: &str) -> Result<Account, String> {
     let url = url.trim().trim_end_matches('/').to_string();
-    if !url.starts_with("https://") && !url.starts_with("http://127.0.0.1") && !url.starts_with("http://localhost") {
+    if !url.starts_with("https://")
+        && !url.starts_with("http://127.0.0.1")
+        && !url.starts_with("http://localhost")
+    {
         return Err("o endereço precisa começar com https://".into());
     }
-    let base = Account { url, anon_key: anon_key.trim().into(), email: email.trim().into(), ..Default::default() };
-    token_request(&base, "password", serde_json::json!({ "email": base.email, "password": password }))
+    let base = Account {
+        url,
+        anon_key: anon_key.trim().into(),
+        email: email.trim().into(),
+        ..Default::default()
+    };
+    token_request(
+        &base,
+        "password",
+        serde_json::json!({ "email": base.email, "password": password }),
+    )
 }
 
 fn fresh_token(a: &mut Account) -> Result<String, String> {
     if a.expires_at - 60 > now_epoch() && !a.access_token.is_empty() {
         return Ok(a.access_token.clone());
     }
-    *a = token_request(a, "refresh_token", serde_json::json!({ "refresh_token": a.refresh_token }))?;
+    *a = token_request(
+        a,
+        "refresh_token",
+        serde_json::json!({ "refresh_token": a.refresh_token }),
+    )?;
     save_account(a).map_err(|e| format!("não foi possível salvar a sessão ({e})"))?;
     Ok(a.access_token.clone())
 }
@@ -252,9 +297,17 @@ pub fn parse_events(rows: &[serde_json::Value]) -> Vec<Event> {
             Some(Event {
                 title: r.get("title")?.as_str()?.to_string(),
                 start: parse_iso(r.get("starts_at")?.as_str()?)?,
-                end: r.get("ends_at").and_then(|e| e.as_str()).and_then(parse_iso).unwrap_or(0),
+                end: r
+                    .get("ends_at")
+                    .and_then(|e| e.as_str())
+                    .and_then(parse_iso)
+                    .unwrap_or(0),
                 all_day: r.get("all_day").and_then(|b| b.as_bool()).unwrap_or(false),
-                location: r.get("location").and_then(|l| l.as_str()).unwrap_or("").to_string(),
+                location: r
+                    .get("location")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or("")
+                    .to_string(),
             })
         })
         .collect()
@@ -266,8 +319,16 @@ pub fn parse_tasks(rows: &[serde_json::Value]) -> Vec<Task> {
             Some(Task {
                 title: r.get("title")?.as_str()?.to_string(),
                 due: r.get("due_at").and_then(|d| d.as_str()).and_then(parse_iso),
-                status: r.get("status").and_then(|s| s.as_str()).unwrap_or("todo").to_string(),
-                priority: r.get("priority").and_then(|s| s.as_str()).unwrap_or("media").to_string(),
+                status: r
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("todo")
+                    .to_string(),
+                priority: r
+                    .get("priority")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("media")
+                    .to_string(),
             })
         })
         .collect()
@@ -283,14 +344,21 @@ pub fn refresh() -> Result<Cache, String> {
     let events = rest(
         &a,
         &token,
-        &format!("events?select=title,starts_at,ends_at,all_day,location&ends_at=gte.{from}&starts_at=lte.{to}&order=starts_at.asc&limit=500"),
+        &format!(
+            "events?select=title,starts_at,ends_at,all_day,location&ends_at=gte.{from}&starts_at=lte.{to}&order=starts_at.asc&limit=500"
+        ),
     )?;
     let tasks = rest(
         &a,
         &token,
         "tasks?select=title,status,due_at,priority&status=neq.done&order=due_at.asc.nullslast&limit=60",
     )?;
-    let c = Cache { fetched_at: now, events: parse_events(&events), tasks: parse_tasks(&tasks), error: String::new() };
+    let c = Cache {
+        fetched_at: now,
+        events: parse_events(&events),
+        tasks: parse_tasks(&tasks),
+        error: String::new(),
+    };
     save_cache(&c);
     Ok(c)
 }
@@ -300,16 +368,18 @@ static STARTED: Once = Once::new();
 /// Liga (uma vez) a thread que atualiza o cache a cada 5 minutos.
 pub fn start() {
     STARTED.call_once(|| {
-        std::thread::spawn(|| loop {
-            if load_account().is_some() {
-                if let Err(e) = refresh() {
-                    crate::dlog::log(&format!("organize: {e}"));
-                    let mut c = load_cache();
-                    c.error = e;
-                    save_cache(&c);
+        std::thread::spawn(|| {
+            loop {
+                if load_account().is_some() {
+                    if let Err(e) = refresh() {
+                        crate::dlog::log(&format!("organize: {e}"));
+                        let mut c = load_cache();
+                        c.error = e;
+                        save_cache(&c);
+                    }
                 }
+                std::thread::sleep(REFRESH_EVERY);
             }
-            std::thread::sleep(REFRESH_EVERY);
         });
     });
 }
@@ -318,8 +388,18 @@ pub fn start() {
 
 const DIAS: [&str; 7] = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MESES: [&str; 12] = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro",
-    "Novembro", "Dezembro",
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
 ];
 
 fn day_of(epoch_local: i64) -> i64 {
@@ -346,14 +426,22 @@ pub fn agenda_text(c: &Cache, now: i64, off: i64, max: usize) -> String {
                 format!("{dd:02}/{m:02}")
             }
         };
-        let hour = if e.all_day { String::new() } else { format!(" {}", hhmm(s)) };
+        let hour = if e.all_day {
+            String::new()
+        } else {
+            format!(" {}", hhmm(s))
+        };
         lines.push(format!("{when}{hour}  {}", e.title));
         if lines.len() >= max {
             break;
         }
     }
     if lines.is_empty() {
-        return if c.fetched_at == 0 { "sincronizando…".into() } else { "sem eventos próximos".into() };
+        return if c.fetched_at == 0 {
+            "sincronizando…".into()
+        } else {
+            "sem eventos próximos".into()
+        };
     }
     lines.join("\n")
 }
@@ -379,7 +467,11 @@ pub fn tasks_text(c: &Cache, now: i64, off: i64, max: usize) -> String {
         })
         .collect();
     if lines.is_empty() {
-        return if c.fetched_at == 0 { "sincronizando…".into() } else { "nenhuma tarefa aberta".into() };
+        return if c.fetched_at == 0 {
+            "sincronizando…".into()
+        } else {
+            "nenhuma tarefa aberta".into()
+        };
     }
     lines.join("\n")
 }
@@ -389,16 +481,30 @@ pub fn calendar_text(c: &Cache, now: i64, off: i64) -> (String, String) {
     let today = day_of(now + off);
     let (y, m, td) = civil_from_days(today);
     let first = days_from_civil(y, m, 1);
-    let next = if m == 12 { days_from_civil(y + 1, 1, 1) } else { days_from_civil(y, m + 1, 1) };
+    let next = if m == 12 {
+        days_from_civil(y + 1, 1, 1)
+    } else {
+        days_from_civil(y, m + 1, 1)
+    };
     let weekday0 = (first + 4).rem_euclid(7); // 0 = domingo
-    let busy: std::collections::HashSet<i64> = c.events.iter().map(|e| day_of(e.start + off)).collect();
-    let mut out = DIAS.iter().map(|d| format!("{d} ")).collect::<String>().trim_end().to_string();
+    let busy: std::collections::HashSet<i64> =
+        c.events.iter().map(|e| day_of(e.start + off)).collect();
+    let mut out = DIAS
+        .iter()
+        .map(|d| format!("{d} "))
+        .collect::<String>()
+        .trim_end()
+        .to_string();
     out.push('\n');
     let mut line = "    ".repeat(weekday0 as usize);
     for (i, day) in (first..next).enumerate() {
         let dd = i as i64 + 1;
         let mark = if busy.contains(&day) { '•' } else { ' ' };
-        let cell = if dd == td { format!("[{dd:>2}]") } else { format!("{dd:>2}{mark} ") };
+        let cell = if dd == td {
+            format!("[{dd:>2}]")
+        } else {
+            format!("{dd:>2}{mark} ")
+        };
         line.push_str(&cell);
         if (weekday0 + dd).rem_euclid(7) == 0 {
             out.push_str(line.trim_end());
@@ -409,7 +515,10 @@ pub fn calendar_text(c: &Cache, now: i64, off: i64) -> (String, String) {
     if !line.is_empty() {
         out.push_str(line.trim_end());
     }
-    (format!("{} {y}", MESES[(m - 1) as usize]).to_uppercase(), out.trim_end().to_string())
+    (
+        format!("{} {y}", MESES[(m - 1) as usize]).to_uppercase(),
+        out.trim_end().to_string(),
+    )
 }
 
 #[cfg(test)]
@@ -420,9 +529,15 @@ mod tests {
     fn datas_ida_e_volta() {
         let e = parse_iso("2026-11-26T15:00:00.123+00:00").unwrap();
         assert_eq!(iso_utc(e), "2026-11-26T15:00:00Z");
-        assert_eq!(parse_iso("2026-11-26T15:00:00-03:00").unwrap(), e + 3 * 3600);
+        assert_eq!(
+            parse_iso("2026-11-26T15:00:00-03:00").unwrap(),
+            e + 3 * 3600
+        );
         assert_eq!(parse_iso("2026-11-26T15:00:00Z").unwrap(), e);
-        assert_eq!(civil_from_days(days_from_civil(2026, 2, 28) + 1), (2026, 3, 1));
+        assert_eq!(
+            civil_from_days(days_from_civil(2026, 2, 28) + 1),
+            (2026, 3, 1)
+        );
         assert!(parse_iso("lixo").is_none());
     }
 
@@ -432,14 +547,45 @@ mod tests {
         let c = Cache {
             fetched_at: 1,
             events: vec![
-                Event { title: "Prova".into(), start: now + 3600, end: now + 7200, ..Default::default() },
-                Event { title: "Ontem".into(), start: now - 90000, end: now - 86400, ..Default::default() },
-                Event { title: "Feriado".into(), start: now + 86400, end: now + 86400, all_day: true, ..Default::default() },
+                Event {
+                    title: "Prova".into(),
+                    start: now + 3600,
+                    end: now + 7200,
+                    ..Default::default()
+                },
+                Event {
+                    title: "Ontem".into(),
+                    start: now - 90000,
+                    end: now - 86400,
+                    ..Default::default()
+                },
+                Event {
+                    title: "Feriado".into(),
+                    start: now + 86400,
+                    end: now + 86400,
+                    all_day: true,
+                    ..Default::default()
+                },
             ],
             tasks: vec![
-                Task { title: "Entregar".into(), due: Some(now - 86400), status: "todo".into(), priority: "alta".into() },
-                Task { title: "Feita".into(), due: None, status: "done".into(), priority: "baixa".into() },
-                Task { title: "Sem data".into(), due: None, status: "todo".into(), priority: "media".into() },
+                Task {
+                    title: "Entregar".into(),
+                    due: Some(now - 86400),
+                    status: "todo".into(),
+                    priority: "alta".into(),
+                },
+                Task {
+                    title: "Feita".into(),
+                    due: None,
+                    status: "done".into(),
+                    priority: "baixa".into(),
+                },
+                Task {
+                    title: "Sem data".into(),
+                    due: None,
+                    status: "todo".into(),
+                    priority: "media".into(),
+                },
             ],
             error: String::new(),
         };

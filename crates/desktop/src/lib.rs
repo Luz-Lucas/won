@@ -11,10 +11,10 @@ pub mod launcher_theme;
 pub mod midclick;
 #[path = "../../core/src/migrate.rs"]
 pub mod migrate;
+pub mod organize;
 pub mod rules;
 pub mod smartcopy;
 pub mod tiling;
-pub mod organize;
 pub mod weather;
 pub mod widget;
 

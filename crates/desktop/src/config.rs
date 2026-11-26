@@ -292,6 +292,8 @@ struct RawBar {
     active_outline: Option<bool>,
     #[serde(default)]
     hide_native_taskbar: bool,
+    /// Lista ordenada dos módulos (substitui left/center/right: a ordem manda, sem âncoras).
+    modules: Option<Vec<Module>>,
     left: Option<Vec<Module>>,
     center: Option<Vec<Module>>,
     right: Option<Vec<Module>>,
@@ -355,10 +357,14 @@ fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widg
         let width = w.width.unwrap_or(dw);
         let height = w.height.unwrap_or(dh);
         if !(MIN_SIZE..=MAX_SIZE).contains(&width) || !(MIN_SIZE..=MAX_SIZE).contains(&height) {
-            errors.push(format!("widget \"{id}\": width e height vão de {MIN_SIZE} a {MAX_SIZE}"));
+            errors.push(format!(
+                "widget \"{id}\": width e height vão de {MIN_SIZE} a {MAX_SIZE}"
+            ));
             continue;
         }
-        let font_size = w.font_size.unwrap_or(if w.kind.is_list() { 13 } else { 24 });
+        let font_size = w
+            .font_size
+            .unwrap_or(if w.kind.is_list() { 13 } else { 24 });
         if !(8..=96).contains(&font_size) || w.radius.unwrap_or(16) > 60 {
             errors.push(format!("widget \"{id}\": font_size 8 a 96 e radius 0 a 60"));
             continue;
@@ -368,7 +374,10 @@ fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widg
             errors.push(format!("widget \"{id}\": opacity vai de 0 a 100"));
             continue;
         }
-        let format = w.format.clone().unwrap_or_else(|| bar::DEFAULT_CLOCK.into());
+        let format = w
+            .format
+            .clone()
+            .unwrap_or_else(|| bar::DEFAULT_CLOCK.into());
         if format.len() > 40 {
             errors.push(format!("widget \"{id}\": format longo demais"));
             continue;
@@ -583,23 +592,28 @@ fn parse_bar(b: &RawBar, errors: &mut Vec<String>) -> Option<BarConfig> {
     if clock_format.chars().count() > 40 {
         errors.push("bar: clock_format longo demais".into());
     }
-    let (left, center, right) = (
-        b.left.clone().unwrap_or_else(|| vec![Module::Title]),
-        b.center.clone().unwrap_or_default(),
-        b.right.clone().unwrap_or_else(|| {
-            if b.islands {
-                vec![
-                    Module::Network,
-                    Module::Volume,
-                    Module::Cpu,
-                    Module::Ram,
-                    Module::Clock,
-                ]
-            } else {
-                vec![Module::Cpu, Module::Ram, Module::Clock]
-            }
-        }),
-    );
+    let (left, center, right) = if let Some(m) = b.modules.clone() {
+        // Lista ordenada: a ordem é a da lista, da esquerda para a direita.
+        (m, Vec::new(), Vec::new())
+    } else {
+        (
+            b.left.clone().unwrap_or_else(|| vec![Module::Title]),
+            b.center.clone().unwrap_or_default(),
+            b.right.clone().unwrap_or_else(|| {
+                if b.islands {
+                    vec![
+                        Module::Network,
+                        Module::Volume,
+                        Module::Cpu,
+                        Module::Ram,
+                        Module::Clock,
+                    ]
+                } else {
+                    vec![Module::Cpu, Module::Ram, Module::Clock]
+                }
+            }),
+        )
+    };
     if left.len() + center.len() + right.len() > 12 {
         errors.push("bar: no máximo 12 módulos".into());
     }
@@ -1017,6 +1031,21 @@ mod tests {
         assert!(
             parse("[[hotkey]]\nkeys=\"Win+J\"\naction=\"focus-next\"\ncommand=\"x\"\n").is_err()
         );
+    }
+
+    #[test]
+    fn bar_modules_are_an_ordered_list() {
+        let c = parse("[bar]\nmodules=[\"clock\",\"title\",\"cpu\"]\nleft=[\"ram\"]\n").unwrap();
+        let b = c.bar.unwrap();
+        assert_eq!(
+            b.left,
+            vec![
+                crate::bar::Module::Clock,
+                crate::bar::Module::Title,
+                crate::bar::Module::Cpu
+            ]
+        );
+        assert!(b.center.is_empty() && b.right.is_empty());
     }
 
     #[test]

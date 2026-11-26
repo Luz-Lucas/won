@@ -121,9 +121,9 @@ describe("Editor visual do desktop", () => {
     expect(box.value).toContain("[bar]");
     expect(box.value).toContain("# vazio");
     expect(screen.getByRole("img", { name: "Prévia da barra própria" })).toBeTruthy();
-    await userEvent.selectOptions(screen.getByLabelText("Posição de Relógio"), "left");
+    await userEvent.click(screen.getByRole("button", { name: "Subir Relógio" }));
     expect((screen.getByLabelText("desktop.toml") as HTMLTextAreaElement).value).toMatch(
-      /left = \["title", "clock"\]/,
+      /modules = \["title", "cpu", "clock", "ram"\]/,
     );
     expect(m.desktopConfigCheck).toHaveBeenCalled();
   });

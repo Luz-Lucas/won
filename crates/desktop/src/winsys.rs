@@ -8,8 +8,7 @@ use windows::Win32::System::Com::{
 };
 use windows_sys::Win32::NetworkManagement::IpHelper::{
     GAA_FLAG_INCLUDE_GATEWAYS, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
-    GAA_FLAG_SKIP_MULTICAST, GetAdaptersAddresses,
-    IP_ADAPTER_ADDRESSES_LH,
+    GAA_FLAG_SKIP_MULTICAST, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
 };
 
 thread_local! {
@@ -216,7 +215,11 @@ pub fn media_text() -> String {
             let w = spotify_window_text();
             note(format!(
                 "{total} sessão(ões) no SMTC, nenhuma tocando{}",
-                if w.is_empty() { "" } else { "; usando o título da janela do Spotify" }
+                if w.is_empty() {
+                    ""
+                } else {
+                    "; usando o título da janela do Spotify"
+                }
             ));
             w
         }
@@ -224,7 +227,11 @@ pub fn media_text() -> String {
             let w = spotify_window_text();
             note(format!(
                 "SMTC indisponível: {e}{}",
-                if w.is_empty() { "" } else { "; usando o título da janela do Spotify" }
+                if w.is_empty() {
+                    ""
+                } else {
+                    "; usando o título da janela do Spotify"
+                }
             ));
             w
         }
@@ -244,10 +251,7 @@ static WANT_MEDIA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool
 static STARTED: std::sync::Once = std::sync::Once::new();
 
 pub fn snapshot() -> Snapshot {
-    SNAP.lock()
-        .ok()
-        .and_then(|g| g.clone())
-        .unwrap_or_default()
+    SNAP.lock().ok().and_then(|g| g.clone()).unwrap_or_default()
 }
 
 /// Liga (uma vez) a thread que mede volume, rede e mídia sem prender a barra.
@@ -289,4 +293,67 @@ pub fn start_sampler() {
             }
         });
     });
+}
+
+/// Muda o volume geral do sistema em `delta` (-1.0..1.0); devolve o novo valor 0..1.
+pub fn adjust_system_volume(delta: f32) -> Option<f32> {
+    let ep = endpoint()?;
+    unsafe {
+        let cur = ep.GetMasterVolumeLevelScalar().ok()?;
+        let v = (cur + delta).clamp(0.0, 1.0);
+        ep.SetMasterVolumeLevelScalar(v, std::ptr::null()).ok()?;
+        if v > 0.0 {
+            let _ = ep.SetMute(false, std::ptr::null());
+        }
+        Some(v)
+    }
+}
+
+/// Volume da sessão de áudio do app `exe` (ex.: "spotify.exe"): lê (delta = 0) ou muda.
+/// Devolve o volume 0..1, ou `None` se o app não tem sessão de áudio ativa.
+pub fn app_volume(exe: &str, delta: f32) -> Option<f32> {
+    use windows::Win32::Media::Audio::{
+        IAudioSessionControl2, IAudioSessionManager2, ISimpleAudioVolume,
+    };
+    use windows::core::Interface;
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let en: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let mgr: IAudioSessionManager2 = dev.Activate(CLSCTX_ALL, None).ok()?;
+        let list = mgr.GetSessionEnumerator().ok()?;
+        let n = list.GetCount().ok()?;
+        let mut result = None;
+        for i in 0..n {
+            let Ok(ctl) = list.GetSession(i) else {
+                continue;
+            };
+            let Ok(c2) = ctl.cast::<IAudioSessionControl2>() else {
+                continue;
+            };
+            let Ok(pid) = c2.GetProcessId() else { continue };
+            let name = crate::win::process_path(pid)
+                .and_then(|p| p.file_name().map(|f| f.to_string_lossy().to_lowercase()));
+            if name.as_deref() != Some(exe) {
+                continue;
+            }
+            let Ok(vol) = ctl.cast::<ISimpleAudioVolume>() else {
+                continue;
+            };
+            let Ok(cur) = vol.GetMasterVolume() else {
+                continue;
+            };
+            let v = if delta == 0.0 {
+                cur
+            } else {
+                (cur + delta).clamp(0.0, 1.0)
+            };
+            if delta != 0.0 {
+                let _ = vol.SetMasterVolume(v, std::ptr::null());
+            }
+            result = Some(v);
+        }
+        result
+    }
 }
