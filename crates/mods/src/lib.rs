@@ -221,30 +221,6 @@ pub fn enable_shell_icons(
     )
 }
 
-/// Fase 14 (versão segura de sessão): desliga a verificação de assinatura de temas só dentro do
-/// Explorer já aberto. Não toca no disco, não sobrevive a reinicialização. Ver crates/mod-theme.
-pub fn enable_shell_theme_session(
-    dir: &Path,
-    exe: &Path,
-    dll: &Path,
-    build: u32,
-    tested: &[u32],
-    experimental: bool,
-) -> Result<Vec<Injection>> {
-    enable_shell_mod(
-        "tema-sem-assinatura-sessao",
-        "uxtheme.dll",
-        "?Verify@CThemeSignature@@QEAAJPEAX@Z",
-        "theme-verify.rva",
-        dir,
-        exe,
-        dll,
-        build,
-        tested,
-        experimental,
-    )
-}
-
 /// Mods 6/7 (fase 13): estilo da barra via XAML (método Windhawk/TranslucentTB). Não usa RVA nem
 /// escreve em memória do Explorer: a DLL só chama `InitializeXamlDiagnosticsEx`. Passa pelas
 /// mesmas travas (`shell::may_enable`); religar remove o marcador de eject, que o desligar cria.

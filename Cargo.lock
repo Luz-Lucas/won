@@ -5068,10 +5068,6 @@ name = "sentinela-mod-test"
 version = "0.1.0"
 
 [[package]]
-name = "sentinela-mod-theme"
-version = "0.1.0"
-
-[[package]]
 name = "sentinela-mod-xaml"
 version = "0.1.0"
 dependencies = [

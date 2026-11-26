@@ -28,12 +28,6 @@ vi.mock("../api", () => ({
   wallpaperGallery: vi.fn(),
   wallpaperOpen: vi.fn(),
   wallpaperPauseModeSet: vi.fn(),
-  themeList: vi.fn().mockResolvedValue({ themes: [], history: [] }),
-  themePreview: vi.fn(),
-  themeApply: vi.fn(),
-  themeUndo: vi.fn(),
-  themeExport: vi.fn(),
-  themeImport: vi.fn(),
   terminalStatus: vi.fn().mockRejectedValue("sem terminal"),
   desktopStatus: vi.fn(),
   desktopStart: vi.fn(),
@@ -73,7 +67,7 @@ describe("Desktop em Personalizar", () => {
   it("hidden_when_program_is_missing", async () => {
     m.desktopStatus.mockResolvedValue(status({ installed: false }));
     render(<Personalizar />);
-    await screen.findByRole("button", { name: "Temas" });
+    await screen.findByRole("button", { name: "Loja" });
     await waitFor(() => expect(m.desktopStatus).toHaveBeenCalled());
     expect(screen.getByRole("button", { name: "Desktop" })).toBeDisabled();
   });

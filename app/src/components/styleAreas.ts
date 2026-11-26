@@ -52,25 +52,14 @@ export const AREA_INFO: Record<PreviewArea, AreaInfo> = {
       "Animações de janelas e da barra de tarefas.",
     ],
   },
-  temas: {
-    title: "Temas",
-    summary: "Conjuntos de cores, papel de parede e terminal.",
-    description: "Um tema junta cores, papel de parede e terminal; dá para exportar e importar.",
-    reference: [
-      "Aplicar um tema muda cores, papel de parede e terminal de uma vez.",
-      "Dá para voltar ao visual anterior pelo Histórico.",
-      "Exportar e importar arquivos .sentinela-theme.",
-    ],
-  },
   loja: {
     title: "Loja",
-    summary: "Temas, ponteiros do mouse e pacotes de ícones para baixar.",
+    summary: "Ponteiros do mouse e pacotes de ícones para baixar.",
     description:
       "Um catálogo com prévia: escolha o que baixar, aplique de dentro do app e reverta quando quiser.",
     reference: [
       "Ponteiros do mouse (cursores) completos, incluindo os de espera animados.",
       "Pacotes de ícones para pasta, Este Computador, Lixeira, sua pasta e Rede.",
-      "Temas que juntam cores, ponteiro e ícones; dá para desfazer tudo.",
       "Itens extras vêm do catálogo online, conferidos por SHA-256.",
     ],
   },

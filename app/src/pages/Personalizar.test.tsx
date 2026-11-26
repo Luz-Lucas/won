@@ -286,7 +286,7 @@ describe("Personalizar", () => {
     );
     render(<Personalizar />);
     expect(screen.getByRole("heading", { level: 1, name: "Estilização" })).toBeInTheDocument();
-    for (const n of ["Barra de tarefas", "Menu Iniciar", "Explorador de Arquivos", "Cores e aparência", "Temas", "Sistema"])
+    for (const n of ["Barra de tarefas", "Menu Iniciar", "Explorador de Arquivos", "Cores e aparência", "Sistema"])
       expect(await screen.findByRole("button", { name: n })).toBeEnabled();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Barra de tarefas" }));

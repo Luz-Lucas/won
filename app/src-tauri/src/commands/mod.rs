@@ -14,7 +14,6 @@ pub mod signatures;
 pub mod startup;
 pub mod system;
 pub mod terminal;
-pub mod theme;
 pub mod tweaks;
 pub mod updates;
 pub mod wallpaper;

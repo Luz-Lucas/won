@@ -15,9 +15,6 @@ vi.mock("../api", () => ({
   lojaApplyShortcuts: vi.fn(),
   lojaRevertShortcuts: vi.fn(),
   restartExplorer: vi.fn(),
-  themePreview: vi.fn(),
-  themeApply: vi.fn(),
-  themeUndo: vi.fn(),
 }));
 
 const item = (o: Partial<api.LojaItem>): api.LojaItem => ({

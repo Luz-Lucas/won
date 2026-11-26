@@ -1,4 +1,4 @@
-import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
@@ -40,12 +40,6 @@ vi.mock("../api", () => ({
   wallpaperOpen: vi.fn(),
   wallpaperMonitors: vi.fn(),
   wallpaperPauseModeSet: vi.fn(),
-  themeList: vi.fn(),
-  themePreview: vi.fn(),
-  themeApply: vi.fn(),
-  themeUndo: vi.fn(),
-  themeExport: vi.fn(),
-  themeImport: vi.fn(),
 }));
 
 const status = (installed: boolean, pause_mode: api.WallpaperPauseMode = "pause") => ({
@@ -55,22 +49,12 @@ const status = (installed: boolean, pause_mode: api.WallpaperPauseMode = "pause"
   pause_mode,
 });
 
-const MIN = { name: "Minimalista", description: "Escuro e enxuto", toml: "version = 1", builtin: true };
-const record = { seq: 1, theme: "Minimalista", applied_at: "x", tweak_ids: ["a"], wallpaper: null };
-
-const preview = {
-  items: [
-    { kind: "tweak" as const, label: "Tema escuro dos apps", change: true, detail: "Valor: 1 → 0" },
-    { kind: "tweak" as const, label: "Barra", change: false, detail: "já está assim" },
-  ],
-  warnings: ["o wallpaper 9 não está na sua Oficina"],
-};
 
 const goTo = async (name: string) => {
   await userEvent.click(await screen.findByRole("button", { name }));
 };
 
-describe("Personalizar: papel de parede e temas", () => {
+describe("Personalizar: papel de parede", () => {
   beforeEach(() => {
     for (const f of Object.values(api)) if (vi.isMockFunction(f)) f.mockReset();
     vi.mocked(api.terminalStatus).mockRejectedValue("sem terminal");
@@ -84,14 +68,13 @@ describe("Personalizar: papel de parede e temas", () => {
       journal_count: 0,
       restore_point_done: false,
     });
-    vi.mocked(api.themeList).mockResolvedValue({ themes: [MIN], history: [] });
     vi.mocked(api.wallpaperMonitors).mockResolvedValue([]);
   });
 
   it("gallery_hidden_without_wallpaper_engine", async () => {
     vi.mocked(api.wallpaperStatus).mockResolvedValue(status(false));
     render(<Personalizar />);
-    await screen.findByRole("button", { name: "Temas" });
+    await screen.findByRole("button", { name: "Loja" });
     expect(screen.getByRole("button", { name: "Papel de parede" })).toBeDisabled();
   });
 
@@ -142,90 +125,5 @@ describe("Personalizar: papel de parede e temas", () => {
     await userEvent.click(screen.getByRole("radio", { name: /^Parar/ }));
     expect(api.wallpaperPauseModeSet).toHaveBeenCalledWith("stop");
     await waitFor(() => expect(screen.getByRole("radio", { name: /^Parar/ })).toBeChecked());
-  });
-
-  it("apply_theme_shows_preview_first", async () => {
-    vi.mocked(api.wallpaperStatus).mockResolvedValue(status(false));
-    vi.mocked(api.themePreview).mockResolvedValue(preview);
-    vi.mocked(api.themeApply).mockResolvedValue({
-      results: [],
-      effect: "relogon",
-      warnings: [],
-      record,
-    });
-    render(<Personalizar />);
-    await goTo("Temas");
-    await userEvent.click(await screen.findByRole("button", { name: "Ver mudanças de Minimalista" }));
-    expect(api.themePreview).toHaveBeenCalledWith("version = 1");
-    expect(api.themeApply).not.toHaveBeenCalled();
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Tema escuro dos apps: Valor: 1 → 0")).toBeInTheDocument();
-    expect(within(dialog).getByText(/o wallpaper 9 não está/)).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole("button", { name: "Aplicar tema" }));
-    expect(api.themeApply).toHaveBeenCalledWith("version = 1");
-    expect(await screen.findByText("Tema aplicado: Minimalista.")).toBeInTheDocument();
-    expect(screen.getByText(/Saia e entre de novo/)).toBeInTheDocument();
-  });
-
-  it("cancel_preview_applies_nothing", async () => {
-    vi.mocked(api.wallpaperStatus).mockResolvedValue(status(false));
-    vi.mocked(api.themePreview).mockResolvedValue(preview);
-    render(<Personalizar />);
-    await goTo("Temas");
-    await userEvent.click(await screen.findByRole("button", { name: "Ver mudanças de Minimalista" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
-    expect(api.themeApply).not.toHaveBeenCalled();
-  });
-
-  it("undo_theme_in_one_step", async () => {
-    vi.mocked(api.wallpaperStatus).mockResolvedValue(status(false));
-    vi.mocked(api.themeList).mockResolvedValue({ themes: [MIN], history: [record] });
-    vi.mocked(api.themeUndo).mockResolvedValue({
-      results: [],
-      conflicts: [],
-      warnings: [],
-      remaining: null,
-    });
-    render(<Personalizar />);
-    await goTo("Temas");
-    expect(await screen.findByText("Último tema aplicado: Minimalista.")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Desfazer tema" }));
-    expect(api.themeUndo).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("Tema desfeito.")).toBeInTheDocument();
-  });
-
-  it("import_shows_warnings", async () => {
-    vi.mocked(api.wallpaperStatus).mockResolvedValue(status(false));
-    openDialog.mockResolvedValue("C:\\temas\\noite.sentinela-theme");
-    vi.mocked(api.themeImport).mockResolvedValue({
-      name: "Noite",
-      description: "d",
-      toml: "version = 1",
-      warnings: ["o wallpaper 424242 não está na sua Oficina; assine em https://steamcommunity.com/x"],
-      disabled: ["a seção [mods] é de uma fase futura e foi ignorada"],
-    });
-    render(<Personalizar />);
-    await goTo("Temas");
-    await userEvent.click(await screen.findByRole("button", { name: "Importar tema…" }));
-    expect(api.themeImport).toHaveBeenCalledWith("C:\\temas\\noite.sentinela-theme");
-    expect(await screen.findByText(/o wallpaper 424242 não está/)).toBeInTheDocument();
-    expect(screen.getByText(/Desligado: a seção \[mods\]/)).toBeInTheDocument();
-    // Fica na lista, mas só aplica depois da prévia.
-    expect(screen.getByRole("button", { name: "Ver mudanças de Noite" })).toBeInTheDocument();
-    expect(api.themeApply).not.toHaveBeenCalled();
-  });
-
-  it("export_current_look", async () => {
-    vi.mocked(api.wallpaperStatus).mockResolvedValue(status(false));
-    saveDialog.mockResolvedValue("C:\\temas\\meu.sentinela-theme");
-    vi.mocked(api.themeExport).mockResolvedValue(undefined);
-    render(<Personalizar />);
-    await goTo("Temas");
-    const btn = await screen.findByRole("button", { name: "Exportar o visual atual…" });
-    expect(btn).toBeDisabled();
-    await userEvent.type(screen.getByLabelText("Nome do tema atual"), "Meu");
-    await userEvent.click(btn);
-    expect(api.themeExport).toHaveBeenCalledWith("Meu", "C:\\temas\\meu.sentinela-theme");
-    expect(await screen.findByText(/Salvo em C:\\temas\\meu\.sentinela-theme/)).toBeInTheDocument();
   });
 });

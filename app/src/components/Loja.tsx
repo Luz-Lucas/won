@@ -10,11 +10,8 @@ import {
   lojaRevert,
   lojaRevertShortcuts,
   restartExplorer,
-  themeApply,
-  themePreview,
-  themeUndo,
 } from "../api";
-import type { LojaItem, LojaKind, ThemePreview } from "../api";
+import type { LojaItem, LojaKind } from "../api";
 import ConfirmDialog from "./ConfirmDialog";
 
 const errorText = (e: unknown) => (typeof e === "string" ? e : String(e));
@@ -30,7 +27,6 @@ const TABS: { id: Tab; label: string }[] = [
 const KIND_LABEL: Record<LojaKind, string> = {
   cursores: "Ponteiros",
   icones: "Ícones",
-  temas: "Tema",
 };
 
 const size = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
@@ -43,11 +39,6 @@ const CURSOR_SIZES: { px: number; label: string }[] = [
   { px: 64, label: "Grande" },
 ];
 
-interface PendingTheme {
-  item: LojaItem;
-  preview: ThemePreview;
-}
-
 /** Loja: ponteiros e ícones para baixar, aplicar e reverter. */
 export default function Loja() {
   const [items, setItems] = useState<LojaItem[]>([]);
@@ -59,7 +50,6 @@ export default function Loja() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [askExplorer, setAskExplorer] = useState(false);
-  const [pending, setPending] = useState<PendingTheme | null>(null);
   const [cursorPx, setCursorPx] = useState<number | null>(null);
 
   useEffect(() => {
@@ -95,7 +85,6 @@ export default function Loja() {
 
   const shown = items.filter(
     (i) =>
-      i.kind !== "temas" &&
       (tab === "todos" || i.kind === tab) &&
       (query.trim() === "" ||
         `${i.name} ${i.description} ${i.tags.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase())),
@@ -171,43 +160,6 @@ export default function Loja() {
       setNote(`"${i.name}" foi removido da biblioteca.`);
     });
 
-  // Tema: prévia do motor de temas primeiro; nada muda sem confirmação.
-  const askTheme = (i: LojaItem) =>
-    run(i.id, async () => {
-      if (!i.toml) throw new Error("Tema sem conteúdo.");
-      setPending({ item: i, preview: await themePreview(i.toml) });
-    });
-
-  const confirmTheme = async () => {
-    const p = pending;
-    setPending(null);
-    if (!p?.item.toml) return;
-    await run(p.item.id, async () => {
-      const done = await themeApply(p.item.toml as string);
-      const failed = done.results.filter((r) => !r.ok);
-      for (const id of [p.item.cursor, p.item.icons]) {
-        const part = id ? byId.get(id) : undefined;
-        if (part) await applyPack(part);
-      }
-      setNote(
-        failed.length > 0
-          ? `Tema aplicado com ${failed.length} ajuste(s) que falharam.`
-          : `Tema "${p.item.name}" aplicado com ponteiro e ícones.`,
-      );
-    });
-  };
-
-  const undoTheme = (i: LojaItem) =>
-    run(i.id, async () => {
-      await themeUndo().catch(() => undefined);
-      for (const id of [i.cursor, i.icons]) {
-        const part = id ? byId.get(id) : undefined;
-        if (part?.applied) await lojaRevert(part.kind);
-      }
-      setNote("Tema desfeito e ponteiro/ícones revertidos.");
-      if (i.icons && byId.get(i.icons)?.applied) setAskExplorer(true);
-    });
-
   const restart = async () => {
     setAskExplorer(false);
     try {
@@ -216,8 +168,6 @@ export default function Loja() {
       setError(errorText(e));
     }
   };
-
-  const changes = pending?.preview.items.filter((x) => x.change) ?? [];
 
   return (
     <div className="loja">
@@ -299,8 +249,6 @@ export default function Loja() {
       <ul className="loja-grid" aria-label="Itens da Loja">
         {shown.map((i) => {
           const working = busy === i.id;
-          const pair = i.kind === "temas" ? [i.cursor, i.icons].map((id) => (id ? byId.get(id) : undefined)) : [];
-          const themeLive = i.kind === "temas" && pair.length === 2 && pair.every((p) => p?.applied);
           return (
             <li key={i.id} className="loja-card">
               {i.preview ? (
@@ -311,30 +259,16 @@ export default function Loja() {
               <div className="clean-head">
                 <strong>{i.name}</strong>
                 <span className="tweak-badge">{KIND_LABEL[i.kind]}</span>
-                {(i.applied || themeLive) && <span className="tweak-badge">Aplicado</span>}
+                {i.applied && <span className="tweak-badge">Aplicado</span>}
                 {i.remote && <span className="tweak-badge">Online</span>}
-                {i.installed && i.kind !== "temas" && !i.applied && <span className="tweak-badge">Baixado</span>}
+                {i.installed && !i.applied && <span className="tweak-badge">Baixado</span>}
               </div>
               <p className="muted">{i.description}</p>
-              {i.kind === "temas" && (
-                <p className="muted">
-                  {`Inclui: ${byId.get(i.cursor ?? "")?.name ?? "ponteiro"} + ${byId.get(i.icons ?? "")?.name ?? "ícones"}`}
-                </p>
-              )}
               <p className="muted loja-meta">
-                {`${i.author} · ${i.license}${i.kind !== "temas" && i.bytes ? ` · ${size(i.bytes)}` : ""}`}
+                {`${i.author} · ${i.license}${i.bytes ? ` · ${size(i.bytes)}` : ""}`}
               </p>
               <div className="loja-actions">
-                {i.kind === "temas" ? (
-                  <>
-                    <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void askTheme(i)} aria-label={`Aplicar tema ${i.name}`}>
-                      {working ? "Aguarde…" : "Aplicar tema"}
-                    </button>
-                    <button type="button" className="btn" disabled={busy !== null} onClick={() => void undoTheme(i)} aria-label={`Desfazer tema ${i.name}`}>
-                      Desfazer
-                    </button>
-                  </>
-                ) : !i.installed ? (
+                {!i.installed ? (
                   <>
                     <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void install(i)} aria-label={`Baixar ${i.name}`}>
                       {working ? "Baixando…" : "Baixar"}
@@ -375,24 +309,6 @@ export default function Loja() {
         de terceiros (Fluent, Phosphor, Tabler, Lucide, Bootstrap, Material, Font Awesome,
         game-icons, Twemoji) mantêm autor e licença de cada um; créditos em docs/loja-creditos.md.
       </p>
-      {pending && (
-        <ConfirmDialog
-          title={`Aplicar "${pending.item.name}"?`}
-          confirmLabel="Aplicar tema"
-          onConfirm={() => void confirmTheme()}
-          onCancel={() => setPending(null)}
-        >
-          {changes.length === 0 && <p>Os ajustes do Windows já estão assim.</p>}
-          <ul>
-            {changes.map((x) => (
-              <li key={`${x.kind}-${x.label}`}>{x.detail ? `${x.label}: ${x.detail}` : x.label}</li>
-            ))}
-            <li>{`Ponteiro: ${byId.get(pending.item.cursor ?? "")?.name ?? "—"}`}</li>
-            <li>{`Ícones: ${byId.get(pending.item.icons ?? "")?.name ?? "—"}`}</li>
-          </ul>
-          <p className="muted">Dá para desfazer tudo de uma vez.</p>
-        </ConfirmDialog>
-      )}
       {askShortcuts && (
         <ConfirmDialog
           title={`Trocar o ícone dos atalhos por "${askShortcuts.name}"?`}

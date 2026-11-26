@@ -908,15 +908,7 @@ export interface ImportedTheme {
   disabled: string[];
 }
 
-export const themeList = () => invoke<ThemesPage>("theme_list");
-export const themePreview = (toml: string) => invoke<ThemePreview>("theme_preview", { toml });
-export const themeApply = (toml: string) => invoke<ThemeApplied>("theme_apply", { toml });
-export const themeUndo = () => invoke<ThemeUndone>("theme_undo");
-export const themeExport = (name: string, path: string) =>
-  invoke<void>("theme_export", { name, path });
-export const themeImport = (path: string) => invoke<ImportedTheme>("theme_import", { path });
-
-export type LojaKind = "cursores" | "icones" | "temas";
+export type LojaKind = "cursores" | "icones";
 
 export interface LojaItem {
   id: string;
@@ -1143,7 +1135,7 @@ export const modsEjectAll = () => invoke<number>("mods_eject_all");
 export const modsRecoveryWrite = () => invoke<string>("mods_recovery_write");
 
 export interface ShellModItem {
-  id: "icones" | "rotulos" | "tema" | "xaml";
+  id: "icones" | "rotulos" | "xaml";
   dll_exists: boolean;
   active: boolean;
 }

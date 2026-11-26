@@ -58,10 +58,6 @@ const INFO: Record<ShellModItem["id"], { title: string; text: string }> = {
   },
   icones: { title: "Ícones pequenos na barra", text: "Reduz os botões da barra de tarefas." },
   rotulos: { title: "Rótulos nos botões da barra", text: "Mostra o nome do programa e nunca junta os botões." },
-  tema: {
-    title: "Temas sem assinatura (só nesta sessão)",
-    text: "Permite temas de terceiros até o Explorer reiniciar. Não altera arquivos do Windows.",
-  },
 };
 
 /** Liga e desliga os efeitos avançados do Explorer; `only` limita a quais aparecem. */

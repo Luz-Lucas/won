@@ -27,7 +27,6 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import Desktop from "../components/Desktop";
 import Terminal from "../components/Terminal";
 import Loja from "../components/Loja";
-import Themes from "../components/Themes";
 import StylePreview, { effectiveOn } from "../components/StylePreview";
 import type { Page } from "../components/Sidebar";
 import WallpaperGallery from "../components/WallpaperGallery";
@@ -428,7 +427,7 @@ function Ajustes({ nav, area }: { nav: React.ReactNode; area: TweakArea }) {
   );
 }
 
-type View = "hub" | TweakArea | "wallpaper" | "temas" | "loja" | "terminal" | "desktop";
+type View = "hub" | TweakArea | "wallpaper" | "loja" | "terminal" | "desktop";
 
 /** Estilização: um menu de áreas; cada uma com referência, prévia e seus controles. */
 export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page) => void }) {
@@ -550,7 +549,6 @@ export default function Personalizar({ onNavigate }: { onNavigate?: (page: Page)
       </div>
       {view === "wallpaper" && engine && <WallpaperGallery status={engine} />}
       {view === "loja" && <Loja />}
-      {view === "temas" && <Themes engine={engine?.installed ?? false} />}
       {view === "desktop" && desk && <Desktop status={desk} onChanged={loadDesk} />}
       {view === "terminal" && term && (
         <Terminal status={term} engine={engine?.installed ?? false} onChanged={loadTerm} />
@@ -564,7 +562,6 @@ const HUB_ORDER: Exclude<View, "hub">[] = [
   "iniciar",
   "explorador",
   "aparencia",
-  "temas",
   "loja",
   "wallpaper",
   "terminal",

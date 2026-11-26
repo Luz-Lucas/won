@@ -152,14 +152,9 @@ pub fn mods_recovery_write() -> Result<String, String> {
 // ---- Efeitos do Explorer (mods 4, 5, 6/7 e tema de sessão) ligados na Estilização ----
 
 /// (id da interface, nome no estado, DLL ao lado do app em `mods\`).
-const SHELL_MODS: [(&str, &str, &str); 4] = [
+const SHELL_MODS: [(&str, &str, &str); 3] = [
     ("icones", "icones-pequenos", "sentinela_mod_icons.dll"),
     ("rotulos", "rotulos-barra", "sentinela_mod_labels.dll"),
-    (
-        "tema",
-        "tema-sem-assinatura-sessao",
-        "sentinela_mod_theme.dll",
-    ),
     (
         "xaml",
         sentinela_mods::XAML_MOD_NAME,
@@ -256,9 +251,6 @@ pub async fn shell_mod_set(id: String, on: bool) -> Result<usize, String> {
         let r = match id.as_str() {
             "icones" => sentinela_mods::enable_shell_icons(&dir, &exe, &dll, build, &[], true),
             "rotulos" => sentinela_mods::enable_shell_labels(&dir, &exe, &dll, build, &[], true),
-            "tema" => {
-                sentinela_mods::enable_shell_theme_session(&dir, &exe, &dll, build, &[], true)
-            }
             _ => sentinela_mods::enable_shell_xaml(&dir, &exe, &dll, build, &[], true),
         };
         let done = r.map_err(|e| format!("{e:#}"))?;
