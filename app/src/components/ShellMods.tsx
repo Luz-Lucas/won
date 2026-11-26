@@ -332,6 +332,15 @@ export default function ShellMods({ only }: { only?: ShellModItem["id"][] }) {
               </div>
             )}
 
+            <Group
+              title="Manter o estilo"
+              hint="Se o Explorer cair, refizer a barra ou o Iniciar/Pesquisa reiniciarem, o estilo volta sozinho em poucos segundos."
+            >
+              <Check checked={style.autoReapply} onChange={(v) => set({ autoReapply: v })}>
+                Reaplicar o estilo automaticamente quando ele sumir
+              </Check>
+            </Group>
+
             <div className="est-actions">
               <button type="button" className="btn" onClick={() => void save()}>
                 Aplicar estilo

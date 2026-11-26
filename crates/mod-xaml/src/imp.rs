@@ -78,6 +78,7 @@ unsafe trait IXamlDiagnostics: IUnknown {
 #[interface("A593B11A-D17F-48BB-8F66-83910731C8A5")]
 unsafe trait IVisualTreeService: IUnknown {
     unsafe fn AdviseVisualTreeChange(&self, cb: *mut c_void) -> HRESULT;
+    unsafe fn UnadviseVisualTreeChange(&self, cb: *mut c_void) -> HRESULT;
 }
 
 // --- estado ------------------------------------------------------------------------------------
@@ -1058,6 +1059,36 @@ fn retry_pending() {
     }
 }
 
+static LIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Conta (de forma assíncrona, na thread de UI de cada um) os retângulos rastreados que ainda
+/// estão ligados ao TaskbarFrame.
+fn check_live() {
+    let items: Vec<Rectangle> = TRACKED
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|t| t.rect.clone())
+        .collect();
+    for rect in items {
+        let Ok(ui) = rect.cast::<UIElement>() else {
+            continue;
+        };
+        let Ok(disp) = ui.Dispatcher() else { continue };
+        let h = DispatchedHandler::new(move || {
+            let ok = rect
+                .cast::<FrameworkElement>()
+                .map(|fe| find_parent_named(fe, "TaskbarFrame"))
+                .unwrap_or(false);
+            if ok {
+                LIVE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+            Ok(())
+        });
+        let _ = disp.RunAsync(CoreDispatcherPriority::Normal, &h);
+    }
+}
+
 /// Reaplica (ou restaura) em todos os elementos guardados, cada um na sua thread de UI.
 fn apply_all(on: bool, st: Style) {
     apply_all_start(on, st.clone());
@@ -1437,7 +1468,10 @@ impl IVisualTreeServiceCallback_Impl for Watcher_Impl {
                 apply_one(&mut t, true, &st)
             ));
         }
-        TRACKED.lock().unwrap().push(t);
+        let mut tr = TRACKED.lock().unwrap();
+        if !tr.iter().any(|x| x.handle == t.handle) {
+            tr.push(t);
+        }
         S_OK
     }
 }
@@ -1469,10 +1503,12 @@ impl IObjectWithSite_Impl for TapSite_Impl {
             let pack = Send2(diag, watcher);
             std::thread::spawn(move || {
                 let pack = pack;
-                if let Ok(svc) = pack.0.cast::<IVisualTreeService>() {
-                    let cb: IVisualTreeServiceCallback = pack.1.cast().unwrap();
-                    let _ = unsafe { svc.AdviseVisualTreeChange(cb.as_raw()) };
-                }
+                let tap: Option<(IVisualTreeService, IVisualTreeServiceCallback)> =
+                    pack.0.cast::<IVisualTreeService>().ok().and_then(|svc| {
+                        let cb: IVisualTreeServiceCallback = pack.1.cast().ok()?;
+                        let _ = unsafe { svc.AdviseVisualTreeChange(cb.as_raw()) };
+                        Some((svc, cb))
+                    });
                 // Movimento (dock, Iniciar à esquerda): ~30 quadros por segundo só quando ligado.
                 std::thread::spawn(|| {
                     let mut cfg = (false, Style::default());
@@ -1514,10 +1550,45 @@ impl IObjectWithSite_Impl for TapSite_Impl {
                 });
                 // Vigia: arquivo de eject / cfg mudando reaplica ou restaura.
                 let mut last: Option<(bool, Style)> = None;
+                let mut tick = 0u32;
+                let (mut armed, mut bad, mut rebuilds) = (false, 0u32, 0u32);
+                let on_taskbar = !is_search_host() && !is_start_host();
                 loop {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     retry_pending();
                     let now = want_on();
+                    tick = tick.wrapping_add(1);
+                    // Estilo sumiu por qualquer motivo (o Explorer refez a barra, a conexão com a
+                    // árvore visual se perdeu)? A cada ~3 s confere se ainda há retângulos ligados
+                    // ao TaskbarFrame; se não há (duas conferências seguidas), refaz a assinatura da
+                    // árvore (ela reenvia todos os elementos) e reaplica. Idempotente: o mesmo
+                    // elemento nunca entra duas vezes.
+                    if on_taskbar && now.0 && now.1.auto_reapply && tick % 6 == 0 {
+                        let live = LIVE.swap(0, std::sync::atomic::Ordering::SeqCst);
+                        if armed {
+                            bad = if live == 0 { bad + 1 } else { 0 };
+                        }
+                        armed = true;
+                        if bad >= 2 && rebuilds < 40 {
+                            if let Some((svc, cb)) = &tap {
+                                rebuilds += 1;
+                                bad = 0;
+                                TRACKED.lock().unwrap().clear();
+                                PENDING.lock().unwrap().clear();
+                                let _ = unsafe { svc.UnadviseVisualTreeChange(cb.as_raw()) };
+                                let r = unsafe { svc.AdviseVisualTreeChange(cb.as_raw()) };
+                                log(&format!(
+                                    "estilo ausente: assinatura da árvore refeita ({rebuilds}): {r:?}"
+                                ));
+                            }
+                        } else if live > 0 && !now.1.islands {
+                            apply_all(true, now.1.clone());
+                        }
+                        check_live();
+                    } else if !(on_taskbar && now.0 && now.1.auto_reapply) {
+                        armed = false;
+                        bad = 0;
+                    }
                     // Com ilhas, reaplica sempre: elas seguem a largura dos apps abertos.
                     if last.as_ref() != Some(&now) || (now.0 && now.1.islands) {
                         apply_all(now.0, now.1.clone());

@@ -322,6 +322,16 @@ pub fn reinject_xaml(dir: &Path, dll: &Path) -> usize {
     if !on {
         return 0;
     }
+    // `auto_reapply=false` desliga a religação automática (o padrão é ligada).
+    let auto = std::fs::read_to_string(dir.join("xaml-barra.cfg"))
+        .map(|t| {
+            !t.lines()
+                .any(|l| matches!(l.trim(), "auto_reapply=false" | "auto_reapply=0"))
+        })
+        .unwrap_or(true);
+    if !auto {
+        return 0;
+    }
     let sys = System::new_all();
     let mut state = registry::load_state(dir);
     let alive: std::collections::HashSet<u32> =

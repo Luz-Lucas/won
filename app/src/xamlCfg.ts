@@ -15,6 +15,7 @@ export interface XamlStyle {
   startHideList: boolean;
   /** Experimental: força o modo escuro na tela de resultados da pesquisa. */
   searchDark: boolean;
+  autoReapply: boolean;
   /** Duas ilhas na barra nativa (apps + bandeja). Usa a cor e o raio acima. */
   islands: boolean;
   islandPad: number;
@@ -49,6 +50,7 @@ export const DEFAULT_XAML: XamlStyle = {
   startHideAll: false,
   startHideList: false,
   searchDark: false,
+  autoReapply: true,
   islands: false,
   islandPad: 14,
   islandTrayPad: 10,
@@ -117,6 +119,8 @@ export function parseXamlCfg(text: string): XamlStyle {
       s.startHideList = v === "true" || v === "1";
     } else if (k === "search_dark") {
       s.searchDark = v === "true" || v === "1";
+    } else if (k === "auto_reapply") {
+      s.autoReapply = v !== "false" && v !== "0";
     } else if (k === "islands") {
       s.islands = v === "true" || v === "1";
     } else if (k === "island_pad" || k === "island_tray_pad" || k === "island_v" || k === "island_edge") {
@@ -169,6 +173,7 @@ export function buildXamlCfg(s: XamlStyle): string {
   if (s.startHideAll) lines.push("start_hide_all=true");
   if (s.startHideList) lines.push("start_hide_list=true");
   if (s.searchDark) lines.push("search_dark=true");
+  if (!s.autoReapply) lines.push("auto_reapply=false");
   if (s.hideStartButton) lines.push("hide_start_button=true");
   if (s.hideWidgets) lines.push("hide_widgets=true");
   if (s.hideSearchGleam) lines.push("hide_search_gleam=true");
