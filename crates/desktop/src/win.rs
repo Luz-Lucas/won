@@ -603,6 +603,7 @@ fn reload(st: &mut State) {
             winbar::apply(st.loader.config().bar.as_ref());
             crate::winclip::apply(st.loader.config().clipboard.as_ref());
             crate::winmid::apply(st.loader.config().middle_click_close);
+            crate::winwidget::apply(&st.loader.config().widgets);
             let cfg = st.loader.config().clone();
             crate::dlog::log(&format!(
                 "config recarregada: tiling={} bar={}",
@@ -620,6 +621,7 @@ fn shutdown(st: &mut State) {
     restore_all(st);
     st.tiler.disable();
     winbar::destroy();
+    crate::winwidget::destroy();
     winlauncher::destroy();
     crate::winclip::destroy();
     crate::winmid::destroy();
@@ -756,6 +758,7 @@ pub fn run() {
                         reload(st);
                         let fg = GetForegroundWindow();
                         winbar::tick(!fg.is_null() && is_fullscreen(fg));
+                        crate::winwidget::tick();
                         let rules = st.loader.config().rules.clone();
                         st.tiler.retile(&rules);
                     }

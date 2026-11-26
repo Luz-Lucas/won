@@ -89,3 +89,20 @@ describe("barra em duas ilhas", () => {
     expect(out).toContain('island_align = "left"');
   });
 });
+
+describe("widgets", () => {
+  it("lê, grava e preserva o resto do arquivo", async () => {
+    const { readSections, applySections, newWidget } = await import("./desktopToml");
+    const base = "# meu arquivo\n[[hotkey]]\nkeys = \"Alt+A\"\naction = \"close\"\n";
+    const s = readSections(base)!;
+    expect(s.widgets).toEqual([]);
+    const w = newWidget("clock", []);
+    const text = applySections(base, { ...s, widgets: [w, newWidget("cpu", [w])] });
+    expect(text).toContain("# meu arquivo");
+    const back = readSections(text)!;
+    expect(back.widgets?.map((x) => x.kind)).toEqual(["clock", "cpu"]);
+    expect(back.widgets?.[0]?.format).toBe("%H:%M");
+    // regravar não duplica
+    expect(applySections(text, back).match(/\[\[widget\]\]/g)).toHaveLength(2);
+  });
+});

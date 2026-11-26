@@ -14,6 +14,7 @@ pub mod migrate;
 pub mod rules;
 pub mod smartcopy;
 pub mod tiling;
+pub mod widget;
 
 #[cfg(windows)]
 pub mod win;
@@ -35,3 +36,6 @@ pub mod winclip;
 
 #[cfg(windows)]
 pub mod winmid;
+
+#[cfg(windows)]
+pub mod winwidget;

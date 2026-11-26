@@ -90,7 +90,7 @@ fn ft(f: FILETIME) -> u64 {
     (u64::from(f.dwHighDateTime) << 32) | u64::from(f.dwLowDateTime)
 }
 
-fn cpu_sample() -> (u64, u64, u64) {
+pub(crate) fn cpu_sample() -> (u64, u64, u64) {
     let mut idle: FILETIME = unsafe { std::mem::zeroed() };
     let mut kernel: FILETIME = unsafe { std::mem::zeroed() };
     let mut user: FILETIME = unsafe { std::mem::zeroed() };
@@ -98,7 +98,7 @@ fn cpu_sample() -> (u64, u64, u64) {
     (ft(idle), ft(kernel), ft(user))
 }
 
-fn now() -> Time {
+pub(crate) fn now() -> Time {
     let mut st: SYSTEMTIME = unsafe { std::mem::zeroed() };
     unsafe { GetLocalTime(&mut st) };
     Time {
@@ -111,7 +111,7 @@ fn now() -> Time {
     }
 }
 
-fn ram_percent() -> u32 {
+pub(crate) fn ram_percent() -> u32 {
     let mut m: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
     m.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
     unsafe { GlobalMemoryStatusEx(&mut m) };
@@ -938,7 +938,8 @@ pub fn tick(fullscreen_foreground: bool) {
             .chain(&b.cfg.center)
             .chain(&b.cfg.right)
             .any(|m| *m == Module::Media);
-        crate::winsys::start_sampler(want_media);
+        crate::winwidget::set_bar_media(want_media);
+        crate::winsys::start_sampler();
         let snap = crate::winsys::snapshot();
         b.vol = snap.vol;
         b.net = snap.net;

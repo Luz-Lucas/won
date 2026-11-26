@@ -76,7 +76,52 @@ export interface ClipboardModel {
   replace: { from: string; to: string }[];
 }
 
+export type WidgetKind = "clock" | "cpu" | "ram" | "network" | "media";
+export const WIDGET_KINDS: WidgetKind[] = ["clock", "cpu", "ram", "network", "media"];
+export const WIDGET_NAMES: Record<WidgetKind, string> = {
+  clock: "Relógio",
+  cpu: "CPU",
+  ram: "Memória",
+  network: "Rede",
+  media: "Mídia tocando",
+};
+
+export interface WidgetModel {
+  id: string;
+  kind: WidgetKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  background: string;
+  foreground: string;
+  fontSize: number;
+  radius: number;
+  locked: boolean;
+  format: string;
+}
+
+export function newWidget(kind: WidgetKind, existing: WidgetModel[]): WidgetModel {
+  let n = existing.length + 1;
+  while (existing.some((w) => w.id === `${kind}${n}`)) n += 1;
+  return {
+    id: `${kind}${n}`,
+    kind,
+    x: 80 + 30 * existing.length,
+    y: 80 + 30 * existing.length,
+    width: kind === "media" ? 300 : 170,
+    height: kind === "media" ? 90 : 100,
+    background: "#14161A",
+    foreground: "#FFFFFF",
+    fontSize: 24,
+    radius: 16,
+    locked: false,
+    format: "%H:%M",
+  };
+}
+
 export interface Sections {
+  widgets?: WidgetModel[];
   bar: BarModel | null;
   tiling: TilingModel | null;
   launcher: LauncherModel | null;
@@ -149,7 +194,30 @@ export function readSections(text: string): Sections | null {
   const l = rec(doc.launcher);
   const c = rec(doc.clipboard);
   const tb = rec(doc.taskbar);
+  const widgets = (Array.isArray(doc.widget) ? doc.widget : []).flatMap((w, i): WidgetModel[] => {
+    const r = rec(w);
+    if (!r || !WIDGET_KINDS.includes(r.kind as WidgetKind)) return [];
+    const kind = r.kind as WidgetKind;
+    const d = newWidget(kind, []);
+    return [
+      {
+        id: str(r.id, `widget${i + 1}`),
+        kind,
+        x: num(r.x, 80 + 30 * i),
+        y: num(r.y, 80 + 30 * i),
+        width: num(r.width, d.width),
+        height: num(r.height, d.height),
+        background: str(r.background, d.background),
+        foreground: str(r.foreground, d.foreground),
+        fontSize: num(r.font_size, d.fontSize),
+        radius: num(r.radius, d.radius),
+        locked: r.locked === true,
+        format: str(r.format, d.format),
+      },
+    ];
+  });
   return {
+    widgets,
     middleClose: tb?.middle_click_close === true,
     bar: b && {
       edge: b.edge === "bottom" ? "bottom" : "top",
@@ -286,6 +354,23 @@ const launcherToml = (l: LauncherModel) =>
     ),
   ].join("\n");
 
+const widgetToml = (w: WidgetModel) =>
+  [
+    "[[widget]]",
+    `id = ${q(w.id)}`,
+    `kind = ${q(w.kind)}`,
+    `x = ${Math.round(w.x)}`,
+    `y = ${Math.round(w.y)}`,
+    `width = ${Math.round(w.width)}`,
+    `height = ${Math.round(w.height)}`,
+    `background = ${q(w.background)}`,
+    `foreground = ${q(w.foreground)}`,
+    `font_size = ${Math.round(w.fontSize)}`,
+    `radius = ${Math.round(w.radius)}`,
+    `locked = ${w.locked}`,
+    ...(w.kind === "clock" ? [`format = ${q(w.format)}`] : []),
+  ].join("\n");
+
 const clipboardToml = (c: ClipboardModel) =>
   [
     "[clipboard]",
@@ -298,7 +383,7 @@ const clipboardToml = (c: ClipboardModel) =>
     ...c.replace.map((r) => `\n[[clipboard.replace]]\nfrom = ${q(r.from)}\nto = ${q(r.to)}`),
   ].join("\n");
 
-const MANAGED = new Set(["bar", "tiling", "tiling.monitor", "launcher", "launcher.app", "clipboard", "clipboard.replace", "taskbar"]);
+const MANAGED = new Set(["bar", "tiling", "tiling.monitor", "launcher", "launcher.app", "clipboard", "clipboard.replace", "taskbar", "widget"]);
 const HEADER = /^\s*\[\[?\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$/;
 
 /** Troca as seções gerenciadas pelas do modelo; o resto do texto fica como está. */
@@ -315,6 +400,7 @@ export function applySections(text: string, s: Sections): string {
     s.tiling && tilingToml(s.tiling),
     s.launcher && launcherToml(s.launcher),
     s.clipboard && clipboardToml(s.clipboard),
+    ...(s.widgets ?? []).map(widgetToml),
     s.middleClose ? "[taskbar]\nmiddle_click_close = true" : null,
   ].filter((b): b is string => !!b);
   const base = kept.join("\n").replace(/\s+$/, "");

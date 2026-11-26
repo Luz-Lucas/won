@@ -7,7 +7,10 @@ import {
   DEFAULT_TILING,
   LAYOUTS,
   MODULES,
+  WIDGET_KINDS,
+  WIDGET_NAMES,
   applySections,
+  newWidget,
   readSections,
   tileBoxes,
   type BarModel,
@@ -16,6 +19,7 @@ import {
   type Module,
   type Sections,
   type TilingModel,
+  type WidgetModel,
   type Zone,
 } from "../desktopToml";
 
@@ -223,6 +227,7 @@ export default function DesktopVisual({
   const setTil = (p: Partial<TilingModel>) => til && update({ tiling: { ...til, ...p } });
   const lau = s.launcher;
   const setLau = (p: Partial<LauncherModel>) => lau && update({ launcher: { ...lau, ...p } });
+  const widgets = s.widgets ?? [];
   const clip = s.clipboard ?? null;
   const setClip = (p: Partial<ClipboardModel>) => clip && update({ clipboard: { ...clip, ...p } });
 
@@ -582,6 +587,66 @@ export default function DesktopVisual({
             </div>
           </div>
         )}
+      </article>
+
+      <article className="card dv-card" aria-labelledby="dv-widgets-title">
+        <header className="dv-head">
+          <h2 id="dv-widgets-title">Widgets na área de trabalho</h2>
+        </header>
+        <p className="muted">
+          Pequenos painéis que ficam sobre a área de trabalho, abaixo dos seus programas. Arraste
+          com o mouse para mudar de lugar (a posição fica guardada). Vale quando o ambiente de
+          desktop estiver em execução.
+        </p>
+        <div className="dv-controls">
+          {WIDGET_KINDS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              className="btn"
+              disabled={widgets.length >= 12}
+              onClick={() => update({ widgets: [...widgets, newWidget(k, widgets)] })}
+            >
+              + {WIDGET_NAMES[k]}
+            </button>
+          ))}
+        </div>
+        {widgets.map((w, i) => {
+          const set = (p: Partial<WidgetModel>) =>
+            update({ widgets: widgets.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+          return (
+            <div key={w.id} className="dv-body" aria-label={`Widget ${WIDGET_NAMES[w.kind]}`}>
+              <div className="dv-controls">
+                <strong>{WIDGET_NAMES[w.kind]}</strong>
+                <label className="clean-check">
+                  <input type="checkbox" checked={w.locked} onChange={(e) => set({ locked: e.target.checked })} />
+                  <span>Travar posição</span>
+                </label>
+                <label>
+                  Fundo{" "}
+                  <input type="color" aria-label={`Fundo de ${w.id}`} value={w.background} onChange={(e) => set({ background: e.target.value.toUpperCase() })} />
+                </label>
+                <label>
+                  Texto{" "}
+                  <input type="color" aria-label={`Texto de ${w.id}`} value={w.foreground} onChange={(e) => set({ foreground: e.target.value.toUpperCase() })} />
+                </label>
+                <button type="button" className="btn" onClick={() => update({ widgets: widgets.filter((_, j) => j !== i) })}>
+                  Remover
+                </button>
+              </div>
+              <Range label="Largura" value={w.width} min={60} max={600} onChange={(v) => set({ width: v })} format={(v) => `${v}px`} />
+              <Range label="Altura" value={w.height} min={60} max={400} onChange={(v) => set({ height: v })} format={(v) => `${v}px`} />
+              <Range label="Tamanho do texto" value={w.fontSize} min={10} max={72} onChange={(v) => set({ fontSize: v })} format={(v) => `${v}`} />
+              <Range label="Cantos" value={w.radius} min={0} max={40} onChange={(v) => set({ radius: v })} format={(v) => `${v}px`} />
+              {w.kind === "clock" && (
+                <label className="dv-field">
+                  <span>Formato da hora</span>
+                  <input aria-label="Formato da hora do widget" value={w.format} onChange={(e) => set({ format: e.target.value })} />
+                </label>
+              )}
+            </div>
+          );
+        })}
       </article>
 
       <article className="card dv-card" aria-labelledby="dv-clip-title">

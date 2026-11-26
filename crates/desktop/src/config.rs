@@ -80,11 +80,33 @@ pub struct Config {
     pub clipboard: Option<crate::smartcopy::Options>,
     /// `[taskbar] middle_click_close = true`: clique do meio na barra fecha o programa.
     pub middle_click_close: bool,
+    /// `[[widget]]`: widgets na área de trabalho.
+    pub widgets: Vec<crate::widget::WidgetConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawWidget {
+    id: Option<String>,
+    kind: crate::widget::WidgetKind,
+    x: Option<i32>,
+    y: Option<i32>,
+    width: Option<u32>,
+    height: Option<u32>,
+    background: Option<String>,
+    foreground: Option<String>,
+    radius: Option<u32>,
+    font_size: Option<u32>,
+    #[serde(default)]
+    locked: bool,
+    format: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawFile {
+    #[serde(default)]
+    widget: Vec<RawWidget>,
     #[serde(default)]
     hotkey: Vec<RawHotkey>,
     #[serde(default)]
@@ -291,6 +313,71 @@ fn color(text: &str) -> Result<Rgb, String> {
     }
     let n = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).unwrap_or(0);
     Ok(Rgb(n(0), n(2), n(4)))
+}
+
+fn parse_widgets(raw: &[RawWidget], errors: &mut Vec<String>) -> Vec<crate::widget::WidgetConfig> {
+    use crate::widget::{MAX_SIZE, MAX_WIDGETS, MIN_SIZE, WidgetConfig, WidgetKind};
+    if raw.len() > MAX_WIDGETS {
+        errors.push(format!("widget: no máximo {MAX_WIDGETS}"));
+        return Vec::new();
+    }
+    let mut out: Vec<WidgetConfig> = Vec::new();
+    for (i, w) in raw.iter().enumerate() {
+        let id = w.id.clone().unwrap_or_else(|| format!("widget{}", i + 1));
+        if id.is_empty() || id.contains(char::is_whitespace) {
+            errors.push(format!("widget {}: id sem espaços", i + 1));
+            continue;
+        }
+        if out.iter().any(|o| o.id == id) {
+            errors.push(format!("widget \"{id}\" repetido"));
+            continue;
+        }
+        let mut pick = |t: &Option<String>, d: Rgb| match t.as_deref().map(color) {
+            Some(Ok(c)) => c,
+            Some(Err(e)) => {
+                errors.push(format!("widget \"{id}\": {e}"));
+                d
+            }
+            None => d,
+        };
+        let background = pick(&w.background, Rgb(0x14, 0x16, 0x1A));
+        let foreground = pick(&w.foreground, Rgb(0xFF, 0xFF, 0xFF));
+        let (dw, dh) = match w.kind {
+            WidgetKind::Media => (300, 90),
+            _ => (170, 100),
+        };
+        let width = w.width.unwrap_or(dw);
+        let height = w.height.unwrap_or(dh);
+        if !(MIN_SIZE..=MAX_SIZE).contains(&width) || !(MIN_SIZE..=MAX_SIZE).contains(&height) {
+            errors.push(format!("widget \"{id}\": width e height vão de {MIN_SIZE} a {MAX_SIZE}"));
+            continue;
+        }
+        let font_size = w.font_size.unwrap_or(24);
+        if !(8..=96).contains(&font_size) || w.radius.unwrap_or(16) > 60 {
+            errors.push(format!("widget \"{id}\": font_size 8 a 96 e radius 0 a 60"));
+            continue;
+        }
+        let format = w.format.clone().unwrap_or_else(|| bar::DEFAULT_CLOCK.into());
+        if format.len() > 40 {
+            errors.push(format!("widget \"{id}\": format longo demais"));
+            continue;
+        }
+        out.push(WidgetConfig {
+            id,
+            kind: w.kind,
+            x: w.x.unwrap_or(80 + 30 * i as i32),
+            y: w.y.unwrap_or(80 + 30 * i as i32),
+            width,
+            height,
+            background,
+            foreground,
+            radius: w.radius.unwrap_or(16),
+            font_size,
+            locked: w.locked,
+            format,
+        });
+    }
+    out
 }
 
 fn action(h: &RawHotkey) -> Result<Action, String> {
@@ -626,8 +713,11 @@ pub fn parse(text: &str) -> Result<Config, Vec<String>> {
         .as_ref()
         .and_then(|c| parse_clipboard(c, &mut errors));
 
+    let widgets = parse_widgets(&raw.widget, &mut errors);
+
     if errors.is_empty() {
         Ok(Config {
+            widgets,
             hotkeys,
             rules,
             borders,
@@ -759,6 +849,13 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 # [taskbar]
 # middle_click_close = true   # clique do meio no botão da barra fecha o programa (experimental)
 #
+# [[widget]]                  # widget na área de trabalho (arraste com o mouse)
+# kind = "clock"              # clock, cpu, ram, network ou media
+# x = 80
+# y = 80
+# width = 170
+# height = 100
+# locked = false              # true: não deixa arrastar
 # [clipboard]                 # copiar e colar inteligente (limpa o texto ao copiar)
 # strip_tracking = true       # tira utm_*, fbclid, gclid das URLs
 # trim = true                 # tira espaços do começo e do fim
@@ -817,6 +914,20 @@ pub const EXAMPLE: &str = r##"# desktop.toml: tudo aqui é opcional. Salvou, val
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn parses_widgets_and_rejects_bad_ones() {
+        let ok = parse(
+            "[[widget]]\nkind = \"clock\"\nid = \"hora\"\n[[widget]]\nkind = \"cpu\"\nwidth = 200\nheight = 80\nlocked = true\n",
+        )
+        .unwrap();
+        assert_eq!(ok.widgets.len(), 2);
+        assert_eq!(ok.widgets[0].id, "hora");
+        assert_eq!(ok.widgets[1].id, "widget2");
+        assert!(ok.widgets[1].locked);
+        assert!(parse("[[widget]]\nkind = \"cpu\"\nwidth = 10\n").is_err());
+        assert!(parse("[[widget]]\nkind = \"clima\"\n").is_err());
+    }
+
     use super::*;
     use std::fs;
 

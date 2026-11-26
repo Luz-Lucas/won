@@ -149,8 +149,11 @@ pub fn snapshot() -> Snapshot {
 }
 
 /// Liga (uma vez) a thread que mede volume, rede e mídia sem prender a barra.
-pub fn start_sampler(want_media: bool) {
-    WANT_MEDIA.store(want_media, std::sync::atomic::Ordering::Relaxed);
+pub fn set_media_wanted(bar: bool, widget: bool) {
+    WANT_MEDIA.store(bar || widget, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn start_sampler() {
     STARTED.call_once(|| {
         std::thread::spawn(|| {
             // Sem fila de mensagens aqui: apartamento multithread, para as chamadas WinRT
@@ -166,10 +169,10 @@ pub fn start_sampler(want_media: bool) {
                 let vol = volume_text();
                 let mut cur = snapshot();
                 cur.vol = vol;
-                if n % 5 == 0 {
+                if n.is_multiple_of(5) {
                     cur.net = network_text();
                 }
-                if n % 2 == 0 {
+                if n.is_multiple_of(2) {
                     cur.media = if WANT_MEDIA.load(std::sync::atomic::Ordering::Relaxed) {
                         media_text()
                     } else {
